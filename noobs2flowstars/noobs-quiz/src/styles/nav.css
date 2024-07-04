@@ -1,0 +1,6 @@
+.nav {
+    display: flex;
+    justify-content: space-around;
+    vertical-align:top;
+    align-items: center;
+}

@@ -1,0 +1,45 @@
+[
+    {
+        "question": "Which phase of the internet was read only?",
+        "answerOptions": [
+            { "answer": "web1.0", "isCorrect": true },
+            { "answer": "web2.0", "isCorrect": false },
+            { "answer": "web3.0", "isCorrect": false },
+            { "answer": "web4.0", "isCorrect": false }
+        ]
+    },
+    {
+        "question": "In which phase is the internet decentralized?",
+        "answerOptions": [
+            { "answer": "web1.0", "isCorrect": false },
+            { "answer": "web2.0", "isCorrect": false },
+            { "answer": "web3.0", "isCorrect": true },
+            { "answer": "web4.0", "isCorrect": false }
+        ]
+    },
+    {
+        "question": "A user can own data on web1.0?",
+        "answerOptions": [
+            { "answer": "True", "isCorrect": false },
+            { "answer": "False", "isCorrect": true }
+        ]
+    },
+    {
+        "question": "How many locations does web2.0 use to store accessible data?",
+        "answerOptions": [
+            { "answer": "Three locations", "isCorrect": false },
+            { "answer": "One location", "isCorrect": true },
+            { "answer": "No locations", "isCorrect": false },
+            { "answer": "Seven locations", "isCorrect": false }
+        ]
+    },
+    {
+        "questions": "How does one access data on web3.0?",
+        "answerOptions": [
+            { "answer": "A magic whiteboard", "isCorrect": false },
+            { "answer": "Snail main in a PO Box", "isCorrect": false },
+            { "answer": "In a blockchain", "isCorrect": true },
+            { "answer": "Through a well tuned microwave", "isCorrect": false }
+        ]
+    }
+]

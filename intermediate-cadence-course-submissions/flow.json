@@ -1,0 +1,340 @@
+{
+	"emulators": {
+		"default": {
+			"port": 3569,
+			"serviceAccount": "emulator-account"
+		}
+	},
+	"contracts": {
+		"NonFungibleToken": {
+			 "source": "../common_resources/contracts/NonFungibleToken.cdc",
+			 "aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x631e88ae7f1d7c20",
+				"mainnet": "0x1d7e57aa55817448"
+			 }
+		},
+		"NonFungibleTokenSimple": {
+			"source": "../common_resources/contracts/NonFungibleTokenSimple.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"NonFungibleTokenCollection": {
+			"source": "../common_resources/contracts/NonFungibleTokenCollection.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"mainnet": "0x1d7e57aa55817448"
+			}
+		},
+		"FungibleToken": {
+			 "source": "../common_resources/contracts/FungibleToken.cdc",
+			 "aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x9a0766d93b6608b7",
+				"mainnet": "0xf233dcee88fe0abe"
+			 }
+		},
+		"MetadataViews": {
+			"source": "../common_resources/contracts/MetadataViews.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x631e88ae7f1d7c20",
+				"mainnet": "0x1d7e57aa55817448"
+			}
+		},
+		"FLOAT": {
+			"source": "../common_resources/contracts/FLOAT.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x0afe396ebc8eee65",
+				"mainnet": "0x2d4c3caffbeab845"
+			}
+		},
+		"ExampleNFT": {
+			"source": "../common_resources/contracts/ExampleNFT.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"TopShot": {
+			"source": "../common_resources/contracts/TopShot.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"TopShotLocking": {
+			"source": "../common_resources/contracts/TopShotLocking.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"Record": {
+			"source": "./Chapter1.0/Day1/contracts/Record.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"Artist": {
+			"source": "./Chapter1.0/Day1/contracts/Artist.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"FlowHotel": {
+			"source": "./Chapter1.0/Day2/contracts/FlowHotel.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"ResourceTypes": {
+			"source": "./Chapter1.0/Day4/contracts/ResourceTypes.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"ExampleNFTAccess": {
+			"source": "./Chapter2.0/Day1/contracts/ExampleNFTAccess.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"StandardSword": {
+			"source": "./Chapter2.0/Day2/contracts/StandardNFTInterface/StandardSword.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"StandardShield": {
+			"source": "./Chapter2.0/Day2/contracts/StandardNFTInterface/StandardShield.cdc",
+			"aliases": {
+				"emulator":"0xf8d6e0586b0a20c7"
+			}
+		},
+		"StandardBow": {
+			"source": "./Chapter2.0/Day2/contracts/StandardNFTInterface/StandardBow.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"StandardAdmin": {
+			"source": "./Chapter2.0/Day2/contracts/StandardNFTInterface/StandardAdmin.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"MyBow": {
+			"source": "./Chapter2.0/Day2/contracts/MyNewNFTInterface/MyBow.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"MyShield": {
+			"source": "./Chapter2.0/Day2/contracts/MyNewNFTInterface/MyShield.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"MySword": {
+			"source": "./Chapter2.0/Day2/contracts/MyNewNFTInterface/MySword.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"MyAdmin": {
+			"source": "./Chapter2.0/Day2/contracts/MyNewNFTInterface/MyAdmin.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"MyCollection": {
+			"source": "./Chapter2.0/Day2/contracts/MyNewNFTInterface/MyCollection.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"TestNFT": {
+			"source": "./Chapter2.0/Day2/contracts/TestNFT.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"TestAdmin": {
+			"source": "./Chapter2.0/Day2/contracts/TestAdmin.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"IPizza": {
+			"source": "./Chapter2.0/Day3/contracts/IPizza.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"Pizza": {
+			"source": "./Chapter2.0/Day3/contracts/Pizza.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"Contract4D1": {
+			"source": "./Chapter4.0/Day1/contracts/Contract4D1.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"Profiles": {
+			"source": "./Chapter4.0/Day1/contracts/Profiles.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"RicardoCoin": {
+			"source": "./Chapter5.0/Day1/contracts/RicardoCoin.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0xb7fb1e0ae6485cf6"
+			}
+		},
+		"FlowToken": {
+			"source": "./Chapter5.0/Day1/contracts/FlowToken.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0xb7fb1e0ae6485cf6"
+			}
+		},
+		"FlowToken_bad": {
+			"source": "./Chapter5.0/Day1/contracts/FlowToken_bad.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"RicardoCoinSuperAdmin": {
+			"source": "./Chapter5.0/Day1/contracts/RicardoCoinSuperAdmin.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"Swap": {
+			"source": "./Chapter5.0/Day1/contracts/Swap.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0xb7fb1e0ae6485cf6"
+			}
+		}
+	},
+	"networks": {
+		"emulator": "127.0.0.1:3569",
+		"mainnet": "access.mainnet.nodes.onflow.org:9000",
+		"testnet": "access.devnet.nodes.onflow.org:9000"
+	},
+	"accounts": {
+		"emulator-account": {
+			"address": "0xf8d6e0586b0a20c7",
+			"key": "680fa28962650ef346a7edf23d63967b0fcf44958488d0d48f8539ece6e92eba",
+			"__publickey__": "5a6a7bdb81838e40fc615d4c0eed3d4caacfc7f47a89d319caa370aac6196113573738ba57e09ea5a27a192d48457ee5c0e32011bc10ef93383aabad24a9ce2a"
+		},
+		"account01": {
+			"address": "0xe03daebed8ca0615",
+			"key": "24131830f069dfb1eb0832bea830807dde1b98f0533119693bd94d9ed0cda286",
+			"__publickey__": "8e69871f04fdefd7932b606cde4b30b51398cca91b2c409ffd1f6f911de52cddecba67c759207a97581b5a1882a442124c69d773bf0e828f4d03a1860425cf39"
+		},
+		"account02": {
+			"address": "0x045a1763c93006ca",
+			"key": "839bea9c1bbbd9893192e774cb04dd39cacf008264886e2336df87840618a7b4",
+			"__publickey__": "aa9006b45921d7a7811207bc904c87a2c98cd90bcc393917a0f7515779b070984ac51dbf334589fdcc133700cc85a0665a314258cb81e8e03d285dda10acfa62"
+		},
+		"account03": {
+			"address": "0x120e725050340cab",
+			"key": "059ab1881bf258241aae485bb509c6f62e25bf8d032790cd6b7586ffe8359c93",
+			"__publickey__": "4028b95aeabeb7572d052fe2294cbc9f50632234ed5f8b4dee7101474f1ef5b373cb7c3ada9c1f5404f73f155656f08eb6f17c20452cb465715d8bbb30ca2f9d"
+		},
+		"account04": {
+			"address": "0xf669cb8d41ce0c74",
+			"key": "b9b120a2cc035e5f8e42ca633df5091c9660b0e24d0336cc60ff57a635a7a12e",
+			"__publickey__": "722d1025378f9ea86fbd563432281354b95dbd9b7ae57da56b3abed84a61a1ffea2a6137644907dc587210d9027842c1d34b6ffbc76c7b855ff03cccf1a0d056"
+		},
+		"account05": {
+			"address": "0x192440c99cb17282",
+			"key": "ef726b3d24265e90ee59430af5bbef73132d2680ea3455441d67bf02005c762e",
+			"__publickey__": "25f32079cce55d96ff40471ef693b5248be585c0efa92e12b04c6eafa4c15df6bba9ead416e5bba5aa364f963435e42451f958d2b9c4f34f3be16c99ba9e26ad"
+		},
+		"testnet-account-admin": {
+			"address": "0xb7fb1e0ae6485cf6",
+			"key" : {
+				"type": "hex",
+				"index": 0,
+				"signatureAlgorithm": "ECDSA_P256",
+				"hashAlgorithm": "SHA3_256",
+				"privateKey": "e0366adfd77f315346d77cbf3f5f5bc55f53623ecdaa5a0c15bfa46f244aa3af"
+			}
+		},
+		"testnet-account-01": {
+			"address": "0x78617072bc4306ab",
+			"key": {
+				"type": "hex",
+				"index": 0,
+				"signatureAlgorithm": "ECDSA_P256",
+				"hashAlgorithm": "SHA3_256",
+				"privateKey": "08f7d46d4f5e90f63460dbeb5691474874581b002bb97daa22362b60aafd0771",
+				"__publickey__": "99bfa48dd7e500a08a24ed37e96f8d5d8df5a47a7bd329d90c9a1f1021b037ac8cb52bfccca5dee679013c2cff4f3364ca1109fb242d26491b3910ec00aab572",
+				"__mnemonic__": "attend damp foam battle sugar runway slush barrel frequent maximum snack about",
+				"__derivation_path__": "m/44'/539'/0'/0/0"
+			}
+		},
+		"testnet-account-02": {
+			"address": "0x8ae00fb5a872b8f4",
+			"key": {
+				"type": "hex",
+				"index": 0,
+				"signatureAlgorithm": "ECDSA_P256",
+				"hashAlgorithm": "SHA3_256",
+				"privateKey": "12d50246d9fbbbbe0d156283df58f19e5e802c1fb61a1726ac48599a50f1f309",
+				"__publickey__": "11b40b1571619b5e5d36766a6b5cde6443352e72fd339a9c9e12e616e03322aa44b1798db5c0734e99128a1c1c83c0aaf210f19108d9c8c8cb64a9d2b1a806a3",
+				"__mnemonic__": "wisdom error hour battle power ignore goddess misery eight labor panda toss",
+				"__derivation_path__": "m/44'/539'/0'/0/0 "
+			}
+		},
+		"testnet-account-03": {
+			"address": "0x0c838d98cae56592",
+			"key": {
+				"type": "hex",
+				"index": 0,
+				"signatureAlgorithm": "ECDSA_P256",
+				"hashAlgorithm": "SHA3_256",
+				"privateKey": "d41edfa87e92f89fab662ea13ee17f4b0384e6f20d590fc038586e2333450e4f",
+				"__publicKey__": "e41fa4631b0ee582c2b0310e62bca1279218f9b4d492d2545f334be43c07fd275f1f5f7879147358acf1e34c2cd6176b237fc039665975ed5c2caa44eec64349",
+				"__mnemonic__": "curve voyage october ladder embark rib butter tattoo devote fossil divide nurse",
+				"__derivation_path__": "m/44'/539'/0'/0/0 "
+			}
+		},
+		"blocto-testnet-account": {
+			"address": "0x41e49c24e24bd19a",
+			"key": {
+				"type": "hex",
+				"index": 1,
+				"signatureAlgorithm": "ECDSA_P256",
+				"hashAlgorithm": "SHA3_256",
+				"privateKey": "90d183707a9c727e6c8ef230b751d4d3346611bb24ce625091678bb2aa22bbe3"
+			}
+		}
+	},
+	"deployments": {
+		"emulator": {
+			"emulator-account": [
+				"FungibleToken",
+				"FlowToken",
+				"RicardoCoin",
+				"Swap"
+			]
+		},
+		"testnet": {
+			"testnet-account-admin": [
+				"FlowToken",
+				"RicardoCoin",
+				"Swap"
+			]
+		}
+	}
+}
+ 

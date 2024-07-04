@@ -1,0 +1,150 @@
+{
+	"emulators": {
+		"default": {
+			"port": 3569,
+			"serviceAccount": "emulator-account"
+		}
+	},
+	"contracts": {
+		"NonFungibleToken": {
+			"source": "../float/src/cadence/core-contracts/NonFungibleToken.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x631e88ae7f1d7c20",
+				"mainnet": "0x1d7e57aa55817448"
+			}
+		},
+		"FungibleToken": {
+			"source": "../float/src/cadence/core-contracts/FungibleToken.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x9a0766d93b6608b7",
+				"mainnet": "0xf233dcee88fe0abe"
+			}
+		},
+		"MetadataViews": {
+			"source": "../float/src/cadence/core-contracts/MetadataViews.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x631e88ae7f1d7c20",
+				"mainnet": "0x1d7e57aa55817448"
+			}
+		},
+		"GrantedAccountAccess": {
+			"source": "../float/src/cadence/sharedaccount/GrantedAccountAccess.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x0afe396ebc8eee65",
+				"mainnet": "0x2d4c3caffbeab845"
+			}
+		},
+		"FlowToken": {
+			"source": "../float/src/cadence/core-contracts/FlowToken.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x7e60df042a9c0868",
+				"mainnet": "0x1654653399040a61"
+			}
+		},
+		"FindViews": {
+			"source": "../float/src/cadence/core-contracts/FindViews.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x35717efbbce11c74",
+				"mainnet": "0x097bafa4e0b48eef"
+			}
+		},
+		"FLOAT": {
+			"source": "../float/src/cadence/float/FLOAT.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0x0afe396ebc8eee65",
+				"mainnet": "0x2d4c3caffbeab845"
+			}
+		},
+		"TestContract": {
+			"source": "./contracts/TestContract.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0xb7fb1e0ae6485cf6"
+			}
+		},
+		"Shapes": {
+			"source": "./contracts/Shapes.cdc",
+			"aliases":{
+				"emulator": "0xf8d6e0586b0a20c7",
+				"testnet": "0xb7fb1e0ae6485cf6"
+			}
+		}
+	},
+	"networks": {
+		"emulator": "127.0.0.1:3569",
+		"mainnet": "access.mainnet.nodes.onflow.org:9000",
+		"testnet": "access.devnet.nodes.onflow.org:9000"
+	},
+	"accounts": {
+		"emulator-account": {
+			"address": "0xf8d6e0586b0a20c7",
+			"key": "680fa28962650ef346a7edf23d63967b0fcf44958488d0d48f8539ece6e92eba",
+			"__publickey__": "5a6a7bdb81838e40fc615d4c0eed3d4caacfc7f47a89d319caa370aac6196113573738ba57e09ea5a27a192d48457ee5c0e32011bc10ef93383aabad24a9ce2a"
+		},
+		"account01": {
+			"address": "0x045a1763c93006ca",
+			"key": "ef726b3d24265e90ee59430af5bbef73132d2680ea3455441d67bf02005c762e",
+			"__publickey__": "25f32079cce55d96ff40471ef693b5248be585c0efa92e12b04c6eafa4c15df6bba9ead416e5bba5aa364f963435e42451f958d2b9c4f34f3be16c99ba9e26ad"
+		},
+		"account02": {
+			"address": "0x01cf0e2f2f715450",
+			"key": "24131830f069dfb1eb0832bea830807dde1b98f0533119693bd94d9ed0cda286",
+			"__publickey__": "8e69871f04fdefd7932b606cde4b30b51398cca91b2c409ffd1f6f911de52cddecba67c759207a97581b5a1882a442124c69d773bf0e828f4d03a1860425cf39"
+		},
+		"account03": {
+			"address": "0x179b6b1cb6755e31",
+			"key": "839bea9c1bbbd9893192e774cb04dd39cacf008264886e2336df87840618a7b4",
+			"__publickey__": "aa9006b45921d7a7811207bc904c87a2c98cd90bcc393917a0f7515779b070984ac51dbf334589fdcc133700cc85a0665a314258cb81e8e03d285dda10acfa62"
+		},
+		"account04": {
+			"address": "0xf3fcd2c1a78f5eee",
+			"key": "059ab1881bf258241aae485bb509c6f62e25bf8d032790cd6b7586ffe8359c93",
+			"__publickey__": "4028b95aeabeb7572d052fe2294cbc9f50632234ed5f8b4dee7101474f1ef5b373cb7c3ada9c1f5404f73f155656f08eb6f17c20452cb465715d8bbb30ca2f9d"
+		},
+		"account05": {
+			"address": "0xe03daebed8ca0615",
+			"key": "b9b120a2cc035e5f8e42ca633df5091c9660b0e24d0336cc60ff57a635a7a12e",
+			"__publickey__": "722d1025378f9ea86fbd563432281354b95dbd9b7ae57da56b3abed84a61a1ffea2a6137644907dc587210d9027842c1d34b6ffbc76c7b855ff03cccf1a0d056"
+		},
+		"testnet-account": {
+                        "address": "0xb7fb1e0ae6485cf6",
+                        "key" : {
+                                "type": "hex",
+                                "index": 0,
+                                "signatureAlgorithm": "ECDSA_P256",
+                                "hashAlgorithm": "SHA3_256",
+                                "privateKey": "e0366adfd77f315346d77cbf3f5f5bc55f53623ecdaa5a0c15bfa46f244aa3af"
+                        }
+                },
+                "blocto-testnet-account": {
+                        "address": "0x41e49c24e24bd19a",
+                        "key": {
+                                "type": "hex",
+                                "index": 1,
+                                "signatureAlgorithm": "ECDSA_P256",
+                                "hashAlgorithm": "SHA3_256",
+                                "privateKey": "90d183707a9c727e6c8ef230b751d4d3346611bb24ce625091678bb2aa22bbe3"
+                        }
+                }
+	},
+	"deployments": {
+		"emulator": {
+			"emulator-account": [
+				"TestContract"
+			]
+		},
+		"testnet": {
+			"testnet-account": [
+				"Shapes"
+			]
+		}
+	}
+}
+ 
