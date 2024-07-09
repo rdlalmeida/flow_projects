@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# TODO: Output a success string with the mongosh command and test for it in the output dump file. If all went well, echo a simple "DB connection successful". Right now it is not clear if the DB connection was successful.
+# TODO: Automate the account creation process, namely,
+#   1. Run the command 'flow keys generate' and capture the key pair in the output to variables and to a .key file.
+#   2. Automatically edit the flow.json file to add the new account configured. Since it is a JSON file, read it to a JSON variable and use JSON editing tools to add the new elements and then dump the result back into the .json file.
+
 # Run a simple routine to read all the contents of a .env file into memory, i.e., setup all variables set in this
 # file as global ones first
 
