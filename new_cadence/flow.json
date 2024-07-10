@@ -17,7 +17,7 @@
             }
         },
         "account01": {
-            "address": "0x179b6b1cb6755e31",
+            "address": "179b6b1cb6755e31",
             "key": {
                 "type": "file",
                 "location": "./account01.key"
@@ -26,7 +26,8 @@
     },
     "deployments": {
         "emulator": {
-            "emulator-account": ["HelloWorldResource"]
+            "emulator-account": ["HelloWorldResource"],
+            "account01": ["HelloWorld"]
         }
     }
 }

@@ -1,5 +1,16 @@
 access(all)
 contract HelloWorldResource {
+
+    access(all)
+    let storageLocation: StoragePath
+
+    access(all)
+    let publicLocation: PublicPath
+
+    init() {
+        self.storageLocation = /storage/HelloAssetDemo
+        self.publicLocation = /public/HelloAssetPublicDemo
+    }
     
     // Declare a resource that only includes one function.
     // access(all) means any Flow user can access this contract. Just the contract though.
