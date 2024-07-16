@@ -50,7 +50,7 @@ then
     # it seems that the best option is to simply wait a second before starting the service and running the
     # rest of the script. This maybe due to the fact that the service takes a while to be up (but no more than 1s)
     # and when I start sending commands to the DB without a service to deal with it, it breaks
-    sleep 1s
+    sleep 3s
 
     # Verify that the damn service is indeed active
     service_status=$(systemctl is-active mongod)

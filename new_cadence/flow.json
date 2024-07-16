@@ -1,33 +1,72 @@
 {
-    "contracts": {
-        "HelloWorld": "cadence/contracts/01_HelloWorld.cdc",
-        "HelloWorldResource": "cadence/contracts/02_HelloWorldResource.cdc"
-    },
-    "networks": {
-        "emulator": "127.0.0.1:3569",
-        "mainnet": "access.mainnet.nodes.onflow.org:9000",
-        "testnet": "access.devnet.nodes.onflow.org:9000"
-    },
-    "accounts": {
-        "emulator-account": {
-            "address": "f8d6e0586b0a20c7",
-            "key": {
-                "type": "file",
-                "location": "./emulator.key"
-            }
-        },
-        "account01": {
-            "address": "179b6b1cb6755e31",
-            "key": {
-                "type": "file",
-                "location": "./account01.key"
-            }
-        }
-    },
-    "deployments": {
-        "emulator": {
-            "emulator-account": ["HelloWorldResource"],
-            "account01": ["HelloWorld"]
-        }
-    }
+	"contracts": {
+		"FooBar": {
+			"source": "cadence/contracts/03_FooBar.cdc",
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7"
+			}
+		},
+		"HelloWorld": "cadence/contracts/01_HelloWorld.cdc",
+		"HelloWorldResource": "cadence/contracts/02_HelloWorldResource.cdc",
+		"MetadataViews": {
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7"
+			}
+		},
+		"NonFungibleToken": {
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7"
+			}
+		},
+		"ViewResolver": {
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7"
+			}
+		}
+	},
+	"networks": {
+		"emulator": "127.0.0.1:3569",
+		"mainnet": "access.mainnet.nodes.onflow.org:9000",
+		"testnet": "access.devnet.nodes.onflow.org:9000"
+	},
+	"accounts": {
+		"account01": {
+			"address": "179b6b1cb6755e31",
+			"key": {
+				"type": "file",
+				"location": "./account01.key"
+			}
+		},
+		"account02": {
+			"address": "f3fcd2c1a78f5eee",
+			"key": {
+				"type": "file",
+				"location": "./account02.key"
+			}
+		},
+		"account03": {
+			"address": "e03daebed8ca0615",
+			"key": "94d48be8745a8bebc4df9fef8a3cf720de4857514b821930bb3c39f54a131069"
+		},
+		"emulator-account": {
+			"address": "f8d6e0586b0a20c7",
+			"key": {
+				"type": "file",
+				"location": "./emulator.key"
+			}
+		}
+	},
+	"deployments": {
+		"emulator": {
+			"account01": [
+				"HelloWorld"
+			],
+			"emulator-account": [
+				"NonFungibleToken",
+				"MetadataViews",
+				"ViewResolver",
+				"FooBar"
+			]
+		}
+	}
 }

@@ -28,7 +28,7 @@ transaction() {
 
         // The transaction-wide parameters should be set at the head of the prepare phase
         self.accountAddress = signer.address
-        self.storageLocation = /storage/HelloAssetDemo
+        self.storageLocation = /storage/HelloAssetDemo1
 
         /*
             Create the Resource by accessing the contract abstraction (HelloWorldResource) and invoking the minter function (createHelloAsset())
