@@ -3,24 +3,33 @@
 		"FooBar": {
 			"source": "cadence/contracts/03_FooBar.cdc",
 			"aliases": {
-				"emulator": "f8d6e0586b0a20c7"
+				"emulator": "0xf8d6e0586b0a20c7"
 			}
 		},
 		"HelloWorld": "cadence/contracts/01_HelloWorld.cdc",
 		"HelloWorldResource": "cadence/contracts/02_HelloWorldResource.cdc",
 		"MetadataViews": {
+			"source": "./utils/MetadataViews.cdc",
 			"aliases": {
-				"emulator": "f8d6e0586b0a20c7"
+				"emulator": "0xf8d6e0586b0a20c7"
 			}
 		},
 		"NonFungibleToken": {
+			"source": "./utils/NonFungibleToken.cdc",
 			"aliases": {
-				"emulator": "f8d6e0586b0a20c7"
+				"emulator": "0xf8d6e0586b0a20c7"
 			}
 		},
 		"ViewResolver": {
+			"source": "./utils/ViewResolver.cdc",
 			"aliases": {
-				"emulator": "f8d6e0586b0a20c7"
+				"emulator": "0xf8d6e0586b0a20c7"
+			}
+		},
+		"FungibleToken": {
+			"source": "./utils/FungibleToken.cdc",
+			"aliases": {
+				"emulator": "0xf8d6e0586b0a20c7"
 			}
 		}
 	},
@@ -31,25 +40,28 @@
 	},
 	"accounts": {
 		"account01": {
-			"address": "179b6b1cb6755e31",
+			"address": "0x179b6b1cb6755e31",
 			"key": {
 				"type": "file",
 				"location": "./account01.key"
 			}
 		},
 		"account02": {
-			"address": "f3fcd2c1a78f5eee",
+			"address": "0xf3fcd2c1a78f5eee",
 			"key": {
 				"type": "file",
 				"location": "./account02.key"
 			}
 		},
 		"account03": {
-			"address": "e03daebed8ca0615",
-			"key": "94d48be8745a8bebc4df9fef8a3cf720de4857514b821930bb3c39f54a131069"
+			"address": "0x045a1763c93006ca",
+			"key": {
+				"type": "file",
+				"location": "./account03.key"
+			}
 		},
 		"emulator-account": {
-			"address": "f8d6e0586b0a20c7",
+			"address": "0xf8d6e0586b0a20c7",
 			"key": {
 				"type": "file",
 				"location": "./emulator.key"
@@ -59,10 +71,10 @@
 	"deployments": {
 		"emulator": {
 			"account01": [
-				"HelloWorld"
 			],
 			"emulator-account": [
 				"NonFungibleToken",
+				"FungibleToken",
 				"MetadataViews",
 				"ViewResolver",
 				"FooBar"

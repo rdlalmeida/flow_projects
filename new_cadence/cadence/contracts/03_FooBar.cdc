@@ -2,6 +2,7 @@
     This is Flow's version of ERC-721 Solidity's standard. When a contract implements an Interface, that contract guarantees that the parameters and functions defined in the Interface exists and can be invoked. The actual implementation of those function is still dependent of whomever writes the contract. This "standard", just like the ERC-721 sandard, only guarantees certain function and parameters presented in the contract's implementation.
 */
 import NonFungibleToken from "../../utils/NonFungibleToken.cdc"
+import MetadataViews from "../../utils/MetadataViews.cdc"
 
 access(all) contract FooBar: NonFungibleToken {
     /* 
@@ -51,6 +52,107 @@ access(all) contract FooBar: NonFungibleToken {
             // function from a contract initialization
             return <- FooBar.createEmptyCollection()
         }
+
+        /*
+            The next function is related to be able to "view" an NFT, i. e., it uses the MetadataViews standard to retrieve information about the NFT, if any.
+            NOTE: The '_' in the argument in the 'resolveView' function means an optional argument label (providing the argument is still mandatory). This function can be invoked with or without providing the 'view' argument label:
+                resolveView(view: Type<@FooBar.NFT>()) is equivalent to
+                resolveView(Type<@FooBar.NFT>())
+        */
+        // Gets a list of views specific to the individual NFT
+        access(all) view fun getViews(): [Type] {
+            return [
+                Type<MetadataViews.Display>(),
+                Type<MetadataViews.Editions>(),
+                Type<MetadataViews.NFTCollectionData>(),
+                Type<MetadataViews.NFTCollectionDisplay>(),
+                Type<MetadataViews.Serial>()
+            ]
+        }
+
+        // Resolves a view for this specific NFT
+        access(all) fun resolveView(_ view: Type): AnyStruct? {
+            switch view {
+                case Type<MetadataViews.Display>():
+                    return MetadataViews.Display(
+                        name: "FooBar Example Token",
+                        description: "An Example NFT Contract from the Flow NFT Guide",
+                        thumbnail: MetadataViews.HTTPFile(
+                            url: "https://ipfs.io/ipfs/QmPwbqyfvEVWrrVqGktrH17zUGPMCn3jVXgxmN8cD7CU6E?filename=AI_generated_baboon.png"
+                        )
+                    )
+                
+                case Type<MetadataViews.Editions>():
+                    // This specific NFT implementation does not have a max number of mints, therefore
+                    // set the max edition field set to nil to indicate that.
+                    let editionInfo: MetadataViews.Edition = MetadataViews.Edition(name: "FooBar Edition", number: self.id, max: nil)
+                    let editionList: [MetadataViews.Edition] = [editionInfo]
+                    return MetadataViews.Editions(
+                        editionList
+                    )
+                
+                case Type<MetadataViews.Serial>():
+                    return MetadataViews.Serial(
+                        self.id
+                    )
+                
+                case Type<MetadataViews.NFTCollectionData>():
+                    return FooBar.resolveContractView(resourceType: Type<@FooBar.NFT>(), viewType: Type<MetadataViews.NFTCollectionData>())
+                
+                case Type<MetadataViews.NFTCollectionDisplay>():
+                    return FooBar.resolveContractView(resourceType: Type<@FooBar.NFT>(), viewType: Type<MetadataViews.NFTCollectionData>())
+            }
+            // This corresponds to the "default" case in switches
+            return nil
+        }
+    }
+
+    // Resolves a view that applies to all the NFTs defined by this contract
+    access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? {
+        switch viewType {
+            case Type<MetadataViews.NFTCollectionData>():
+                let collectionData: MetadataViews.NFTCollectionData = MetadataViews.NFTCollectionData(
+                    storagePath: self.CollectionStoragePath,
+                    publicPath: self.CollectionPublicPath,
+                    providerPath: /private/bogusPath,
+                    publicCollection: Type<&FooBar.Collection>(),
+                    publicLinkedType: Type<@FooBar.Collection>(),
+                    publicLinkedType: Type<&FooBar.Collection>(),
+                    createEmptyCollectionFunction: (fun(): @NonFungibleToken.Collection {
+                        return <- FooBar.createEmptyCollection()
+                    })
+                )
+                return collectionData
+            
+            case Type<MetadataViews.NFTCollectionDisplay>():
+                let media: MetadataViews.Media = MetadataViews.Media(
+                    file: MetadataViews.HTTPFile(
+                        url: "https://ipfs.io/ipfs/QmPwbqyfvEVWrrVqGktrH17zUGPMCn3jVXgxmN8cD7CU6E?filename=AI_generated_baboon.png"
+                    ),
+                    // TODO: I'm not sure if 'image/png+xml' is a valid mediaType. I've adapted it from the original
+                    // "image/svg+xml" because my image file has a .png extension.
+                    mediaType: "image/png+xml"
+                )
+                return MetadataViews.NFTCollectionDisplay(
+                    name: "The FooBar Example Collection",
+                    description: "This collection is used as an example to help you develop your next Flow NFT.",
+                    externalURL: MetadataViews.ExternalURL("https://ipfs.io/ipfs/QmPwbqyfvEVWrrVqGktrH17zUGPMCn3jVXgxmN8cD7CU6E?filename=AI_generated_baboon.png"),
+                    squareImage: media,
+                    bannerImage: media,
+                    socials: {
+                        "instagram": MetadataViews.ExternalURL("https://www.instagram.com/rdlalmeida/")
+                    }
+                )
+        }
+        return nil
+    }
+
+    // Gets a list of views for all the NFTs defined by this contract
+    access(all) view fun getContractViews(resourceType: Type?): [Type] {
+        return [
+            Type<MetadataViews.NFTCollectionData>(),
+            Type<MetadataViews.NFTCollectionDisplay>()
+        ]
     }
 
     // This other Resource serves only to delegate the production of NFT Resources
