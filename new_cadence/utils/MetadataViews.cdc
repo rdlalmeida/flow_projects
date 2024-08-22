@@ -1,5 +1,3 @@
-// Local copy of the main MetadataViews.cdc contract currently stored in Flow account 0x1d7e57aa55817448
-
 // import FungibleToken from 0xf233dcee88fe0abe
 import FungibleToken from "./FungibleToken.cdc"
 
@@ -299,14 +297,6 @@ pub contract MetadataViews {
     ///
     pub struct Royalty {
 
-        /// Generic FungibleToken Receiver for the beneficiary of the royalty
-        /// Can get the concrete type of the receiver with receiver.getType()
-        /// Recommendation - Users should create a new link for a FlowToken 
-        /// receiver for this using `getRoyaltyReceiverPublicPath()`, and not 
-        /// use the default FlowToken receiver. This will allow users to update 
-        /// the capability in the future to use a more generic capability
-        pub let receiver: Capability<&AnyResource{FungibleToken.Receiver}>
-
         /// Multiplier used to calculate the amount of sale value transferred to 
         /// royalty receiver. Note - It should be between 0.0 and 1.0 
         /// Ex - If the sale value is x and multiplier is 0.56 then the royalty 
@@ -323,11 +313,10 @@ pub contract MetadataViews {
         /// that the owner might want to specify.
         pub let description: String
 
-        init(receiver: Capability<&AnyResource{FungibleToken.Receiver}>, cut: UFix64, description: String) {
+        init(cut: UFix64, description: String) {
             pre {
                 cut >= 0.0 && cut <= 1.0 : "Cut value should be in valid range i.e [0,1]"
             }
-            self.receiver = receiver
             self.cut = cut
             self.description = description
         }
@@ -742,4 +731,3 @@ pub contract MetadataViews {
     }
 
 }
- 
