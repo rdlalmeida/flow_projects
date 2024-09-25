@@ -1,0 +1,45 @@
+{
+	"emulators": {
+		"default": {
+			"port": 3569,
+			"serviceAccount": "emulator-account"
+		}
+	},
+	"contracts": {
+		"SomeContract": "./flow/cadence/01/contracts/SomeContract.cdc",
+		"MyStorage": "./flow/cadence/02/contracts/MyStorage.cdc"
+	},
+	"networks": {
+		"emulator": "127.0.0.1:3569",
+		"mainnet": "access.mainnet.nodes.onflow.org:9000",
+		"testnet": "access.devnet.nodes.onflow.org:9000"
+	},
+	"accounts": {
+		"emulator-account": {
+			"address": "f8d6e0586b0a20c7",
+			"key": "680fa28962650ef346a7edf23d63967b0fcf44958488d0d48f8539ece6e92eba"
+		},
+		"account01": {
+			"address": "0x01cf0e2f2f715450",
+			"key": "776501fe41893f16c008a0fdd2839cfd8295e09f17ab43c8de073d707c360651",
+			"__public_key__": "c3c042a72a1aec4cacb6f921070d54d9f3a8b0b91bd425f8fd51474a4d2a77128f232eabf0e74026fe6a5da63e402dfa755e31fdfe0191004cf444a0c61792cb"
+		},
+		"account02": {
+			"address": "0x179b6b1cb6755e31",
+			"key": "d9cce95244e48d2fb19907f370d96506d1b06876c79e030dac9985ca5de548fe",
+			"__public_key__": "990ac6ed394325ea4f83852664d4f07a9667232f4711ef0e4ba48c320675d77f1f5157832042e410b2e437c4292be791cd3e42413896e8119b477c0638b8e6eb"
+		},
+		"account03": {
+			"address": "0xf3fcd2c1a78f5eee",
+			"key": "3ceefedb589131931b7e4f998b316456d4ced97ebb792d078abda6408506a6e4",
+			"__public_key__": "b6fd06e9a8f5d6b894f73a0fb94125f03176536811b8a73180d6c52a738cffcb51ab4a7414162ed59ac01874ea2a05ddd4ed807ea43d9202b9cf6da49c661a1c"
+		}
+	},
+	"deployments": {
+		"emulator": {
+			"emulator-account": [
+				"MyStorage"
+			]
+		}
+	}
+}

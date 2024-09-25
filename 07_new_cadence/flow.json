@@ -1,0 +1,56 @@
+{
+	"contracts": {
+		"FlowToken": "./utils/FlowToken.cdc",
+		"FooBar": "cadence/contracts/03_FooBar.cdc",
+		"FungibleToken": "./utils/FungibleToken.cdc",
+		"HelloWorld": "cadence/contracts/01_HelloWorld.cdc",
+		"HelloWorldResource": "cadence/contracts/02_HelloWorldResource.cdc",
+		"MetadataViews": "./utils/MetadataViews.cdc",
+		"NonFungibleToken": "./utils/NonFungibleToken.cdc",
+		"ViewResolver": "./utils/ViewResolver.cdc"
+	},
+	"networks": {
+		"emulator": "127.0.0.1:3569",
+		"mainnet": "access.mainnet.nodes.onflow.org:9000",
+		"testnet": "access.devnet.nodes.onflow.org:9000"
+	},
+	"accounts": {
+		"account01": {
+			"address": "179b6b1cb6755e31",
+			"key": {
+				"type": "file",
+				"location": "./account01.key"
+			}
+		},
+		"account02": {
+			"address": "f3fcd2c1a78f5eee",
+			"key": {
+				"type": "file",
+				"location": "./account02.key"
+			}
+		},
+		"account03": {
+			"address": "045a1763c93006ca",
+			"key": {
+				"type": "file",
+				"location": "./account03.key"
+			}
+		},
+		"emulator-account": {
+			"address": "f8d6e0586b0a20c7",
+			"key": {
+				"type": "file",
+				"location": "./emulator.key"
+			}
+		}
+	},
+	"deployments": {
+		"emulator": {
+			"account01": [],
+			"emulator-account": [
+				"NonFungibleToken",
+				"FooBar"
+			]
+		}
+	}
+}
