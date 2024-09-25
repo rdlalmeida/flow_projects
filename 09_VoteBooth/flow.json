@@ -1,25 +1,61 @@
 {
-	"contracts": {
-		"Counter": {
-			"source": "cadence/contracts/Counter.cdc",
-			"aliases": {
-				"testing": "0000000000000007"
-			}
-		}
-	},
-	"networks": {
-		"emulator": "127.0.0.1:3569",
-		"mainnet": "access.mainnet.nodes.onflow.org:9000",
-		"testing": "127.0.0.1:3569",
-		"testnet": "access.devnet.nodes.onflow.org:9000"
-	},
-	"accounts": {
-		"emulator-account": {
-			"address": "f8d6e0586b0a20c7",
-			"key": {
-				"type": "file",
-				"location": "emulator-account.pkey"
-			}
-		}
-	}
+    "contracts": {
+        "AnotherNFT": {
+            "source": "cadence/contracts/AnotherNFT.cdc",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "0000000000000007"
+            }
+        }
+    },
+    "networks": {
+        "emulator": "127.0.0.1:3569",
+        "mainnet": "access.mainnet.nodes.onflow.org:9000",
+        "testing": "127.0.0.1:3569",
+        "testnet": "access.devnet.nodes.onflow.org:9000"
+    },
+    "accounts": {
+        "account01": {
+            "address": "179b6b1cb6755e31",
+            "key": {
+                "type": "file",
+                "location": "account01.pkey"
+            }
+        },
+        "account02": {
+            "address": "7f9ce526f44f45a8",
+            "key": {
+                "type": "file",
+                "location": "account02.pkey"
+            }
+        },
+        "account03": {
+            "address": "f3fcd2c1a78f5eee",
+            "key": {
+                "type": "file",
+                "location": "account03.pkey"
+            }
+        },
+        "account04": {
+            "address": "e03daebed8ca0615",
+            "key": {
+                "type": "file",
+                "location": "account04.pkey"
+            }
+        },
+        "account05": {
+            "address": "045a1763c93006ca",
+            "key": {
+                "type": "file",
+                "location": "account05.pkey"
+            }
+        },
+        "emulator-account": {
+            "address": "f8d6e0586b0a20c7",
+            "key": {
+                "type": "file",
+                "location": "emulator-account.pkey"
+            }
+        }
+    }
 }
