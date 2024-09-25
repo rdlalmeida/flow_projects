@@ -1,2 +1,0 @@
-# emerald_dao_begginer_dapp_submissions
-0x41e49c24e24bd19a
