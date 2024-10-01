@@ -1,61 +1,103 @@
 {
-    "contracts": {
-        "AnotherNFT": {
-            "source": "cadence/contracts/AnotherNFT.cdc",
-            "aliases": {
-                "emulator": "f8d6e0586b0a20c7",
-                "testing": "0000000000000007"
-            }
-        }
-    },
-    "networks": {
-        "emulator": "127.0.0.1:3569",
-        "mainnet": "access.mainnet.nodes.onflow.org:9000",
-        "testing": "127.0.0.1:3569",
-        "testnet": "access.devnet.nodes.onflow.org:9000"
-    },
-    "accounts": {
-        "account01": {
-            "address": "179b6b1cb6755e31",
-            "key": {
-                "type": "file",
-                "location": "account01.pkey"
-            }
-        },
-        "account02": {
-            "address": "7f9ce526f44f45a8",
-            "key": {
-                "type": "file",
-                "location": "account02.pkey"
-            }
-        },
-        "account03": {
-            "address": "f3fcd2c1a78f5eee",
-            "key": {
-                "type": "file",
-                "location": "account03.pkey"
-            }
-        },
-        "account04": {
-            "address": "e03daebed8ca0615",
-            "key": {
-                "type": "file",
-                "location": "account04.pkey"
-            }
-        },
-        "account05": {
-            "address": "045a1763c93006ca",
-            "key": {
-                "type": "file",
-                "location": "account05.pkey"
-            }
-        },
-        "emulator-account": {
-            "address": "f8d6e0586b0a20c7",
-            "key": {
-                "type": "file",
-                "location": "emulator-account.pkey"
-            }
-        }
-    }
+	"contracts": {
+		"AnotherNFT": {
+			"source": "cadence/contracts/AnotherNFT.cdc",
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7",
+				"testing": "0000000000000007"
+			}
+		},
+		"Burner": {
+			"source": "cadence/contracts/Burner.cdc",
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7"
+			}
+		},
+		"FungibleToken": {
+			"source": "cadence/contracts/FungibleToken.cdc",
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7"
+			}
+		},
+		"MetadataViews": {
+			"source": "cadence/contracts/MetadataViews.cdc",
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7"
+			}
+		},
+		"NonFungibleToken": {
+			"source": "cadence/contracts/NonFungibleToken.cdc",
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7"
+			}
+		},
+		"ViewResolver": {
+			"source": "cadence/contracts/ViewResolver.cdc",
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7"
+			}
+		}
+	},
+	"networks": {
+		"emulator": "127.0.0.1:3569",
+		"mainnet": "access.mainnet.nodes.onflow.org:9000",
+		"testing": "127.0.0.1:3569",
+		"testnet": "access.devnet.nodes.onflow.org:9000"
+	},
+	"accounts": {
+		"account01": {
+			"address": "179b6b1cb6755e31",
+			"key": {
+				"type": "file",
+				"location": "account01.pkey"
+			}
+		},
+		"account02": {
+			"address": "f3fcd2c1a78f5eee",
+			"key": {
+				"type": "file",
+				"location": "account02.pkey"
+			}
+		},
+		"account03": {
+			"address": "e03daebed8ca0615",
+			"key": {
+				"type": "file",
+				"location": "account03.pkey"
+			}
+		},
+		"account04": {
+			"address": "045a1763c93006ca",
+			"key": {
+				"type": "file",
+				"location": "account04.pkey"
+			}
+		},
+		"account05": {
+			"address": "120e725050340cab",
+			"key": {
+				"type": "file",
+				"location": "emulator-account.pkey"
+			}
+		},
+		"default": {
+			"address": "e7623b544daf9023",
+			"key": "215d963b15ac735eb60f3d8d6dbce5f594f1022a4f357b80c52d3e73953c71ca"
+		},
+		"emulator-account": {
+			"address": "f8d6e0586b0a20c7",
+			"key": {
+				"type": "file",
+				"location": "emulator-account.pkey"
+			}
+		}
+	},
+	"deployments": {
+		"emulator": {
+			"default": [],
+			"emulator-account": [
+				"AnotherNFT"
+			]
+		}
+	}
 }
