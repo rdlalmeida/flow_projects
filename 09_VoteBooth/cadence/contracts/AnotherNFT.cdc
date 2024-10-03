@@ -103,7 +103,7 @@ access(all) contract AnotherNFT: NonFungibleToken {
 
         // NonFungibleToken.Receiver
         access(all) view fun isSupportedNFTType(type: Type): Bool {
-            // The '!' is used ro resolve a potential Bool?
+            // The '!' is used to resolve a potential Bool?
             if (self.supportedTypes[type]!) {
                 return true
             }

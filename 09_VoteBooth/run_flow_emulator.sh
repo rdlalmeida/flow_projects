@@ -13,7 +13,7 @@ else
     do
         if [[ $LINE == *'='* ]] && [[ $LINE != '#'* ]]; then
             ENV_VAR="$(echo $LINE | envsubst)"
-            eval "declare $ENV_VAR"
+            eval "declare ${ENV_VAR}"
         fi
     done < .env
 fi
