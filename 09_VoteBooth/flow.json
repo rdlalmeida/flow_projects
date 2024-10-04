@@ -121,6 +121,10 @@
                         {
                             "type": "String",
                             "value": "$ELECTION_BALLOT"
+                        },
+                        {
+                            "type": "[Int]",
+                            "value": "$ELECTION_OPTIONS"
                         }
                     ]
                 }

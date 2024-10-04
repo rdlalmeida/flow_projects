@@ -12,13 +12,18 @@ access(all) contract VoteBooth_std: NonFungibleToken {
     access(all) let ballotCollectionPublicPath: PublicPath
 
     // CUSTOM EVENTS
-    access(all) event NonNilTokenReturned(tokenType: Type)
+    access(all) event NonNilTokenReturned(_tokenType: Type)
+    access(all) event BallotMinted(_voteId: UInt64, _voterAddress: Address)
+    access(all) event BallotSubmitted(_voteId: UInt64, _voterAddress: Address)
+    access(all) event BallotModified(_voteId: UInt64, _voterAddress: Address)
+    access(all) event BallotBurned(_voteId: UInt64, _voterAddress: Address)
 
     // CUSTOM VARIABLES (These are severely restricted so I need to define getters for these parameters)
-    access(contract) let _name: String
-    access(contract) let _symbol: String
-    access(contract) let _ballot: String
-    access(contract) let _location: String
+    access(all) let _name: String
+    access(all) let _symbol: String
+    access(all) let _ballot: String
+    access(all) let _location: String
+    access(all) let _options: [Int64]
 
     // These variables are going to be used to keep track of votes minted and submitted
     access(all) var totalBallotsMinted: UInt64
@@ -26,7 +31,10 @@ access(all) contract VoteBooth_std: NonFungibleToken {
 
     // And this one keeps track of where the votes where sent to. This is not standard practice
     // in NFT contracts but makes sense in this particular context
-    access(contract) var ballotOwners: {UInt64: Address} 
+    access(contract) var ballotOwners: {UInt64: Address}
+
+    // As with the Solidity contract, I need the inverse mapping to prevent an address from getting multiple tokens
+    access(contract) var owners: {Address:UInt64} 
 
     // Getters for the custom parameters
     access(all) view fun getElectionName(): String {
@@ -45,7 +53,12 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         return self._ballot
     }
 
+    access(all) view fun getElectionOptions(): [Int64] {
+        return self._options
+    }
+
     /*
+        ************************ NFT **********************************************
         The main element of this system, which in this case is set as a Resource following Flow's NonFungibleToken standard.
     */
     access(all) resource Ballot: NonFungibleToken.NFT {
@@ -53,8 +66,16 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         // standard doesn't want to...
         access(all) let id: UInt64
 
+        /*
+            I'm going to store the main option for the vote in this variable. For now I'm setting it as a simple Int to facilitate validations and so on, but in the interest of protecting voter privacy, this needs to be revised (any data encryption of this kind need loads of salt)
+        */
+        access(self) var option: Int64
+
         init() {
             self.id = self.uuid
+
+            // Set the option to an invalid value (all options are > 0) during minting
+            self.option = 0
         }
 
         // These getters serve so that voter can access these contract parameters from their VoteNFT
@@ -77,6 +98,10 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             return VoteBooth_std._ballot
         }
 
+        access(all) view fun getElectionOptions(): [Int64] {
+            return VoteBooth_std._options
+        }
+
         /*
             This function is as pointless as they come in this context, by I need to add it. Obvioulsy I don't want the voter to create collection in the VoteBooth contract account nor I want, for now, a collection in the voter account.
         */
@@ -94,26 +119,55 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         access(all) fun resolveView(_ view: Type): AnyStruct? {
             return nil
         }
+
+        /*
+            I need to create a 'getVote' for both the Ballot NFT and both Collection. In each, I will have the same function signature, but it does differents things according to the spot where that happens.
+            TODO: Continue here!
+        */
+        access(all) view fun getVote() {
+            // TODO
+        }
+
+        access(all) fun vote() {
+            // TODO
+        }
     }
+    // ************************ NFT **********************************************
 
 
     /*
+        ******************** MINTER **********************************************
         Use this Admin resource to manage access to the BallotPrinter
         The idea is to protect the creation of Ballot NFTs with two layers and based in one fundamental aspect: resources can only be created within contracts! In other words, only contract function are allowed to create resources. It is impossible to create a resource directly with a transaction (literally executing 'create <Resource>'), so, in order to create a resource implemented by a contract, we need a function that, internally, uses the 'create' instruction and then returns the Resource.
         That said, by restricting both the Ballot creation function and the function to create the ballotPrinter (but not the Printer resource because I can't). This means that only the contract deployer account can run both the Printer creation and the Ballot printing.
         Finally, as it is usually the rule, create and save a printer in the contract contructor.
     */
     access(all) resource BallotPrinterAdmin {
-        access(contract) fun printBallot(): @Ballot {
-            return <- create VoteBooth_std.Ballot()
+        access(contract) fun printBallot(voterAddress: Address): @Ballot {
+            // Before minting the Ballot NFT, check if the voterAddress already has another minted into its account
+            pre{VoteBooth_std.owners[voterAddress] == nil: "Voter account ".concat(voterAddress.toString()).concat(" already has a Ballot.")}
+
+            // Fill out the contract mappings before returning the Ballot NFT
+            let newBallot: @Ballot <- create Ballot()
+
+            VoteBooth_std.owners[voterAddress] = newBallot.id
+            VoteBooth_std.ballotOwners[newBallot.id] = voterAddress
+
+            // Emit the respective event
+            emit BallotMinted(_voteId: newBallot.id, _voterAddress: voterAddress)
+
+            // Return the ballot to the owner
+            return <- newBallot
         }
     }
 
     access(contract) fun createBallotPrinterAdmin(): @VoteBooth_std.BallotPrinterAdmin {
         return <- create VoteBooth_std.BallotPrinterAdmin()
     }
+    // ************************ MINTER ********************************************
 
     /*
+        ************************ BALLOT COLLECTION ********************************
         The idea with this Resource is it to be used to store the votes from the contract side, i.e., after they were submitted. The idea is for the voters not having these collections (for now at least) since I can use the storage domains as a handy way to guarantee that, at any point, each voter has only one vote in his/her account storage.
 
         I'm creating two types of Collections in this contract. The BallotBox is the one that sits in the contract account and can hold multiple voteNFTs, which count as submitted votes. The VoteBox is another collection that sits in the voter's account and is limited to hold only one VoteNFT at a time. Votes minted go into a VoteBox and once submitted they go into the BallotBox Collections.
@@ -158,7 +212,8 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         /*
             Because I want to follow the NonFungibleToken standard in this particular implementation, I need to restrict the number of deposits that can be done, namely prevent that multiple VoteNFTs can be deposited into one account. I can use the voteOwners dictionary
         */
-        access(all) fun deposit(token: @{NonFungibleToken.NFT}) {            
+        access(all) fun deposit(token: @{NonFungibleToken.NFT}) {    
+                    
             // Force-cast the token received to the expected type
             let ballot: @VoteBooth_std.Ballot <- token as! @VoteBooth_std.Ballot
 
@@ -169,7 +224,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             // But let's test it anyhow
             if (randomResource != nil) {
                 // If something other than a 'nil' was obtained, emit the respective event and move on
-                emit NonNilTokenReturned(tokenType: randomResource.getType())
+                emit NonNilTokenReturned(_tokenType: randomResource.getType())
             }
 
             // Destroy the variable before exiting
@@ -214,8 +269,10 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             self.supportedTypes[Type<@VoteBooth_std.Ballot>()] = true
         }
     }
+    // ************************ BALLOT COLLECTION *********************************
 
-    /*
+    /*  
+        ************************ VOTE COLLECTION **********************************
         This one is the collection intended to store a single VoteNFT in the voter account. Since I can (need to) add a createEmptyCollection function to both the contract and the NFT implementation, the contract function creates the BallotBox and the NFT one creates the VoteBox. A ballot becomes a vote once the voter choses an option.
         This resource also follows the NonFungibleToken.Collection standard, therefore I need to implement a bunch of paramters that actually force me to adapt this Collection to serve my needs.
     */
@@ -248,7 +305,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
                 /* 
                     TODO: Test if this event gets emitted (probably need to force it). In theory this should not be possible once this resource is stored somewhere, under the assumption that it does not has access to the contract parameters, namely the event definition
                 */
-                emit NonNilTokenReturned(tokenType: randomResource.getType())
+                emit NonNilTokenReturned(_tokenType: randomResource.getType())
             }
 
             destroy randomResource
@@ -310,6 +367,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             self.supportedTypes[Type<@VoteBooth_std.Ballot>()] = true
         }
     }
+    // ************************ VOTE COLLECTION ***********************************
 
     
     // NonFungibleToken.Collection
@@ -352,7 +410,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
 
         TODO: Investigate how Flow solves the ownership issue regarding this contract, for instance. In Solidity we have the Ownable modifier and onlyOwner stuff, but this is not as clear in Flow thus far
     */
-    init(name: String, symbol: String, ballot: String, location: String, ) {
+    init(name: String, symbol: String, ballot: String, location: String, options: [Int64]) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
         self.ballotCollectionStoragePath = /storage/BallotCollection
         self.ballotCollectionPublicPath = /public/BallotCollection
@@ -362,11 +420,13 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         self._symbol = symbol
         self._ballot = ballot
         self._location = location
+        self._options = options
 
         // Initialize the vote counting variables
         self.totalBallotsMinted = 0
         self.totalBallotsSubmitted = 0
         self.ballotOwners = {}
+        self.owners = {}
 
         // Create and save the one VoteNFTMinter into the contract's own account
         self.account.storage.save(<- create BallotPrinterAdmin(), to: self.ballotPrinterAdminStoragePath)
