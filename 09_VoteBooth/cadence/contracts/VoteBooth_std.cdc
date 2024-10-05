@@ -13,17 +13,17 @@ access(all) contract VoteBooth_std: NonFungibleToken {
 
     // CUSTOM EVENTS
     access(all) event NonNilTokenReturned(_tokenType: Type)
-    access(all) event BallotMinted(_voteId: UInt64, _voterAddress: Address)
-    access(all) event BallotSubmitted(_voteId: UInt64, _voterAddress: Address)
-    access(all) event BallotModified(_voteId: UInt64, _voterAddress: Address)
-    access(all) event BallotBurned(_voteId: UInt64, _voterAddress: Address)
+    access(all) event BallotMinted(_ballotId: UInt64, _voterAddress: Address)
+    access(all) event BallotSubmitted(_ballotId: UInt64, _voterAddress: Address)
+    access(all) event BallotModified(_ballotId: UInt64, _voterAddress: Address)
+    access(all) event BallotBurned(_ballotId: UInt64, _voterAddress: Address)
 
     // CUSTOM VARIABLES (These are severely restricted so I need to define getters for these parameters)
     access(all) let _name: String
     access(all) let _symbol: String
     access(all) let _ballot: String
     access(all) let _location: String
-    access(all) let _options: [Int64]
+    access(all) let _options: [UInt64]
 
     // These variables are going to be used to keep track of votes minted and submitted
     access(all) var totalBallotsMinted: UInt64
@@ -53,7 +53,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         return self._ballot
     }
 
-    access(all) view fun getElectionOptions(): [Int64] {
+    access(all) view fun getElectionOptions(): [UInt64] {
         return self._options
     }
 
@@ -62,14 +62,14 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         The main element of this system, which in this case is set as a Resource following Flow's NonFungibleToken standard.
     */
     access(all) resource Ballot: NonFungibleToken.NFT {
-        // I want to name this id as 'voteId' to remain consistent, but the 
+        // I want to name this id as 'ballotId' to remain consistent, but the 
         // standard doesn't want to...
         access(all) let id: UInt64
 
         /*
             I'm going to store the main option for the vote in this variable. For now I'm setting it as a simple Int to facilitate validations and so on, but in the interest of protecting voter privacy, this needs to be revised (any data encryption of this kind need loads of salt)
         */
-        access(self) var option: Int64
+        access(self) var option: UInt64
 
         init() {
             self.id = self.uuid
@@ -98,7 +98,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             return VoteBooth_std._ballot
         }
 
-        access(all) view fun getElectionOptions(): [Int64] {
+        access(all) view fun getElectionOptions(): [UInt64] {
             return VoteBooth_std._options
         }
 
@@ -122,14 +122,87 @@ access(all) contract VoteBooth_std: NonFungibleToken {
 
         /*
             I need to create a 'getVote' for both the Ballot NFT and both Collection. In each, I will have the same function signature, but it does differents things according to the spot where that happens.
-            TODO: Continue here!
         */
-        access(all) view fun getVote() {
-            // TODO
+
+        /*
+            This is one of the main ones in this system, as it should be quite obvious.
+            The basis for autheticate the user with this function relies on the fact that this function needs to be called from a Ballot resource and this resource can only be created with a signed transaction. From that point onwards, any functions that consume gas get it from the transaction signer. Even if the resource is saved into storage, that storage is associated to an account. Removing that resource from storage can only be done by the owner of it. These element guarantee pretty much that this function can only be called by the ower... or the contract (this is the one scenario that I cannot dismiss right now). As such, validate if the user is the same one as one in the contract dictionaries. I have this ownership set from the contract side via a mapping/dictionary but from the voter side, this ownership is established to how Flow regulates resources, namely, that they cannot be "dangling" anywhere and must be owned by someone at all times. The function 'self.owner!.address' gives me this address
+        */
+        access(all) fun vote(newOption: UInt64) {
+            // Get the current owner for this ballot
+            let ballotOwner: Address? = VoteBooth_std.getBallotOwner(ballotId: self.id)
+
+            // This situation should never happen. If it does, it means Ballot NFTs
+            // are being minted outside of the owners mapping
+            if (ballotOwner == nil) {
+                panic("Ballot #".concat(self.id.toString()).concat(" does not has a owner yet! This token should not exist!"))
+            }
+
+            // Test if the right owner is the one that is calling this function. 
+            // Panic otherwise
+            if (ballotOwner != self.owner!.address) {
+                panic("Invalid owner detected! Ballot #".concat(self.id.toString()).concat(" has a different owner (Function caller: ".concat(self.owner!.address.toString())).concat(")"))
+            }
+
+            // Validate the option too by matching it with one of the available options
+            let availableOptions: [UInt64] = self.getElectionOptions()
+
+            // If the option provided does not matches none of the available, panic
+            if (!availableOptions.contains(newOption)) {
+                panic(
+                    "Invalid option provided: "
+                    .concat(newOption.toString())
+                    .concat(".")
+                )
+            }
+
+            // Test the current state of the Ballot to determine (later) if this is
+            // a first vote or a re-submission
+            var firstVote: Bool = true
+
+            if (self.option != 0) {
+                // If the current option is different than the default one, it means this is a re-submission- Mark it as so
+                firstVote = false 
+            }
+
+            // All validations OK. Proceed to change the ballot
+            self.option = newOption
+
+            // Emit the respective event
+            if(firstVote) {
+                emit VoteBooth_std.BallotSubmitted(_ballotId: self.id, _voterAddress: self.owner!.address)
+            }
+            else {
+                emit VoteBooth_std.BallotModified(_ballotId: self.id, _voterAddress: self.owner!.address)
+            }
         }
 
-        access(all) fun vote() {
-            // TODO
+        // Simple function to print the array of options available. This one is not that efficient.
+        access(all) view fun getAvailableElectionOptions(): String {
+            let availableOptions: [UInt64] = self.getElectionOptions()
+
+            var options: String = "[ "
+
+            for option in availableOptions {
+                options = options.concat(option.toString()).concat(" ")
+            }
+
+            return options.concat("]")
+        }
+
+        /*
+            This function simply validates if the caller is the Ballot NFT owner and, if it is, return the current value of the option parameter. Return nil otherwise
+        */
+        access(all) view fun getVote(): UInt64? {
+            // Force the optional out of this one because, at this point, there are little chance of getting a nil with this one
+            let ballotOwner: Address = VoteBooth_std.getBallotOwner(ballotId: self.id)!
+
+            if (self.owner!.address != ballotOwner) {
+                return nil
+            }
+            else {
+                return self.option
+            }
         }
     }
     // ************************ NFT **********************************************
@@ -154,7 +227,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             VoteBooth_std.ballotOwners[newBallot.id] = voterAddress
 
             // Emit the respective event
-            emit BallotMinted(_voteId: newBallot.id, _voterAddress: voterAddress)
+            emit BallotMinted(_ballotId: newBallot.id, _voterAddress: voterAddress)
 
             // Return the ballot to the owner
             return <- newBallot
@@ -406,11 +479,27 @@ access(all) contract VoteBooth_std: NonFungibleToken {
     }
 
     /*
+        Simple function to return the address of the owner of token with the id provided, or nil if none exists yet
+    */
+    access(all) view fun getBallotOwner(ballotId: UInt64): Address? {
+        return self.ballotOwners[ballotId]
+    }
+
+    /*
+        Another simple function to return the id of the ballot that was tranferred to the address provided
+    */
+    access(all) view fun getBallotId(owner: Address): UInt64? {
+        return self.owners[owner]
+    }
+
+    // TODO: BURN FUNCTION HERE!
+
+    /*
         The constructor for the contract (not the NFTs). This one receives a string and sets it has the main ballot, i.e., what this election is all about
 
         TODO: Investigate how Flow solves the ownership issue regarding this contract, for instance. In Solidity we have the Ownable modifier and onlyOwner stuff, but this is not as clear in Flow thus far
     */
-    init(name: String, symbol: String, ballot: String, location: String, options: [Int64]) {
+    init(name: String, symbol: String, ballot: String, location: String, options: [UInt64]) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
         self.ballotCollectionStoragePath = /storage/BallotCollection
         self.ballotCollectionPublicPath = /public/BallotCollection

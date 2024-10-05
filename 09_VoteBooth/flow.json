@@ -123,8 +123,25 @@
                             "value": "$ELECTION_BALLOT"
                         },
                         {
-                            "type": "[Int]",
-                            "value": "$ELECTION_OPTIONS"
+                            "type": "Array",
+                            "value": [
+                                {
+                                    "type": "UInt64",
+                                    "value": "1"
+                                },
+                                {
+                                    "type": "UInt64",
+                                    "value": "2"
+                                },
+                                {
+                                    "type": "UInt64",
+                                    "value": "3"
+                                },
+                                {
+                                    "type": "UInt64",
+                                    "value": "4"
+                                }
+                            ]
                         }
                     ]
                 }
