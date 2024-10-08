@@ -4,12 +4,16 @@
     The first task with this contract is making it compatible with the NonFungibleToken standard.
 */
 import "NonFungibleToken"
+import "Burner"
 
 access(all) contract VoteBooth_std: NonFungibleToken {
     // STORAGE PATHS
-    access(contract) let ballotPrinterAdminStoragePath: StoragePath
-    access(all) let ballotCollectionStoragePath: StoragePath
+    access(all) let ballotPrinterAdminStoragePath: StoragePath
+    access(all) let ballotPrinterAdminPublicPath: PublicPath
+    access(self) let ballotCollectionStoragePath: StoragePath
     access(all) let ballotCollectionPublicPath: PublicPath
+    access(all) let voteBoxStoragePath: StoragePath
+    access(all) let voteBoxPublicPath: PublicPath
 
     // CUSTOM EVENTS
     access(all) event NonNilTokenReturned(_tokenType: Type)
@@ -61,7 +65,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         ************************ NFT **********************************************
         The main element of this system, which in this case is set as a Resource following Flow's NonFungibleToken standard.
     */
-    access(all) resource Ballot: NonFungibleToken.NFT {
+    access(all) resource Ballot: NonFungibleToken.NFT, Burner.Burnable{
         // I want to name this id as 'ballotId' to remain consistent, but the 
         // standard doesn't want to...
         access(all) let id: UInt64
@@ -204,6 +208,18 @@ access(all) contract VoteBooth_std: NonFungibleToken {
                 return self.option
             }
         }
+
+        /*
+            Now for the things to properly implement the Burner interface so that voters have the ability to burn their Ballot NFTs if, by whatever reason, they want to retract a submitted vote. At this level (at the NFT level) I need to establish the burnCallback function to be automatically triggered when the token is burned/destroyed (apparently the new Crescendo upgrade remove the resource's default destructor and this callback tries to re establish some of its functionalities.)
+        */
+        access(contract) fun burnCallback() {
+            // For now, all I care is to emit the event that signals the token burn
+            emit VoteBooth_std.BallotBurned(_ballotId: self.id, _voterAddress: self.owner!.address)
+        }
+
+        access(all) view fun saySomething(): String {
+            return "Hello from the VoteBooth_std.Ballot Resource!"
+        }
     }
     // ************************ NFT **********************************************
 
@@ -216,7 +232,8 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         Finally, as it is usually the rule, create and save a printer in the contract contructor.
     */
     access(all) resource BallotPrinterAdmin {
-        access(contract) fun printBallot(voterAddress: Address): @Ballot {
+        // TODO: I don't like these permissions a bit! Test this extensively! I need to be 100% sure some dude cannot borrow this thing and starts printing ballots left and right.
+        access(all) fun printBallot(voterAddress: Address): @Ballot {
             // Before minting the Ballot NFT, check if the voterAddress already has another minted into its account
             pre{VoteBooth_std.owners[voterAddress] == nil: "Voter account ".concat(voterAddress.toString()).concat(" already has a Ballot.")}
 
@@ -232,9 +249,13 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             // Return the ballot to the owner
             return <- newBallot
         }
+
+        access(all) view fun saySomething(): String {
+            return "Hello from inside the VoteBooth_std.BallotPrinterAdmin Resource"
+        }
     }
 
-    access(contract) fun createBallotPrinterAdmin(): @VoteBooth_std.BallotPrinterAdmin {
+    access(self) fun createBallotPrinterAdmin(): @VoteBooth_std.BallotPrinterAdmin {
         return <- create VoteBooth_std.BallotPrinterAdmin()
     }
     // ************************ MINTER ********************************************
@@ -328,6 +349,10 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             let vote: @{NonFungibleToken.NFT} <- self.ownedNFTs.remove(key: withdrawID) ?? panic("Unable to retrive a vote with id ".concat(withdrawID.toString()))
 
             return <- vote
+        }
+
+        access(all) view fun saySomething(): String {
+            return "Hello from inside the VoteBooth_std.BallotBox Resource!"
         }
 
         init() {
@@ -434,11 +459,26 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             return <- create VoteBooth_std.VoteBox()
         }
 
+        // Add the Ballot burner function here too. This should allow the voter to call it from its VoteBox collection if it does not has access to the contract
+        access(all) fun burnBallot(ballotToBurn: @VoteBooth_std.Ballot) {
+            Burner.burn(<- ballotToBurn)
+        }
+
+        access(all) view fun saySomething(): String {
+            return "Hello from the inside of the VoteBooth_std.VoteBox Resource!"
+        }
+
         init() {
             self.ownedNFTs <- {}
             self.supportedTypes = {}
             self.supportedTypes[Type<@VoteBooth_std.Ballot>()] = true
         }
+    }
+
+    // I need a function to create these ones as well
+    access(all) fun createEmptyVoteBox(): @VoteBooth_std.VoteBox {
+        // The collection that stores the Ballots themselves is harmless in itself
+        return <- create VoteBooth_std.VoteBox()
     }
     // ************************ VOTE COLLECTION ***********************************
 
@@ -492,7 +532,32 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         return self.owners[owner]
     }
 
-    // TODO: BURN FUNCTION HERE!
+    /*
+        And here I need to add the actual burn function, which is going to be at the contract and at the collection level
+    */
+    access(all) fun burnBallot(ballotToBurn: @VoteBooth_std.Ballot) {
+        // Call the parent's function and get on with it
+        Burner.burn(<- ballotToBurn)
+
+        /*
+            TODO: The expectation is that, if I call this burn function, at some point, the burnCallback that I defined in the Ballot NFT specification is going to be called too down the line. It should emit the BallotBurned event. Test this!
+        */
+    }
+
+    // Just for consistency, add two new burner functions at this level: one for BallotBox Collections and another for the VoteBox Collections
+    // I could have one function for both purposes, but good programming practices require this kind of specification
+    // I don't expect these function to ever be needed, but just in case...
+    access(all) fun burnBallotBox(ballotBoxToBurn: @VoteBooth_std.BallotBox) {
+        Burner.burn(<- ballotBoxToBurn)
+    }
+
+    access(all) fun burnVoteBox(voteBoxToBurn: @VoteBooth_std.VoteBox) {
+        Burner.burn(<- voteBoxToBurn)
+    }
+
+    access(all) view fun saySomething(): String {
+        return "Hello from the VoteBooth_std.cdc contract level!"
+    }
 
     /*
         The constructor for the contract (not the NFTs). This one receives a string and sets it has the main ballot, i.e., what this election is all about
@@ -501,8 +566,11 @@ access(all) contract VoteBooth_std: NonFungibleToken {
     */
     init(name: String, symbol: String, ballot: String, location: String, options: [UInt64]) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
-        self.ballotCollectionStoragePath = /storage/BallotCollection
-        self.ballotCollectionPublicPath = /public/BallotCollection
+        self.ballotPrinterAdminPublicPath = /public/BallotPrinterAdmin
+        self.ballotCollectionStoragePath = /storage/BallotBox
+        self.ballotCollectionPublicPath = /public/BallotBox
+        self.voteBoxStoragePath = /storage/VoteBox
+        self.voteBoxPublicPath = /public/VoteBox
 
         // Use the input arguments to set the internal parameters
         self._name = name
@@ -519,5 +587,16 @@ access(all) contract VoteBooth_std: NonFungibleToken {
 
         // Create and save the one VoteNFTMinter into the contract's own account
         self.account.storage.save(<- create BallotPrinterAdmin(), to: self.ballotPrinterAdminStoragePath)
+
+        // Go ahead and create an empty BallotBox Collection and store it as well
+        self.account.storage.save(<- create BallotBox(), to: self.ballotCollectionStoragePath)
+
+        // Create a capability to a BallotPrinter public path to avoid having to load this resource every time I need to print a Ballot
+        // TODO: Check that this capability allows the contract AND ONLY the contract to run the printBallot function
+        
+        // TODO: Do I really need to do this? Apparently with the new upgrade, the owner of the reference is allowed to borrow it directly from his/her own storage...
+        // let printerCapability: Capability<&VoteBooth_std.BallotPrinterAdmin> = self.account.capabilities.storage.issue<&VoteBooth_std.BallotPrinterAdmin>(self.ballotPrinterAdminStoragePath)
+
+        // self.account.capabilities.publish(printerCapability, at: self.ballotPrinterAdminPublicPath)
     }
 }

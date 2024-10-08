@@ -10,37 +10,43 @@
         "Burner": {
             "source": "cadence/contracts/Burner.cdc",
             "aliases": {
-                "emulator": "f8d6e0586b0a20c7"
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "0000000000000008"
             }
         },
         "FungibleToken": {
             "source": "cadence/contracts/FungibleToken.cdc",
             "aliases": {
-                "emulator": "f8d6e0586b0a20c7"
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "0000000000000009"
             }
         },
         "MetadataViews": {
             "source": "cadence/contracts/MetadataViews.cdc",
             "aliases": {
-                "emulator": "f8d6e0586b0a20c7"
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "000000000000000a"
             }
         },
         "NonFungibleToken": {
             "source": "cadence/contracts/NonFungibleToken.cdc",
             "aliases": {
-                "emulator": "f8d6e0586b0a20c7"
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "000000000000000b"
             }
         },
         "ViewResolver": {
             "source": "cadence/contracts/ViewResolver.cdc",
             "aliases": {
-                "emulator": "f8d6e0586b0a20c7"
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "000000000000000c"
             }
         },
         "VoteBooth_std": {
             "source": "cadence/contracts/VoteBooth_std.cdc",
             "aliases": {
-                "emulator": "f8d6e0586b0a20c7"
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "000000000000000d"
             }
         }
     },
