@@ -8,7 +8,7 @@ import "MetadataViews"
 
 access(all) contract AnotherNFT: NonFungibleToken {
     // STORAGE PATHS
-    access(account) let minterStoragePath: StoragePath
+    access(all) let minterStoragePath: StoragePath
     access(all) let collectionStoragePath: StoragePath
     access(all) let collectionPublicPath: PublicPath
 

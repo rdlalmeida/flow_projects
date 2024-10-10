@@ -48,6 +48,13 @@
                 "emulator": "f8d6e0586b0a20c7",
                 "testing": "000000000000000d"
             }
+        },
+        "VoteBooth_fix": {
+            "source": "cadence/contracts/VoteBooth_fix.cdc",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "000000000000000e"
+            }
         }
     },
     "networks": {
@@ -122,32 +129,15 @@
                         },
                         {
                             "type": "String",
+                            "value": "$ELECTION_BALLOT"
+                        },
+                        {
+                            "type": "String",
                             "value": "$ELECTION_LOCATION"
                         },
                         {
                             "type": "String",
-                            "value": "$ELECTION_BALLOT"
-                        },
-                        {
-                            "type": "Array",
-                            "value": [
-                                {
-                                    "type": "UInt64",
-                                    "value": "1"
-                                },
-                                {
-                                    "type": "UInt64",
-                                    "value": "2"
-                                },
-                                {
-                                    "type": "UInt64",
-                                    "value": "3"
-                                },
-                                {
-                                    "type": "UInt64",
-                                    "value": "4"
-                                }
-                            ]
+                            "value": "$ELECTION_OPTIONS"
                         }
                     ]
                 }

@@ -10,7 +10,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
     // STORAGE PATHS
     access(all) let ballotPrinterAdminStoragePath: StoragePath
     access(all) let ballotPrinterAdminPublicPath: PublicPath
-    access(self) let ballotCollectionStoragePath: StoragePath
+    access(all) let ballotCollectionStoragePath: StoragePath
     access(all) let ballotCollectionPublicPath: PublicPath
     access(all) let voteBoxStoragePath: StoragePath
     access(all) let voteBoxPublicPath: PublicPath
@@ -253,6 +253,8 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         access(all) view fun saySomething(): String {
             return "Hello from inside the VoteBooth_std.BallotPrinterAdmin Resource"
         }
+        
+        init() {}
     }
 
     access(self) fun createBallotPrinterAdmin(): @VoteBooth_std.BallotPrinterAdmin {
@@ -561,10 +563,13 @@ access(all) contract VoteBooth_std: NonFungibleToken {
 
     /*
         The constructor for the contract (not the NFTs). This one receives a string and sets it has the main ballot, i.e., what this election is all about
+        NOTE: Initially I was trying to pass an [UInt64] as the "options" parameter, but Flow does not like this at all, like the whole thing crashes out of nowhere if you try to pass any array as a contructor argument in flow.json. I mean, it's like "warn the developers Please" kinda crash, without even indicating exactly where the thing is crashing into. It took me too long to figure out that it was the input argument in the contract contructor that was creating all these problems in my deploys.
+        While I wait for a proper solution (I'm assuming the Flow developers are on the issue after so many crash reports from my end), I need to be creative and find a way to pass an array as a String, given that String arguments are the only ones 100% working right now.
+        The options array is read from the .env file as a String and internally it is decomposed into an array using the 'split' function from the String type. Not elegant nor ideal but it is all I can do for now...
 
         TODO: Investigate how Flow solves the ownership issue regarding this contract, for instance. In Solidity we have the Ownable modifier and onlyOwner stuff, but this is not as clear in Flow thus far
     */
-    init(name: String, symbol: String, ballot: String, location: String, options: [UInt64]) {
+    init(name: String, symbol: String, ballot: String, location: String, options: String) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
         self.ballotPrinterAdminPublicPath = /public/BallotPrinterAdmin
         self.ballotCollectionStoragePath = /storage/BallotBox
@@ -577,7 +582,35 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         self._symbol = symbol
         self._ballot = ballot
         self._location = location
-        self._options = options
+
+        // To go from a String to a [UInt64] I need a couple of auxiliary, temporary structures
+        // This one to store the final array of options
+        var newOptions: [UInt64] = []
+
+        // And this one to process each element at a time
+        var newInt: UInt64? = nil
+
+        // First, split the input string by the ';' character that was used to separate the individual options. This should yield a [String]
+        let inputOptions: [String] = options.split(separator: ";")
+
+        // Now cycle for each one of the captured String elements
+        for option in inputOptions {
+            // Try to cast it from a String to a UInt64
+            newInt = UInt64.fromString(option)
+
+            // If the cast was successful, which I expect it to be 100% of the time
+            if (newInt != nil) {
+                // Append the new option to the UInt64 array
+                newOptions.append(newInt!)
+            }
+            else {
+                // Otherwise I may have a problem. In this case panic instead of deploying a weird contracts
+                panic("VoteBooth_std constructor - Found an invalid option element: ".concat(option))
+            }
+        }
+
+        // If all goes well, set the [UInt64] obtained as the internal option parameter
+        self._options = newOptions
 
         // Initialize the vote counting variables
         self.totalBallotsMinted = 0
