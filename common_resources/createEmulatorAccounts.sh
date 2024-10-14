@@ -98,9 +98,8 @@ do
     ######################## 3. Save the Private key to a file and add it to the .gitignore file
     ACCOUNT_FILENAME="$ACCOUNT_NAME.pkey"
 
-    # Even if a private key file with this name already exists, this command overwrites it. The | tr -d '\n' serves to remove any trailing newlines that can interfere with the emulator
-    # reading the key in the file
-    echo $PRIVATE_KEY | tr -d '\n' > $ACCOUNT_FILENAME
+    # Even if a private key file with this name already exists, this command overwrites it
+    echo $PRIVATE_KEY > $ACCOUNT_FILENAME
 
     # I now need to add the new private key files to my gitignore file. These are just dumb test accounts but it is a good idea to start thinking like a proper cybersecurity analyst
     # To avoid cluttering this file with multiple entries of the same file (which can easily happen if I need to redo this process at some point), I need to increase the complexity a bit here
