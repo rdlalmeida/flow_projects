@@ -24,7 +24,7 @@ transaction(recipient: Address) {
     }
 
     execute {
-        let mintedNFT: @ExampleNFTContract.ExampleNFT <- self.minter.createNFT()
+        let mintedNFT: @{NonFungibleToken.NFT} <- self.minter.createNFT()
         self.recipientCollectionRef.deposit(token: <- mintedNFT)
     }
 }

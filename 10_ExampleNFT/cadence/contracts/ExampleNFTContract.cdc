@@ -9,21 +9,36 @@ access(all) contract ExampleNFTContract: NonFungibleToken {
     // Custom Events
     access(all) event NFTMinted(tokenId: UInt64)
 
+    /*
+        Turns out that the latest Cadence upgrade (Octobre 2024) still has a bunch of problems, the biggest of them being the inability of capturing certain types of values from test scripts, I need to be a bit creative towards testing this contract properly. As such, I'm a bit limited to run scripts and transactions that encapsulate what I want to test given that the Test module is still ridden with hidden errors.
+        Since transactions do not return values, I need to resort to Events to be able to test if the functions are working as they should. The next set of events serve this purpose only
+    */
+    access(all) event ViewsGotten(nftId: UInt64, nftType: Type, result: String)
+    access(all) event ViewsResolved(nftId: UInt64, nftType: Type, result: String)
+    access(all) event EmptyCollectionCreated(nftId: UInt64, nftType: Type, size: Int)
+
     access(all) resource ExampleNFT: NonFungibleToken.NFT {
         access(all) let id: UInt64
 
         // These fields are not that relevant for now, but I need to implement these function to implement the standard
         access(all) view fun getViews(): [Type] {
+            // Emit the events fist before returning the result
+            emit ViewsGotten(nftId: self.id, nftType: self.getType(), result: "[]")
             return [
             ]
         }
 
         access(all) fun resolveView(_ view: Type): AnyStruct? {
+            emit ViewsResolved(nftId: self.id, nftType: self.getType(), result: "nil")
             return nil
         }
 
         access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
-            return <- ExampleNFTContract.createEmptyCollection(nftType: Type<@ExampleNFTContract.ExampleNFT>())
+            let collection: @{NonFungibleToken.Collection} <- ExampleNFTContract.createEmptyCollection(nftType: Type<@ExampleNFTContract.ExampleNFT>())
+
+            emit EmptyCollectionCreated(nftId: self.id, nftType: self.getType(), size: collection.getLength())
+
+            return <- collection
         }
         
         init() {
@@ -88,7 +103,11 @@ access(all) contract ExampleNFTContract: NonFungibleToken {
         }
 
         access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
-            return <- ExampleNFTContract.createEmptyCollection(nftType: Type<@ExampleNFTContract.ExampleNFT>())
+            let collection: @{NonFungibleToken.Collection} <- ExampleNFTContract.createEmptyCollection(nftType: Type<@ExampleNFTContract.ExampleNFT>())
+
+            emit EmptyCollectionCreated(nftId: 0, nftType: self.getType(), size: collection.getLength())
+
+            return <- collection
         }
 
         init() {
