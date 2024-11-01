@@ -4,20 +4,25 @@
 
 List any keys present in your local (Linux) machine
 
-    $ ls -al ~/.ssh
+`$ ls -al ~/.ssh`
 
 If the system complains that it cannot find a '~./ssh' folder it means for sure that no SSH keys were created yet (which is OK) but it can also mean that OpenSSL (which provides the ssh command, as well as the ssh agent and so on) is not yet installed. Confirm this with either:
-$ whereis ssh
+
+`$ whereis ssh`
 
 or
-$ whereis openssl
+
+`$ whereis openssl`
 
 If the system cannot find any of these executables, install OpenSSL using:
-$ sudo apt-get install openssl
+
+`$ sudo apt-get install openssl`
 
 ## 2. Generate a pair of asymmetrical encryption keys in the local machine (Linux)
 
-    $ ssh-keygen -t ed25519 -C "<github_login_email_address>"
+Run this to start:
+
+`$ ssh-keygen -t ed25519 -C <github_login_email_address>`
 
 **IMPORTANT** This key must be created with the email used for logging in the github server
 
@@ -25,17 +30,17 @@ If it doesn't exist yet, this command creates a $HOME/.ssh folder and, in it, tw
 
 You can see the actual key by printing the file contents:
 
-    $ cat id_ed25519
+`$ cat id_ed25519`
 
 ## 3. Add the private key to the SSH agent to be provided automatically whenever git requires it
 
 First, ensure that the SSH agent is active and turn it on if it doesn't
 
-    $ eval "$(ssh-agent -s)"
+`$ eval "$(ssh-agent -s)"`
 
 And then add the private key to it
 
-    $ sudo ssh-add ~/.ssh/id_ed25519
+`$ sudo ssh-add ~/.ssh/id_ed25519`
 
 ## 4. Add the public key to your github account settings
 
@@ -57,19 +62,20 @@ And then add the private key to it
 
 1. First create and move into the folder locally where the repository is to be located
 
-    `$ mkdir my_project`
+`$ mkdir my_project`
 
-    `$ cd my_project`
+`$ cd my_project`
 
 2. Initialise a git repository at the root of the folder
 
-    `$ git init`
+`$ git init`
 
 3. Login into your github.com account and create a new repository. Take note of the URL of the newly created repository by clicking in the upper right green "<> Code" button and selecting the adequate transmission protocol (HTTPS is usually enough but the SSH protocol works really well if OpenSSL is correctly configured in the local machine.)
+
 4. Move back to the local repository folder where git was initialised in (2) and run now:
 
-    `$ git remote add origin <REMOTE_REPO_URL_FROM_3>`
+`$ git remote add origin <REMOTE_REPO_URL_FROM_3>`
 
-    `$ git push --all origin`
+`$ git push --all origin`
 
 5. That should be all.
