@@ -106,6 +106,76 @@
                 "type": "file",
                 "location": "emulator-account.pkey"
             }
+        },
+        "flow-account00": {
+            "address": "0x678bb63d2ecf5ac2",
+            "key": {
+                "type": "file",
+                "location": "flow_test_accounts/flow_account00.key"
+            }
+        },
+        "flow-account01": {
+            "address": "0x83ec0fe03f355a1d",
+            "key": {
+                "type": "file",
+                "location": "flow_test_accounts/flow_account01.key"
+            }
+        },
+        "flow-account02": {
+            "address": "0x95b86ad3a631507c",
+            "key": {
+                "type": "file",
+                "location": "flow_test_accounts/flow_account02.key"
+            }
+        },
+        "flow-account03": {
+            "address": "0x71dfd30eb7cb50a3",
+            "key": {
+                "type": "file",
+                "location": "flow_test_accounts/flow_account03.key"
+            }
+        },
+        "flow-account04": {
+            "address": "0x9e92584a6ab42e55",
+            "key": {
+                "type": "file",
+                "location": "flow_test_accounts/flow_account04.key"
+            }
+        },
+        "flow-account05": {
+            "address": "0x7af5e1977b4e2e8a",
+            "key": {
+                "type": "file",
+                "location": "flow_test_accounts/flow_account05.key"
+            }
+        },
+        "flow-account06": {
+            "address": "0x88c63d79f3b02434",
+            "key": {
+                "type": "file",
+                "location": "flow_test_accounts/flow_account06.key"
+            }
+        },
+        "flow-account07": {
+            "address": "0x65413a9b5deb9e6e",
+            "key": {
+                "type": "file",
+                "location": "flow_test_accounts/flow_account07.key"
+            }
+        },
+        "flow-account08": {
+            "address": "0x812683464c119eb1",
+            "key": {
+                "type": "file",
+                "location": "flow_test_accounts/flow_account08.key"
+            }
+        },
+        "flow-account09": {
+            "address": "0x9772e675d51594d0",
+            "key": {
+                "type": "file",
+                "location": "flow_test_accounts/flow_account09.key"
+            }
         }
     },
     "deployments": {
