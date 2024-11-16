@@ -20,9 +20,90 @@
                 "testnet": "9a0766d93b6608b7"
             }
         },
+        "FlowClusterQC": {
+            "source": "mainnet://8624b52f9ddcd04a.FlowClusterQC",
+            "hash": "c01ac0263dce7395dfd6b53f1ec327e9d8ccb1103711f8c1829cb903db0e2975",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "mainnet": "8624b52f9ddcd04a",
+                "testnet": "9eca2b38b18b5dfe"
+            }
+        },
+        "FlowDKG": {
+            "source": "mainnet://8624b52f9ddcd04a.FlowDKG",
+            "hash": "12dddd9b76d098310a7c6cafbc63af05e3ba3a98beb3d703740a7340192dc6fd",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "mainnet": "8624b52f9ddcd04a",
+                "testnet": "9eca2b38b18b5dfe"
+            }
+        },
+        "FlowEpoch": {
+            "source": "mainnet://8624b52f9ddcd04a.FlowEpoch",
+            "hash": "0e2b347f8714c99ee03ce5b16a310af8af65673b70b687ca7514df7386b936a4",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "mainnet": "8624b52f9ddcd04a",
+                "testnet": "9eca2b38b18b5dfe"
+            }
+        },
+        "FlowFees": {
+            "source": "mainnet://f919ee77447b7497.FlowFees",
+            "hash": "d02bc8295c0434cf2b0a96a77d992f49f52e7865debda84e7a21e176e163a680",
+            "aliases": {
+                "emulator": "e5a8b7f23e8b548f",
+                "mainnet": "f919ee77447b7497",
+                "testnet": "912d5440f7e3769e"
+            }
+        },
+        "FlowIDTableStaking": {
+            "source": "mainnet://8624b52f9ddcd04a.FlowIDTableStaking",
+            "hash": "d0c96b89bd34ca820216ddd340b4748184cd03235e7949fa934db9b8b6100705",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "mainnet": "8624b52f9ddcd04a",
+                "testnet": "9eca2b38b18b5dfe"
+            }
+        },
+        "FlowServiceAccount": {
+            "source": "mainnet://e467b9dd11fa00df.FlowServiceAccount",
+            "hash": "a797fd8923ae6c7063ae1480b4874acf20ee4f40f97e2e874dd617c157bf8310",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "mainnet": "e467b9dd11fa00df",
+                "testnet": "8c5303eaa26202d6"
+            }
+        },
+        "FlowStorageFees": {
+            "source": "mainnet://e467b9dd11fa00df.FlowStorageFees",
+            "hash": "e38d8a95f6518b8ff46ce57dfa37b4b850b3638f33d16333096bc625b6d9b51a",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "mainnet": "e467b9dd11fa00df",
+                "testnet": "8c5303eaa26202d6"
+            }
+        },
+        "FlowToken": {
+            "source": "mainnet://1654653399040a61.FlowToken",
+            "hash": "cefb25fd19d9fc80ce02896267eb6157a6b0df7b1935caa8641421fe34c0e67a",
+            "aliases": {
+                "emulator": "0ae53cb6e3f42a79",
+                "mainnet": "1654653399040a61",
+                "testnet": "7e60df042a9c0868"
+            }
+        },
         "FungibleToken": {
             "source": "mainnet://f233dcee88fe0abe.FungibleToken",
             "hash": "050328d01c6cde307fbe14960632666848d9b7ea4fef03ca8c0bbfb0f2884068",
+            "aliases": {
+                "emulator": "ee82856bf20e2aa6",
+                "mainnet": "f233dcee88fe0abe",
+                "testnet": "9a0766d93b6608b7"
+            }
+        },
+        "FungibleTokenMetadataViews": {
+            "source": "mainnet://f233dcee88fe0abe.FungibleTokenMetadataViews",
+            "hash": "dff704a6e3da83997ed48bcd244aaa3eac0733156759a37c76a58ab08863016a",
             "aliases": {
                 "emulator": "ee82856bf20e2aa6",
                 "mainnet": "f233dcee88fe0abe",
@@ -44,8 +125,7 @@
             "aliases": {
                 "emulator": "f8d6e0586b0a20c7",
                 "mainnet": "1d7e57aa55817448",
-                "testnet": "631e88ae7f1d7c20",
-                "testing": "0000000000000008"
+                "testnet": "631e88ae7f1d7c20"
             }
         },
         "ViewResolver": {
@@ -55,24 +135,6 @@
                 "emulator": "f8d6e0586b0a20c7",
                 "mainnet": "1d7e57aa55817448",
                 "testnet": "631e88ae7f1d7c20"
-            }
-        },
-        "FlowFees": {
-            "source": "mainnet://f919ee77447b7497.FlowFees",
-            "hash": "d02bc8295c0434cf2b0a96a77d992f49f52e7865debda84e7a21e176e163a680",
-            "aliases": {
-                "emulator": "e5a8b7f23e8b548f",
-                "mainnet": "f919ee77447b7497",
-                "testnet": "912d5440f7e3769e"
-            }
-        },
-        "FlowStorageFees": {
-            "source": "mainnet://e467b9dd11fa00df.FlowStorageFees",
-            "hash": "e38d8a95f6518b8ff46ce57dfa37b4b850b3638f33d16333096bc625b6d9b51a",
-            "aliases": {
-                "emulator": "f8d6e0586b0a20c7",
-                "mainnet": "e467b9dd11fa00df",
-                "testnet": "8c5303eaa26202d6"
             }
         }
     },
