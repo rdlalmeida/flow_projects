@@ -1,5 +1,6 @@
 import "NonFungibleToken"
 import "ExampleNFTContract"
+import "FlowFees"
 
 transaction(destinationAddress: Address, withdrawID: UInt64) {
     let withdrawRef: auth(NonFungibleToken.Withdraw) &{NonFungibleToken.Collection}
@@ -7,6 +8,13 @@ transaction(destinationAddress: Address, withdrawID: UInt64) {
     let receiverRef: &{NonFungibleToken.Receiver}
     
     prepare(signer: auth(BorrowValue) &Account) {
+        let currentFeeBalance: UFix64 = FlowFees.getFeeBalance();
+        log(
+            "03-TransferNFT: Current Fee Balance = "
+            .concat(currentFeeBalance.toString())
+        )
+
+
         self.withdrawRef = signer.storage.borrow<auth(NonFungibleToken.Withdraw) &{NonFungibleToken.Collection}>(from: ExampleNFTContract.CollectionStoragePath) ??
             panic(
                 "The signer does not store a ExampleNFTContract.Collection object at the path "
@@ -32,5 +40,11 @@ transaction(destinationAddress: Address, withdrawID: UInt64) {
     execute {
         let nft: @{NonFungibleToken.NFT} <- self.withdrawRef.withdraw(withdrawID: withdrawID)
         self.receiverRef.deposit(token: <- nft)
+
+        let finalFeeBalance: UFix64 = FlowFees.getFeeBalance()
+        log(
+            "03-TransferNFT = "
+            .concat(finalFeeBalance.toString())
+        )
     }
 }

@@ -128,11 +128,25 @@ access(all) contract ExampleNFTContract: NonFungibleToken {
         return <- create Collection()
     }
 
+    access(all) fun saySomething(): String {
+        return "This contract is working!"
+    }
+
+    access(all) fun sayThings(things: String): String {
+        return "Words are being concatenated: ".concat(things);
+    }
+
 
     init() {
         self.MinterStoragePath = /storage/exampleMinter
         self.CollectionStoragePath = /storage/exampleNFTCollection
         self.CollectionPublicPath = /public/exampleNFTCollection
+
+        // Clean the storage spot for the Minter in storage first. Whenever I amend a deployed contract, the Minter never gets deleted after deleting the contract
+        let randomMinter: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.MinterStoragePath);
+
+        // Destroy whatever may have been in storage to clear the space for the new Minter
+        destroy randomMinter
 
         // TODO: Added the type of resource to store. Check if this might resolve the minting problem I was getting before
         self.account.storage.save<@ExampleNFTContract.NFTMinter>(<- create NFTMinter(), to: self.MinterStoragePath)

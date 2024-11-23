@@ -1,5 +1,6 @@
 import "NonFungibleToken"
 import "ExampleNFTContract"
+import "FlowFees"
 
 /*
     Use this transaction to retrieve a Collection reference, borrow the last NFT in it, run the NFT functions and then use the Test file to capture and validate the events.
@@ -13,6 +14,12 @@ transaction() {
 
     // Note: I'm trying to run this as if this was a script, i.e., I need tp try to run this with a 'normal' &Account without any entitlements
     prepare(signer: &Account) {
+        let currentFeeBalance: UFix64 = FlowFees.getFeeBalance()
+        log(
+            "04-TestNFTFunctions: Current balance = "
+            .concat(currentFeeBalance.toString())
+        )
+
         self.collectionRef = signer.capabilities.borrow<&{NonFungibleToken.Collection}>(ExampleNFTContract.CollectionPublicPath) ??
             panic(
                 "Account "
@@ -72,5 +79,11 @@ transaction() {
 
         // All tests done. Destroy the collection to finish this
         destroy emptyCollection
+
+        let finalFeeBalance: UFix64 = FlowFees.getFeeBalance()
+        log(
+            "04-TestNFTFunctions: Current Fee Balance = "
+            .concat(finalFeeBalance.toString())
+        )
     }
 }

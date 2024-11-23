@@ -6,9 +6,6 @@ import "FlowFees"
 
 /* 
     VERY IMPORTANT NOTE: Apparently, in order for a test function to execute automatically, the function name needs to start with 'test<SomeOtherNames>'. If not, the testing module ignores the function! Weird behaviour, but I need to take this into account.
-
-    TODO: I'm stuck with the authorization crap... How the fuck do I get the neccessary entitlements in a TestAccount??? I need to be able to load and save stuff into storage but I cannot do it with any of the info published so far...
-
 */
 
 access(all) let account01: Test.TestAccount = Test.createAccount()
@@ -133,7 +130,7 @@ access(all) fun testMintNFT() {
     Test.assertEqual(1, mintEvents.length)
     Test.assertEqual(1, depositEvents.length)
     
-    // The previous validation assured me that I have one single event in the list above (as exptected). As such, extract the tokenId from the event arguments first
+    // The previous validation assured me that I have one single event in the list above (as expected). As such, extract the tokenId from the event arguments first
     // Start by casting the event description received to a proper event of the expected type
     let mintEvent01: ExampleNFTContract.NFTMinted = mintEvents[0] as! ExampleNFTContract.NFTMinted
     let depositedEvent01: NonFungibleToken.Deposited = depositEvents[0] as! NonFungibleToken.Deposited

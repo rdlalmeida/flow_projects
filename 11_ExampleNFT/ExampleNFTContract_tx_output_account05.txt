@@ -1,0 +1,74 @@
+account05 = 0x120e725050340cab
+FlowFees = 0xe5a8b7f23e8b548f
+FlowToken = 0x0ae53cb6e3f42a79
+FungibleToken = 0xee82856bf20e2aa6
+
+
+5:54AM DBG EVT [727215] flow.AccountContractAdded: 0x25e34d929bbe1f7c3e92d0cbea153289d2cf88612b51de76bd5a0d119a306359
+
+-----------------------------------------------------------------------------------------------
+5:54AM DBG EVT [727215] A.0ae53cb6e3f42a79.FlowToken.TokensWithdrawn: 0x558e58060a72c247af338c68e17ef60fde9000a35c13f582d8813d53391591f6
+
+Events Block #25:
+    Index	1
+    Type	A.0ae53cb6e3f42a79.FlowToken.TokensWithdrawn
+    Tx ID	727215ad477697055d3b6adb0e8b23f5d97756cffaba660b3a9b5b51fe669e75
+    Values
+		- amount (UFix64): 0.00001000 
+		- from ((Address)?): 0x120e725050340cab 
+
+-----------------------------------------------------------------------------------------------
+5:54AM DBG EVT [727215] A.ee82856bf20e2aa6.FungibleToken.Withdrawn: 0x13c5e87287dfb6db5c054ca1cfcc9ee28352264c81b942cd64eb66006d809de2
+
+Events Block #25:
+    Index	2
+    Type	A.ee82856bf20e2aa6.FungibleToken.Withdrawn
+    Tx ID	727215ad477697055d3b6adb0e8b23f5d97756cffaba660b3a9b5b51fe669e75
+    Values
+		- amount (UFix64): 0.00001000 
+		- balanceAfter (UFix64): 2000.00098000 
+		- from ((Address)?): 0x120e725050340cab 
+		- fromUUID (UInt64): 240793046482946 
+		- type (String): "A.0ae53cb6e3f42a79.FlowToken.Vault" 
+		- withdrawnUUID (UInt64): 205608674394113 
+
+-----------------------------------------------------------------------------------------------
+5:54AM DBG EVT [727215] A.0ae53cb6e3f42a79.FlowToken.TokensDeposited: 0xe1d1401e338611daec286d1718669d16952865abc73bc96e83529b372934d4d1
+
+Events Block #25:
+    Index	3
+    Type	A.0ae53cb6e3f42a79.FlowToken.TokensDeposited
+    Tx ID	727215ad477697055d3b6adb0e8b23f5d97756cffaba660b3a9b5b51fe669e75
+    Values
+		- amount (UFix64): 0.00001000 
+		- to ((Address)?): 0xe5a8b7f23e8b548f 
+
+-----------------------------------------------------------------------------------------------
+5:54AM DBG EVT [727215] A.ee82856bf20e2aa6.FungibleToken.Deposited: 0xa32d0ecf5dff2d3bddfcfa86d3e8099e846908a6d5f98ec2540f50ac59d7bd5f
+
+Events Block #25:
+    Index	4
+    Type	A.ee82856bf20e2aa6.FungibleToken.Deposited
+    Tx ID	727215ad477697055d3b6adb0e8b23f5d97756cffaba660b3a9b5b51fe669e75
+    Values
+		- amount (UFix64): 0.00001000 
+		- balanceAfter (UFix64): 0.00049000 
+		- depositedUUID (UInt64): 205608674394113 
+		- to ((Address)?): 0xe5a8b7f23e8b548f 
+		- toUUID (UInt64): 3 
+		- type (String): "A.0ae53cb6e3f42a79.FlowToken.Vault" 
+
+-----------------------------------------------------------------------------------------------
+5:54AM DBG EVT [727215] A.e5a8b7f23e8b548f.FlowFees.FeesDeducted: 0xdbbd28a820a3b7fcb6c0dff8f9e9291616710bc040ba67f0d6933a2dec09de19
+
+Events Block #25:
+    Index	5
+    Type	A.e5a8b7f23e8b548f.FlowFees.FeesDeducted
+    Tx ID	727215ad477697055d3b6adb0e8b23f5d97756cffaba660b3a9b5b51fe669e75
+    Values
+		- amount (UFix64): 0.00001000 
+		- executionEffort (UFix64): 0.00000011 
+		- inclusionEffort (UFix64): 1.00000000 
+
+-----------------------------------------------------------------------------------------------
+

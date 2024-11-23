@@ -8,7 +8,10 @@ transaction(recipient: Address) {
 
     prepare(signer: auth(BorrowValue) &Account) {
         let currentFeeBalance: UFix64 = FlowFees.getFeeBalance();
-        log("Current Fee Balance: ".concat(currentFeeBalance.toString()))
+        log(
+            "02-MintNFT: Current Fee Balance = "
+            .concat(currentFeeBalance.toString())
+        )
 
         self.minter = signer.storage.borrow<&ExampleNFTContract.NFTMinter>(from: ExampleNFTContract.MinterStoragePath) ??
         panic(
@@ -32,6 +35,10 @@ transaction(recipient: Address) {
         self.recipientCollectionRef.deposit(token: <- mintedNFT)
 
         let currentFeeBalance: UFix64 = FlowFees.getFeeBalance()
-        log("Final Fee Balance: ".concat(currentFeeBalance.toString()))
+        
+        log(
+            "02-MintNFT: Final Fee Balance = "
+            .concat(currentFeeBalance.toString())
+        )
     }
 }
