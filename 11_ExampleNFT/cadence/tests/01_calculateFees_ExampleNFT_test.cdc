@@ -33,7 +33,53 @@ access(all) let feesDeductedEventType: Type = Type<FlowFees.FeesDeducted>()
 access(all) let tokensDepositedEventType: Type = Type<FlowFees.TokensDeposited>()
 access(all) let tokensWithdrawnEventType: Type = Type<FlowFees.TokensWithdrawn>()
 
+
+// Simple function that is not run during the normal test run (because it is not prefixed by 'test' in its name) that runs FlowFee.computeFees function to, hopefully, 
+// return the amount paid in fees for the transaction considered.
+access(all) fun calculateFees(inclusionEffort: UFix64, executionEffort: UFix64): UFix64 {
+    return FlowFees.computeFees(inclusionEffort: inclusionEffort, executionEffort: executionEffort);
+}
+
+// Another simple function just to print out the fee parameters
+access(all) fun printFeeParameters() {
+    let feeParameters: FlowFees.FeeParameters = FlowFees.getFeeParameters()
+
+    log("Current Fee Parameters: ")
+    log(feeParameters)
+}
+
+// And another one to abstract the capture the FeesDeducted event alone
+// NOTE: This function returns a dictionary with an index and an three element dictionary as value. 
+// This element contains the arguments emitted by the FlowFees.FeesDeducted, namely, the amount, inclusionEffort and executionEffort. The index is for the case in which multiple events are captured instead
+access(all) fun captureFeesDeducted(): {UInt64: {String: UFix64}} {
+    let feesDeductedEvents: [AnyStruct] = Test.eventsOfType(feesDeductedEventType)
+    log("Captured ".concat(feesDeductedEvents.length.toString()).concat(" FlowFees.FeesDeducted events"))
+
+    var eventResult: {UInt64: {String: UFix64}} = {}
+    var index: UInt64 = 0
+
+    for feeEvent in feesDeductedEvents {
+        let newFeeEvent: FlowFees.FeesDeducted = feeEvent as! FlowFees.FeesDeducted
+
+        log("FlowFee event #".concat(index.toString()).concat(": "));
+        log(newFeeEvent)
+
+        // Add the event elements to the result array
+        eventResult[index] = {
+            "amount": newFeeEvent.amount,
+            "inclusionEffort": newFeeEvent.inclusionEffort,
+            "executionEffort": newFeeEvent.executionEffort
+        }
+        // Adjust the index before moving to the next event
+        index = index + 1
+    }
+
+    // Return the result
+    return eventResult
+}
+
 // Setup function to deploy the main contract and any other initial configurations
+// NOTE: I've prefixed this function with NOT to prevent the automated test suit from running it
 access(all) fun setup() {
     // Begin by retrieving and printing the current fee parameters
     let beforeFeeParameters: FlowFees.FeeParameters = FlowFees.getFeeParameters();
@@ -58,7 +104,10 @@ access(all) fun setup() {
 
         log("FlowFee Event #".concat(index.toString()).concat(":"));
         log(newFeeEvent);
+
+        index = index + 1
     }
+    // Turns out that deploying the contract does not emit any FeesDeducted events... I'll leave the code here anyways
 
 
     // Check if the parameters have changed after deploying the main contract
@@ -66,6 +115,48 @@ access(all) fun setup() {
 
     log("Fee parameters after contract deploy: ");
     log(afterFeeParameters);
+
+    Test.expect(err, Test.beNil())
+}
+
+// Test the creation of an empty collection
+access(all) fun testCreateCollection() {
+    let txResult: Test.TransactionResult = executeTransaction(
+        createCollectionTx,
+        [],
+        account01
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    let eventResults: {UInt64: {String: UFix64}} = captureFeesDeducted()
+
+    log("Fees Deducted Events results: ")
+    log(eventResults)
+}
+
+// I'm defining another deploy function, outside of the setup one, to make sure that test files do not emit FlowFees events during contract deployments, 
+// though contract deployments do require the payment of fees
+// NOTE: Apparently, the name of the function is irrelevant... turns out that deploying contracts in Test mode does not costs any fees, it seems
+access(all) fun NOTtestContractDeploy() {
+    // Deploy the ExampleNFTContract
+    let err: Test.Error? = Test.deployContract(
+        name: "ExampleNFTContract",
+        path: "../contracts/ExampleNFTContract.cdc",
+        arguments: []
+    )
+
+    let feesDeductedEvents: [AnyStruct] = Test.eventsOfType(feesDeductedEventType);
+    log("Captured ".concat(feesDeductedEvents.length.toString()).concat(" events!"));
+
+    var index: Int = 0;
+
+    for feeEvent in feesDeductedEvents {
+        let newFeeEvent: FlowFees.FeesDeducted = feeEvent as! FlowFees.FeesDeducted
+
+        log("FlowFee Event #".concat(index.toString()).concat(":"));
+        log(newFeeEvent)
+    }
 
     Test.expect(err, Test.beNil())
 }
