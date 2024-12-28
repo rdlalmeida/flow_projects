@@ -21,6 +21,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
     access(all) event BallotSubmitted(_ballotId: UInt64, _voterAddress: Address)
     access(all) event BallotModified(_ballotId: UInt64, _voterAddress: Address)
     access(all) event BallotBurned(_ballotId: UInt64, _voterAddress: Address)
+    access(all) event ContractDataInconsistent(_ballotId: UInt64)
 
     // CUSTOM VARIABLES (These are severely restricted so I need to define getters for these parameters)
     access(all) let _name: String
@@ -59,6 +60,15 @@ access(all) contract VoteBooth_std: NonFungibleToken {
 
     access(all) view fun getElectionOptions(): [UInt64] {
         return self._options
+    }
+
+    // The ballotOwners and the owners dictionaries are access(contract), as such I need to develop getters to check their values
+    access(all) view fun getBallotOwners(): {UInt64: Address} {
+        return self.ballotOwners
+    }
+
+    access(all) view fun getOwners(): {Address: UInt64} {
+        return self.owners
     }
 
     /*
@@ -107,7 +117,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         }
 
         /*
-            This function is as pointless as they come in this context, by I need to add it. Obvioulsy I don't want the voter to create collection in the VoteBooth contract account nor I want, for now, a collection in the voter account.
+            This function is as pointless as they come in this context, by I need to add it. Obviously I don't want the voter to create collection in the VoteBooth contract account nor I want, for now, a collection in the voter account.
         */
         access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
             return <- create VoteBooth_std.BallotBox()
@@ -125,12 +135,12 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         }
 
         /*
-            I need to create a 'getVote' for both the Ballot NFT and both Collection. In each, I will have the same function signature, but it does differents things according to the spot where that happens.
+            I need to create a 'getVote' for both the Ballot NFT and both Collection. In each, I will have the same function signature, but it does different things according to the spot where that happens.
         */
 
         /*
             This is one of the main ones in this system, as it should be quite obvious.
-            The basis for autheticate the user with this function relies on the fact that this function needs to be called from a Ballot resource and this resource can only be created with a signed transaction. From that point onwards, any functions that consume gas get it from the transaction signer. Even if the resource is saved into storage, that storage is associated to an account. Removing that resource from storage can only be done by the owner of it. These element guarantee pretty much that this function can only be called by the ower... or the contract (this is the one scenario that I cannot dismiss right now). As such, validate if the user is the same one as one in the contract dictionaries. I have this ownership set from the contract side via a mapping/dictionary but from the voter side, this ownership is established to how Flow regulates resources, namely, that they cannot be "dangling" anywhere and must be owned by someone at all times. The function 'self.owner!.address' gives me this address
+            The basis for authenticate the user with this function relies on the fact that this function needs to be called from a Ballot resource and this resource can only be created with a signed transaction. From that point onwards, any functions that consume gas get it from the transaction signer. Even if the resource is saved into storage, that storage is associated to an account. Removing that resource from storage can only be done by the owner of it. These element guarantee pretty much that this function can only be called by the owner... or the contract (this is the one scenario that I cannot dismiss right now). As such, validate if the user is the same one as one in the contract dictionaries. I have this ownership set from the contract side via a mapping/dictionary but from the voter side, this ownership is established to how Flow regulates resources, namely, that they cannot be "dangling" anywhere and must be owned by someone at all times. The function 'self.owner!.address' gives me this address
         */
         access(all) fun vote(newOption: UInt64) {
             // Get the current owner for this ballot
@@ -229,7 +239,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         Use this Admin resource to manage access to the BallotPrinter
         The idea is to protect the creation of Ballot NFTs with two layers and based in one fundamental aspect: resources can only be created within contracts! In other words, only contract function are allowed to create resources. It is impossible to create a resource directly with a transaction (literally executing 'create <Resource>'), so, in order to create a resource implemented by a contract, we need a function that, internally, uses the 'create' instruction and then returns the Resource.
         That said, by restricting both the Ballot creation function and the function to create the ballotPrinter (but not the Printer resource because I can't). This means that only the contract deployer account can run both the Printer creation and the Ballot printing.
-        Finally, as it is usually the rule, create and save a printer in the contract contructor.
+        Finally, as it is usually the rule, create and save a printer in the contract constructor.
     */
     access(all) resource BallotPrinterAdmin {
         // TODO: I don't like these permissions a bit! Test this extensively! I need to be 100% sure some dude cannot borrow this thing and starts printing ballots left and right.
@@ -249,6 +259,21 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             // Return the ballot to the owner
             return <- newBallot
         }
+
+        // Add the standard ballot burner function to this one as well, just because.
+        access(all) fun burnBallot(ballotToBurn: @VoteBooth_std.Ballot) {
+            // Delete the entries from the internal dictionaries
+            let result: Bool = VoteBooth_std.removeDictEntries(_ballotId: ballotToBurn.id)
+
+            if (!result) {
+                // Warn if a false was returned for some reason
+                emit ContractDataInconsistent(_ballotId: ballotToBurn.id)
+            }
+
+            Burner.burn(<- ballotToBurn)
+        }
+
+
 
         access(all) view fun saySomething(): String {
             return "Hello from inside the VoteBooth_std.BallotPrinterAdmin Resource"
@@ -273,7 +298,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             This dictionary is going to be used to store the submitted votes. Ideally this structure should have a more suggestive name, but that is impossible if the NonFungibleToken standard is to be followed.
             // TODO: It's getting clearer and clearer that, at some point, I need to create my own standard for this purpose.
         */
-        // NonFugibleToken.Collection
+        // NonFungibleToken.Collection
         access(all) var ownedNFTs: @{UInt64: {NonFungibleToken.NFT}}
 
         // I'm going to use this dictionary to store the NFT types supported by the collections in 
@@ -314,7 +339,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             let ballot: @VoteBooth_std.Ballot <- token as! @VoteBooth_std.Ballot
 
             // Save the VoteNFT in the spot determined by its id and save whatever may be in that
-            // dicionary entry to a variable. If all goes right, this variable should be 'nil'
+            // dictionary entry to a variable. If all goes right, this variable should be 'nil'
             let randomResource: @AnyResource? <- self.ownedNFTs[ballot.id] <- ballot
 
             // But let's test it anyhow
@@ -345,10 +370,10 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         // NonFungibleToken.Provider
         /*
             This another of those functions that, ideally should be used only be the vote owner and by the VoteBooth and Tally contracts. These entities need to be the only one able to move a VoteNFT from one account to another.
-            TODO: Test the restrictions of this function: only the VoteNFT onwer, the VoteBooth and the Tally contract should be able to use this function and even those uses are restricted to Voter <-> VoteBooth and VoteBooth <-> Tally
+            TODO: Test the restrictions of this function: only the VoteNFT owner, the VoteBooth and the Tally contract should be able to use this function and even those uses are restricted to Voter <-> VoteBooth and VoteBooth <-> Tally
         */
         access(NonFungibleToken.Withdraw) fun withdraw(withdrawID: UInt64): @{NonFungibleToken.NFT} {
-            let vote: @{NonFungibleToken.NFT} <- self.ownedNFTs.remove(key: withdrawID) ?? panic("Unable to retrive a vote with id ".concat(withdrawID.toString()))
+            let vote: @{NonFungibleToken.NFT} <- self.ownedNFTs.remove(key: withdrawID) ?? panic("Unable to retrieve a vote with id ".concat(withdrawID.toString()))
 
             return <- vote
         }
@@ -361,7 +386,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             self.ownedNFTs <- {}
 
             // Initialize the supported types dictionary
-            // NOTE: This one is a simple dicionary. No resources involved, 
+            // NOTE: This one is a simple dictionary. No resources involved, 
             // therefore it gets a '=' instead of a '<-'
             self.supportedTypes = {}
 
@@ -374,7 +399,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
     /*  
         ************************ VOTE COLLECTION **********************************
         This one is the collection intended to store a single VoteNFT in the voter account. Since I can (need to) add a createEmptyCollection function to both the contract and the NFT implementation, the contract function creates the BallotBox and the NFT one creates the VoteBox. A ballot becomes a vote once the voter choses an option.
-        This resource also follows the NonFungibleToken.Collection standard, therefore I need to implement a bunch of paramters that actually force me to adapt this Collection to serve my needs.
+        This resource also follows the NonFungibleToken.Collection standard, therefore I need to implement a bunch of parameters that actually force me to adapt this Collection to serve my needs.
     */
     access(all) resource VoteBox: NonFungibleToken.Collection {
         access(all) var ownedNFTs: @{UInt64: {NonFungibleToken.NFT}}
@@ -463,6 +488,16 @@ access(all) contract VoteBooth_std: NonFungibleToken {
 
         // Add the Ballot burner function here too. This should allow the voter to call it from its VoteBox collection if it does not has access to the contract
         access(all) fun burnBallot(ballotToBurn: @VoteBooth_std.Ballot) {
+
+            // Delete both entries from the internal dictionaries
+            let result: Bool = VoteBooth_std.removeDictEntries(_ballotId: ballotToBurn.id)
+
+            if (!result) {
+                // If the dictionary cleaning function returned a false by some reason,
+                // throw an event to signal this
+                emit ContractDataInconsistent(_ballotId: ballotToBurn.id)
+            }
+            
             Burner.burn(<- ballotToBurn)
         }
 
@@ -484,7 +519,43 @@ access(all) contract VoteBooth_std: NonFungibleToken {
     }
     // ************************ VOTE COLLECTION ***********************************
 
-    
+    /*
+        This function receives the identification number of a token that was minted by the Admin Ballot printer and removes all entries from the internal dictionaries. This is useful for when a token is burned, so that the internal contract data structure maintains its consistency.
+    */
+    access(all) fun removeDictEntries(_ballotId: UInt64): Bool {
+        // Get the address associated with the token id provided
+        let storedAddress: Address = VoteBooth_std.getBallotOwner(ballotId: _ballotId) ?? 
+        panic(
+            "Unable to get a valid address for token #"
+            .concat(_ballotId.toString())
+            .concat(" from the ballotOwners dictionary!")
+        )
+
+        // Remove the ballotOwners entry first
+        let addressRemoved: Address = self.ballotOwners.remove(key: _ballotId) ??
+        panic(
+            "Unable to remove token id #"
+            .concat(_ballotId.toString())
+            .concat(" from the ballotOwners dictionary!")
+        )
+
+        // And then the one from the owners as well
+        let idRemoved: UInt64 = self.owners.remove(key: storedAddress) ??
+        panic(
+            "Unable to remove address "
+            .concat(storedAddress.toString())
+            .concat(" from the owners dictionary!")
+        )
+
+        // Validate the results before returning stuff
+        if (idRemoved == _ballotId && storedAddress == addressRemoved) {
+            // If all the data is consistent, signal it with sending a true back
+            return true
+        }
+
+        // Otherwise send a false instead. Hopefully the panics above should take care of data inconsistencies.
+        return false
+    }
     // NonFungibleToken.Collection
     /*
         This one is another of the standard requirements, include providing the type of the NFT to store in the collection. This one is a bit useless... for now.
@@ -528,7 +599,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
     }
 
     /*
-        Another simple function to return the id of the ballot that was tranferred to the address provided
+        Another simple function to return the id of the ballot that was transferred to the address provided
     */
     access(all) view fun getBallotId(owner: Address): UInt64? {
         return self.owners[owner]
@@ -538,6 +609,12 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         And here I need to add the actual burn function, which is going to be at the contract and at the collection level
     */
     access(all) fun burnBallot(ballotToBurn: @VoteBooth_std.Ballot) {
+        let result: Bool = VoteBooth_std.removeDictEntries(_ballotId: ballotToBurn.id)
+
+        if (!result) {
+            emit ContractDataInconsistent(_ballotId: ballotToBurn.id)
+        }
+
         // Call the parent's function and get on with it
         Burner.burn(<- ballotToBurn)
 
@@ -563,7 +640,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
 
     /*
         The constructor for the contract (not the NFTs). This one receives a string and sets it has the main ballot, i.e., what this election is all about
-        NOTE: Initially I was trying to pass an [UInt64] as the "options" parameter, but Flow does not like this at all, like the whole thing crashes out of nowhere if you try to pass any array as a contructor argument in flow.json. I mean, it's like "warn the developers Please" kinda crash, without even indicating exactly where the thing is crashing into. It took me too long to figure out that it was the input argument in the contract contructor that was creating all these problems in my deploys.
+        NOTE: Initially I was trying to pass an [UInt64] as the "options" parameter, but Flow does not like this at all, like the whole thing crashes out of nowhere if you try to pass any array as a constructor argument in flow.json. I mean, it's like "warn the developers Please" kinda crash, without even indicating exactly where the thing is crashing into. It took me too long to figure out that it was the input argument in the contract constructor that was creating all these problems in my deploys.
         While I wait for a proper solution (I'm assuming the Flow developers are on the issue after so many crash reports from my end), I need to be creative and find a way to pass an array as a String, given that String arguments are the only ones 100% working right now.
         The options array is read from the .env file as a String and internally it is decomposed into an array using the 'split' function from the String type. Not elegant nor ideal but it is all I can do for now...
 

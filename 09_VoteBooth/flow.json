@@ -1,147 +1,139 @@
 {
-    "contracts": {
-        "AnotherNFT": {
-            "source": "cadence/contracts/AnotherNFT.cdc",
-            "aliases": {
-                "emulator": "f8d6e0586b0a20c7",
-                "testing": "0000000000000007"
-            }
-        },
-        "Burner": {
-            "source": "cadence/contracts/Burner.cdc",
-            "aliases": {
-                "emulator": "f8d6e0586b0a20c7",
-                "testing": "0000000000000008"
-            }
-        },
-        "FungibleToken": {
-            "source": "cadence/contracts/FungibleToken.cdc",
-            "aliases": {
-                "emulator": "f8d6e0586b0a20c7",
-                "testing": "0000000000000009"
-            }
-        },
-        "MetadataViews": {
-            "source": "cadence/contracts/MetadataViews.cdc",
-            "aliases": {
-                "emulator": "f8d6e0586b0a20c7",
-                "testing": "000000000000000a"
-            }
-        },
-        "NonFungibleToken": {
-            "source": "cadence/contracts/NonFungibleToken.cdc",
-            "aliases": {
-                "emulator": "f8d6e0586b0a20c7",
-                "testing": "000000000000000b"
-            }
-        },
-        "ViewResolver": {
-            "source": "cadence/contracts/ViewResolver.cdc",
-            "aliases": {
-                "emulator": "f8d6e0586b0a20c7",
-                "testing": "000000000000000c"
-            }
-        },
-        "VoteBooth_std": {
-            "source": "cadence/contracts/VoteBooth_std.cdc",
-            "aliases": {
-                "emulator": "f8d6e0586b0a20c7",
-                "testing": "000000000000000d"
-            }
-        },
-        "VoteBooth_fix": {
-            "source": "cadence/contracts/VoteBooth_fix.cdc",
-            "aliases": {
-                "emulator": "f8d6e0586b0a20c7",
-                "testing": "000000000000000e"
-            }
-        }
+  "contracts": {
+    "AnotherNFT": {
+      "source": "cadence/contracts/AnotherNFT.cdc",
+      "aliases": {
+        "emulator": "f8d6e0586b0a20c7",
+        "testing": "0000000000000007"
+      }
     },
-    "networks": {
-        "emulator": "127.0.0.1:3569",
-        "mainnet": "access.mainnet.nodes.onflow.org:9000",
-        "testing": "127.0.0.1:3569",
-        "testnet": "access.devnet.nodes.onflow.org:9000"
+    "Burner": {
+      "source": "cadence/contracts/Burner.cdc",
+      "aliases": {
+        "emulator": "f8d6e0586b0a20c7",
+        "testing": "0000000000000008"
+      }
     },
-    "accounts": {
-        "account01": {
-            "address": "179b6b1cb6755e31",
-            "key": {
-                "type": "file",
-                "location": "account01.pkey"
-            }
-        },
-        "account02": {
-            "address": "f3fcd2c1a78f5eee",
-            "key": {
-                "type": "file",
-                "location": "account02.pkey"
-            }
-        },
-        "account03": {
-            "address": "e03daebed8ca0615",
-            "key": {
-                "type": "file",
-                "location": "account03.pkey"
-            }
-        },
-        "account04": {
-            "address": "045a1763c93006ca",
-            "key": {
-                "type": "file",
-                "location": "account04.pkey"
-            }
-        },
-        "account05": {
-            "address": "120e725050340cab",
-            "key": {
-                "type": "file",
-                "location": "emulator-account.pkey"
-            }
-        },
-        "default": {
-            "address": "e7623b544daf9023",
-            "key": "215d963b15ac735eb60f3d8d6dbce5f594f1022a4f357b80c52d3e73953c71ca"
-        },
-        "emulator-account": {
-            "address": "f8d6e0586b0a20c7",
-            "key": {
-                "type": "file",
-                "location": "emulator-account.pkey"
-            }
-        }
+    "FungibleToken": {
+      "source": "cadence/contracts/FungibleToken.cdc",
+      "aliases": {
+        "emulator": "f8d6e0586b0a20c7",
+        "testing": "0000000000000009"
+      }
     },
-    "deployments": {
-        "emulator": {
-            "default": [],
-            "emulator-account": [
-                "AnotherNFT",
-                {
-                    "name": "VoteBooth_std",
-                    "args": [
-                        {
-                            "type": "String",
-                            "value": "$ELECTION_NAME"
-                        },
-                        {
-                            "type": "String",
-                            "value": "$ELECTION_SYMBOL"
-                        },
-                        {
-                            "type": "String",
-                            "value": "$ELECTION_BALLOT"
-                        },
-                        {
-                            "type": "String",
-                            "value": "$ELECTION_LOCATION"
-                        },
-                        {
-                            "type": "String",
-                            "value": "$ELECTION_OPTIONS"
-                        }
-                    ]
-                }
-            ]
-        }
+    "MetadataViews": {
+      "source": "cadence/contracts/MetadataViews.cdc",
+      "aliases": {
+        "emulator": "f8d6e0586b0a20c7",
+        "testing": "000000000000000a"
+      }
+    },
+    "NonFungibleToken": {
+      "source": "cadence/contracts/NonFungibleToken.cdc",
+      "aliases": {
+        "emulator": "f8d6e0586b0a20c7",
+        "testing": "000000000000000b"
+      }
+    },
+    "ViewResolver": {
+      "source": "cadence/contracts/ViewResolver.cdc",
+      "aliases": {
+        "emulator": "f8d6e0586b0a20c7",
+        "testing": "000000000000000c"
+      }
+    },
+    "VoteBooth_std": {
+      "source": "cadence/contracts/VoteBooth_std.cdc",
+      "aliases": {
+        "emulator": "f8d6e0586b0a20c7",
+        "testing": "000000000000000d"
+      }
     }
+  },
+  "networks": {
+    "emulator": "127.0.0.1:3569",
+    "mainnet": "access.mainnet.nodes.onflow.org:9000",
+    "testing": "127.0.0.1:3569",
+    "testnet": "access.devnet.nodes.onflow.org:9000"
+  },
+  "accounts": {
+    "account01": {
+      "address": "0x179b6b1cb6755e31",
+      "key": {
+        "type": "file",
+        "location": "account01.pkey"
+      }
+    },
+    "account02": {
+      "address": "0xf3fcd2c1a78f5eee",
+      "key": {
+        "type": "file",
+        "location": "account02.pkey"
+      }
+    },
+    "account03": {
+      "address": "0xe03daebed8ca0615",
+      "key": {
+        "type": "file",
+        "location": "account03.pkey"
+      }
+    },
+    "account04": {
+      "address": "045a1763c93006ca",
+      "key": {
+        "type": "file",
+        "location": "account04.pkey"
+      }
+    },
+    "account05": {
+      "address": "120e725050340cab",
+      "key": {
+        "type": "file",
+        "location": "emulator-account.pkey"
+      }
+    },
+    "default": {
+      "address": "e7623b544daf9023",
+      "key": "215d963b15ac735eb60f3d8d6dbce5f594f1022a4f357b80c52d3e73953c71ca"
+    },
+    "emulator-account": {
+      "address": "f8d6e0586b0a20c7",
+      "key": {
+        "type": "file",
+        "location": "emulator-account.pkey"
+      }
+    }
+  },
+  "deployments": {
+    "emulator": {
+      "default": [],
+      "emulator-account": [
+        {
+          "name": "VoteBooth_std",
+          "args": [
+            {
+              "type": "String",
+              "value": "$ELECTION_NAME"
+            },
+            {
+              "type": "String",
+              "value": "$ELECTION_SYMBOL"
+            },
+            {
+              "type": "String",
+              "value": "$ELECTION_BALLOT"
+            },
+            {
+              "type": "String",
+              "value": "$ELECTION_LOCATION"
+            },
+            {
+              "type": "String",
+              "value": "$ELECTION_OPTIONS"
+            }
+          ]
+        }
+      ]
+    }
+  }
 }
