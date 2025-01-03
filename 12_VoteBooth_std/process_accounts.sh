@@ -18,6 +18,19 @@ account_addresses=$(echo $accounts | jq '.[] | .address')
 # The string returned from the 'keys' feature comes formatted as a Python-style array string, i.e., with '[', ']' and a bunch of other stuff that needs to be processed before attempting to
 # convert the string into a bash array. Also, right now, the two strings (names and addresses) don't have the same formatting, so I need to normalise this first.
 
+for account_name in $account_names; do
+    # echo $account_name
+    echo $accounts | jq --arg arg1 $account_name '.[$arg1]'
+
+    # acct_addr=$(echo $accounts | jq --arg jq_account_name $account_name '.jq_account_name.address')
+    # echo $acct_addr
+done;
+
+exit 0;
+
+echo "account01: "
+echo $accounts | jq '.account01.address'
+
 # Convert the Python-style array string to a Bash style array
 # Remove whitespaces
 account_names=${account_names// /}
@@ -74,3 +87,4 @@ do
     # Finally this is ready to export the variables properly
     echo export ${names[$i]}=$current_address
 done;
+

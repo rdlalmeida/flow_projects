@@ -85,11 +85,20 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         */
         access(self) var option: UInt64
 
-        init() {
+        /*
+            The idea is to keep these tokens with the same owner until they are either submitted or burned. To ensure this, I need to brand each of these tokens with an internal tokenOwner address. This is because, being a token, when someone accesses it outside of storage, retrieving the owner address with self.owner!.address throws an error instead. To prevent this, use the following parameter instead
+        */
+
+        access(all) let ballotOwner: Address
+
+        init(_ballotOwner: Address) {
             self.id = self.uuid
 
             // Set the option to an invalid value (all options are > 0) during minting
             self.option = 0
+
+            // Set the owner as well
+            self.ballotOwner = _ballotOwner
         }
 
         // These getters serve so that voter can access these contract parameters from their VoteNFT
@@ -224,7 +233,8 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         */
         access(contract) fun burnCallback() {
             // For now, all I care is to emit the event that signals the token burn
-            emit VoteBooth_std.BallotBurned(_ballotId: self.id, _voterAddress: self.owner!.address)
+            // NOTE: When this function gets invoked, the token is not in storage because the burn function requires the token to burn as argument. As such, self.owner == nil, and therefore force casting self.owner!.address is going to create problems
+            emit VoteBooth_std.BallotBurned(_ballotId: self.id, _voterAddress: self.ballotOwner)
         }
 
         access(all) view fun saySomething(): String {
@@ -248,7 +258,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
             pre{VoteBooth_std.owners[voterAddress] == nil: "Voter account ".concat(voterAddress.toString()).concat(" already has a Ballot.")}
 
             // Fill out the contract mappings before returning the Ballot NFT
-            let newBallot: @Ballot <- create Ballot()
+            let newBallot: @Ballot <- create Ballot(_ballotOwner: voterAddress)
 
             VoteBooth_std.owners[voterAddress] = newBallot.id
             VoteBooth_std.ballotOwners[newBallot.id] = voterAddress
@@ -695,18 +705,66 @@ access(all) contract VoteBooth_std: NonFungibleToken {
         self.ballotOwners = {}
         self.owners = {}
 
+        // Create a capability to a BallotPrinter public path to avoid having to load this resource every time I need to print a Ballot
+        // TODO: Check that this capability allows the contract AND ONLY the contract to run the printBallot function
+        
+        // Need to do some maintenance first. Destroy any old instances of printerAdmin objects that may still live in storage
+        let randomResource: @AnyResource <- self.account.storage.load<@AnyResource>(from: self.ballotPrinterAdminStoragePath)
+
+        // Test if anything other than a nil was returned from the last load
+        if (randomResource != nil) {
+            log(
+                "Found a type '"
+                .concat(randomResource.getType().identifier)
+                .concat("' object in at ")
+                .concat(self.ballotPrinterAdminStoragePath.toString())
+                .concat(" path in account ")
+                .concat(self.account.address.toString())
+                .concat(" storage!")
+            )
+        }
+
+        // Destroy it
+        destroy randomResource
+
+        let result: Capability? = self.account.capabilities.unpublish(VoteBooth_std.ballotPrinterAdminPublicPath)
+
+        // Unlink any capabilities still active in the public path
+        if (result != nil) {
+            log(
+                "Found a capability active at "
+                .concat(VoteBooth_std.ballotPrinterAdminPublicPath.toString())
+                .concat(" from account ")
+                .concat(self.account.address.toString())
+            )
+        }
+
+        // Clean the BallotBox as well
+        let anotherResource: @AnyResource <- self.account.storage.load<@AnyResource>(from: VoteBooth_std.ballotCollectionStoragePath)
+
+        if (anotherResource != nil) {
+            log(
+                "Found a type '"
+                .concat(anotherResource.getType().identifier)
+                .concat("' object in at ")
+                .concat(self.ballotCollectionStoragePath.toString())
+                .concat(" path in account ")
+                .concat(self.account.address.toString())
+                .concat(" storage!")
+            )
+        }
+
+        // Destroy it also
+        destroy anotherResource
+
         // Create and save the one VoteNFTMinter into the contract's own account
         self.account.storage.save(<- create BallotPrinterAdmin(), to: self.ballotPrinterAdminStoragePath)
 
         // Go ahead and create an empty BallotBox Collection and store it as well
         self.account.storage.save(<- create BallotBox(), to: self.ballotCollectionStoragePath)
 
-        // Create a capability to a BallotPrinter public path to avoid having to load this resource every time I need to print a Ballot
-        // TODO: Check that this capability allows the contract AND ONLY the contract to run the printBallot function
-        
-        // TODO: Do I really need to do this? Apparently with the new upgrade, the owner of the reference is allowed to borrow it directly from his/her own storage...
-        // let printerCapability: Capability<&VoteBooth_std.BallotPrinterAdmin> = self.account.capabilities.storage.issue<&VoteBooth_std.BallotPrinterAdmin>(self.ballotPrinterAdminStoragePath)
+        let printerCapability: Capability<&VoteBooth_std.BallotPrinterAdmin> = self.account.capabilities.storage.issue<&VoteBooth_std.BallotPrinterAdmin>(self.ballotPrinterAdminStoragePath)
 
-        // self.account.capabilities.publish(printerCapability, at: self.ballotPrinterAdminPublicPath)
+        self.account.capabilities.publish(printerCapability, at: self.ballotPrinterAdminPublicPath)
     }
 }
