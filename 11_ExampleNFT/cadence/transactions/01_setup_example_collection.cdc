@@ -3,36 +3,44 @@ import "NonFungibleToken"
 import "FlowFees"
 
 transaction() {
-    prepare(signer: auth(BorrowValue, IssueStorageCapabilityController, PublishCapability, SaveValue, UnpublishCapability) &Account) {
-        let initialFeeBalance: UFix64 = FlowFees.getFeeBalance();
-        
-        log(
-            "01-SetupCollection: Current Fee Balance = "
-            .concat(initialFeeBalance.toString())
-        )
+    prepare(signer: auth(BorrowValue, IssueStorageCapabilityController, PublishCapability, SaveValue, LoadValue, UnpublishCapability) &Account) {
+        // Start by cleaning up the storage and capability records
+        let randomResource: @AnyResource? <- signer.storage.load<@ExampleNFTContract.Collection>(from: ExampleNFTContract.CollectionStoragePath)
 
-        if (signer.storage.borrow<&{NonFungibleToken.Collection}>(from: ExampleNFTContract.CollectionStoragePath) != nil) {
+        if (randomResource == nil) {
             log(
                 "Account "
                 .concat(signer.address.toString())
-                .concat(" already has a NonFungibleToken.Collection in storage!")
+                .concat(" already has a resource of type ")
+                .concat(randomResource.getType().identifier)
+                .concat(" in storage at ")
+                .concat(ExampleNFTContract.CollectionStoragePath.toString())
             )
-            return
         }
 
-        let collection: @{NonFungibleToken.Collection} <- ExampleNFTContract.createEmptyCollection(nftType: Type<@{NonFungibleToken.NFT}>())
+        // Destroy it
+        destroy randomResource
 
-        signer.storage.save(<- collection, to: ExampleNFTContract.CollectionStoragePath)
+        // Repeat the process for the capabilities as well
+        let oldCap: Capability? = signer.capabilities.unpublish(ExampleNFTContract.CollectionPublicPath)
 
-        let collectionCap: Capability<&{NonFungibleToken.Collection}> = signer.capabilities.storage.issue<&{NonFungibleToken.Collection}>(ExampleNFTContract.CollectionStoragePath)
+        if (oldCap == nil) {
+            log(
+                "Account "
+                .concat(signer.address.toString())
+                .concat(" had a publish Capability at ")
+                .concat(ExampleNFTContract.CollectionPublicPath.toString())
+            )
+        }
 
-        signer.capabilities.publish(collectionCap, at: ExampleNFTContract.CollectionPublicPath)
+        // Refresh the elements
+        let newCollection: @{NonFungibleToken.Collection} <- ExampleNFTContract.createEmptyCollection(nftType: Type<@ExampleNFTContract.ExampleNFT>())
 
-        let lastFeeBalance = FlowFees.getFeeBalance();
-        log(
-            "01-SetupCollection: Final Fee Balance = "
-            .concat(lastFeeBalance.toString())
-        )
+        signer.storage.save<@{NonFungibleToken.Collection}>(<- newCollection, to: ExampleNFTContract.CollectionStoragePath)
+
+        let newCap: Capability<&{NonFungibleToken.Collection}> = signer.capabilities.storage.issue<&{NonFungibleToken.Collection}>(ExampleNFTContract.CollectionStoragePath)
+
+        signer.capabilities.publish(newCap ,at: ExampleNFTContract.CollectionPublicPath)
     }
 
     execute {}

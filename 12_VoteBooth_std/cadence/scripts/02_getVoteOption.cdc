@@ -18,14 +18,22 @@ access(all) fun main(userAddress: Address, ballotId: UInt64): UInt64? {
         .concat(userAddress.toString())
     )
 
-    let ballotRef: &VoteBooth_std.Ballot = voteBoxRef.borrowNFT(ballotId) as! &VoteBooth_std.Ballot
+    log("VoteBox reference: ")
+    log(voteBoxRef)
 
-    if (ballotRef == nil) {
+    let nftRef: &{NonFungibleToken.NFT}? = voteBoxRef.borrowNFT(ballotId)
+
+    log("NFT reference: ")
+    log(nftRef)
+
+    if (nftRef == nil) {
         panic(
             "Unable to borrow a reference to a valid Ballot for account "
             .concat(userAddress.toString())
         )
     }
+
+    let ballotRef: &VoteBooth_std.Ballot = nftRef as! &VoteBooth_std.Ballot
 
     return ballotRef.getVote()
 }

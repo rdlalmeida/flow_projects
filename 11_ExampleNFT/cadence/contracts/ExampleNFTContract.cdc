@@ -86,7 +86,7 @@ access(all) contract ExampleNFTContract: NonFungibleToken {
         access(all) fun deposit(token: @{NonFungibleToken.NFT}) {
             let token: @ExampleNFTContract.ExampleNFT <- token as! @ExampleNFTContract.ExampleNFT
 
-            let id: UInt64 = token.id
+            // let id: UInt64 = token.id
 
             let oldToken: @AnyResource? <- self.ownedNFTs[token.id] <- token
 

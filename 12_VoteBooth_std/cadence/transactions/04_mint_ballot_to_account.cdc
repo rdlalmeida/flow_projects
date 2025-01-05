@@ -1,8 +1,9 @@
 import "VoteBooth_std"
+import "NonFungibleToken"
 
 transaction(recipient: Address) {
     let minterRef: &VoteBooth_std.BallotPrinterAdmin
-    let voteBoxRef: &VoteBooth_std.VoteBox
+    let voteBoxRef: &{NonFungibleToken.Receiver}
     let recipientAddress: Address
     prepare(signer: auth(Capabilities) &Account) {
         let recipientAccount: &Account = getAccount(recipient)
@@ -20,7 +21,7 @@ transaction(recipient: Address) {
         }
 
         // All good. Continue by getting a valid reference for the recipient's VoteBox
-        self.voteBoxRef = recipientAccount.capabilities.borrow<&VoteBooth_std.VoteBox>(VoteBooth_std.voteBoxPublicPath) ?? 
+        self.voteBoxRef = recipientAccount.capabilities.borrow<&{NonFungibleToken.Receiver}>(VoteBooth_std.voteBoxPublicPath) ?? 
         panic(
             "Unable to retrieve a valid reference to a &VoteBooth_std.VoteBox at "
             .concat(VoteBooth_std.voteBoxPublicPath.toString())
@@ -56,6 +57,5 @@ transaction(recipient: Address) {
             .concat(" into a VoteBox to account ")
             .concat(self.recipientAddress.toString())
         )
-
     }
 }

@@ -1,4 +1,5 @@
 import "VoteBooth_std"
+import "NonFungibleToken"
 
 transaction() {
     prepare(signer: auth(Storage, Capabilities) &Account) {
@@ -36,12 +37,12 @@ transaction() {
             )
         }
 
-        let newCollection: @VoteBooth_std.VoteBox <- VoteBooth_std.createEmptyVoteBox()
+        let newCollection: @{NonFungibleToken.Collection} <- VoteBooth_std.createEmptyVoteBox()
 
         // Save it into storage
-        signer.storage.save<@VoteBooth_std.VoteBox>(<- newCollection, to: VoteBooth_std.voteBoxStoragePath)
+        signer.storage.save<@{NonFungibleToken.Collection}>(<- newCollection, to: VoteBooth_std.voteBoxStoragePath)
 
-        let voteBoxCap: Capability<&VoteBooth_std.VoteBox> = signer.capabilities.storage.issue<&VoteBooth_std.VoteBox>(VoteBooth_std.voteBoxStoragePath)
+        let voteBoxCap: Capability<&{NonFungibleToken.Collection}> = signer.capabilities.storage.issue<&{NonFungibleToken.Collection}>(VoteBooth_std.voteBoxStoragePath)
 
         // And publish the public capability
         signer.capabilities.publish(voteBoxCap, at: VoteBooth_std.voteBoxPublicPath)

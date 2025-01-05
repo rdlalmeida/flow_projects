@@ -433,7 +433,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
                 panic("Account ".concat(self.owner!.address.toString()).concat(" already has a VoteNFT in storage"))
             }
             let ballot: @VoteBooth_std.Ballot <- token as! @VoteBooth_std.Ballot
-
+            
             let randomResource: @AnyResource? <- self.ownedNFTs[ballot.id] <- ballot
 
             if (randomResource != nil) {
@@ -523,7 +523,7 @@ access(all) contract VoteBooth_std: NonFungibleToken {
     }
 
     // I need a function to create these ones as well
-    access(all) fun createEmptyVoteBox(): @VoteBooth_std.VoteBox {
+    access(all) fun createEmptyVoteBox(): @{NonFungibleToken.Collection} {
         // The collection that stores the Ballots themselves is harmless in itself
         return <- create VoteBooth_std.VoteBox()
     }
