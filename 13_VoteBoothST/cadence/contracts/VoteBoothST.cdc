@@ -31,10 +31,31 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(contract) var ballotOwners: {UInt64: Address}
     access(contract) var owners: {Address: UInt64}
 
+// ----------------------------- BALLOT BEGIN ------------------------------------------------------
     access(all) resource Ballot: NonFungibleToken.NFT, Burner.Burnable {
         access(all) let id: UInt64
         access(self) var option: UInt64
         access(all) let ballotOwner: Address
+
+        access(all) view fun getViews(): [Type] {
+            return []
+        }
+
+        access(all) fun resolveView(_ view: Type): AnyStruct? {
+            return nil
+        }
+
+        access(contract) fun burnCallback() {
+            emit VoteBoothST.BallotBurned(_ballotId: self.id, _voterAddress: self.ballotOwner)
+        }
+
+        access(all) view fun saySomething(): String {
+            return "Hello from the VoteBoothST.Ballot Resource!"
+        }
+
+        access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
+            return <- create VoteBoothST.VoteBox()
+        }
 
 
         init(_ballotOwner: Address) {
@@ -43,7 +64,9 @@ access(all) contract VoteBoothST: NonFungibleToken {
             self.ballotOwner = _ballotOwner
         }
     }
+// ----------------------------- BALLOT END --------------------------------------------------------
 
+// ----------------------------- VOTE BOX BEGIN ----------------------------------------------------
     access(all) resource VoteBox: NonFungibleToken.Collection {
         access(all) var ownedNFTs: @{UInt64: {NonFungibleToken.NFT}}
         
@@ -100,6 +123,49 @@ access(all) contract VoteBoothST: NonFungibleToken {
             self.ownedNFTs <- {}
             self.supportedTypes = {}
         }
+    }
+// ----------------------------- VOTE BOX END ------------------------------------------------------
+
+// ----------------------------- BALLOT PRINTER BEGIN ----------------------------------------------
+    access(all) resource BallotPrinterAdmin {
+        access(all) fun printBallot(voterAddress: Address): @Ballot {
+            let newBallot: @Ballot <- create Ballot(_ballotOwner: voterAddress)
+
+            emit BallotMinted(_ballotId: newBallot.id, _voterAddress: voterAddress)
+
+            return <- newBallot
+        }
+
+        access(all) fun burnBallot(ballotToBurn: @VoteBoothST.Ballot) {
+            Burner.burn(<- ballotToBurn)
+        }
+
+        access(all) view fun saySomething(): String {
+            return "Hello from inside the VoteBoothST.BallotPrinterAdmin Resource"
+        }
+
+        init() {}
+    }
+
+    access(self) fun createBallotPrinterAdmin(): @VoteBoothST.BallotPrinterAdmin {
+        return <- create VoteBoothST.BallotPrinterAdmin()
+    }
+// ----------------------------- BALLOT PRINTER END ------------------------------------------------
+    
+    access(all) fun createEmptyCollection(nftType: Type): @{NonFungibleToken.Collection} {
+        return <- create VoteBoothST.VoteBox()
+    }
+
+    access(all) view fun saySomething(): String {
+        return "Hello from the VoteBoothST.cdc contract level!"
+    }
+
+    access(all) view fun getContractViews(resourceType: Type?): [Type] {
+        return []
+    }
+    
+    access(all) fun resolveContractView(resourceType: Type?, viewType: Type): AnyStruct? {
+        return nil
     }
 
     init(name: String, symbol: String, ballot: String, location: String, options: String) {
@@ -159,7 +225,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
         let oldCap: Capability? = self.account.capabilities.unpublish(self.ballotPrinterAdminPublicPath)
 
-        if (result != nil) {
+        if (oldCap != nil) {
             log(
                 "Found an active capability at "
                 .concat(self.ballotPrinterAdminPublicPath.toString())
@@ -183,5 +249,11 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         destroy anotherResource
+
+        self.account.storage.save(<- create BallotPrinterAdmin(), to: self.ballotPrinterAdminStoragePath)
+
+        let printerCapability: Capability<&VoteBoothST.BallotPrinterAdmin> = self.account.capabilities.storage.issue<&VoteBoothST.BallotPrinterAdmin> (self.ballotPrinterAdminStoragePath)
+
+        self.account.capabilities.publish(printerCapability, at: self.ballotPrinterAdminPublicPath)
     }
 }
