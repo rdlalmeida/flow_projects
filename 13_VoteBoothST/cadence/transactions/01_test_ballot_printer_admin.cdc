@@ -5,7 +5,9 @@ transaction() {
     prepare(signer: auth(Storage) &Account) {
         let storedBallotPrinterAdmin: @VoteBoothST.BallotPrinterAdmin <- signer.storage.load<@VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
-            "Unable to retrieve a valid VoteBoothST.BallotPrinterAdmin resource from storage from account "
+            "Unable to retrieve a valid VoteBoothST.BallotPrinterAdmin resource from storage "
+            .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())
+            .concat(" for account ")
             .concat(signer.address.toString())
         )
 

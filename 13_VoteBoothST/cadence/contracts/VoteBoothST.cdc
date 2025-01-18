@@ -2,6 +2,8 @@
     This contract is just a cleaner, more efficient (and hopefully functional) version of the VoteBooth contract. As usual, I've wrote 98% of the last attempt at this contract in one sitting, hoping that by taking care of all the issues revealed by VS code would be enough. After wasting weeks writing a smart contract with almost 1000 lines (a lot of those are these very long comments I'm so prone to write), I found out that my stupid v.12 contract does everything... except storing Ballots in VoteBoxes!!! Which is, like, one of the most import steps of this process!
 
     I did try to debug this thing for a while, but it is just too much... My best approach is to re-write this thing from scratch and test it thoroughly as much as possible, just to make sure that this contract continues working as supposed.
+
+    TODO: Complete the ballotOwners and owners mechanics
 */
 
 import "NonFungibleToken"
@@ -36,6 +38,9 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) var totalBallotsSubmitted: UInt64
     access(contract) var ballotOwners: {UInt64: Address}
     access(contract) var owners: {Address: UInt64}
+
+    // CUSTOM ENTITLEMENTS
+    access(all) entitlement Admin
 
 // ----------------------------- BALLOT BEGIN ------------------------------------------------------
     /*
@@ -236,12 +241,21 @@ access(all) contract VoteBoothST: NonFungibleToken {
             return "Hello from the inside of the VoteBoothST.VoteBox resource!"
         }
 
+        access(all) fun burnBallot(ballotToBurn: @VoteBoothST.Ballot) {
+            Burner.burn(<- ballotToBurn)
+        }
+
         init() {
             self.ownedNFTs <- {}
             self.supportedTypes = {}
         }
     }
 // ----------------------------- VOTE BOX END ------------------------------------------------------
+
+// Contract-level Collection creation function
+access(all) fun createEmptyVoteBox(): @VoteBoothST.VoteBox {
+    return <- create VoteBoothST.VoteBox()
+}
 
 // ----------------------------- BALLOT COLLECTION BEGIN -------------------------------------------
 /* 
@@ -322,8 +336,17 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
 // ----------------------------- BALLOT COLLECTION END ---------------------------------------------
 
 // ----------------------------- BALLOT PRINTER BEGIN ----------------------------------------------
+/*
+    To protect the most sensible functions of the BallotPrinterAdmin resource, namely the printBallot function, I'm protecting it with a custom 'Admin' entitlement defined at the contract level.
+    This means that, in order to have the 'printBallot' and 'burnBallot' available in a &BallotPrinterAdmin, I need an authorized reference instead of a normal one.
+    Authorized references are indicated with a 'auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin' and these can only be successfully obtained from the
+    'account.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(PATH)', instead of the usual 'account.capabilities.borrow...'
+    Because I now need to access the 'storage' subset of the Flow API, I necessarily need to obtain this reference from the transaction signer and no one else! The transaction need to be signed by the deployed to work! Cool, that's exactly what I want!
+    It is now impossible to call the 'printBallot' function from a reference obtained by the usual, capability-based reference retrievable by a simple account reference, namely, from 'let account: &Account = getAccount(accountAddress)'
+*/
     access(all) resource BallotPrinterAdmin {
-        access(all) fun printBallot(voterAddress: Address): @Ballot {
+        access(Admin) fun printBallot(voterAddress: Address): @Ballot {
+
             let newBallot: @Ballot <- create Ballot(_ballotOwner: voterAddress)
 
             emit BallotMinted(_ballotId: newBallot.id, _voterAddress: voterAddress)
@@ -331,7 +354,7 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
             return <- newBallot
         }
 
-        access(all) fun burnBallot(ballotToBurn: @VoteBoothST.Ballot) {
+        access(Admin) fun burnBallot(ballotToBurn: @VoteBoothST.Ballot) {
             Burner.burn(<- ballotToBurn)
         }
 
@@ -339,11 +362,8 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
             return "Hello from inside the VoteBoothST.BallotPrinterAdmin Resource"
         }
 
-        init() {}
-    }
-
-    access(self) fun createBallotPrinterAdmin(): @VoteBoothST.BallotPrinterAdmin {
-        return <- create VoteBoothST.BallotPrinterAdmin()
+        init(ownerAddress: Address) {
+        }
     }
 // ----------------------------- BALLOT PRINTER END ------------------------------------------------
 
@@ -446,6 +466,11 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
         Burner.burn(<- voteBoxToBurn)
     }
 
+    // Very simple function to determine the address of the account that deployed this contract in the first place
+    access(all) view fun getContractDeployer(): Address {
+        return self.account.address
+    }
+
 // ----------------------------- CONTRACT LOGIC END ------------------------------------------------
 // ----------------------------- CONSTRUCTOR BEGIN -------------------------------------------------
     init(name: String, symbol: String, ballot: String, location: String, options: String) {
@@ -503,9 +528,9 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
 
         destroy randomResource
 
-        let oldCap: Capability? = self.account.capabilities.unpublish(self.ballotPrinterAdminPublicPath)
+        let oldCap01: Capability? = self.account.capabilities.unpublish(self.ballotPrinterAdminPublicPath)
 
-        if (oldCap != nil) {
+        if (oldCap01 != nil) {
             log(
                 "Found an active capability at "
                 .concat(self.ballotPrinterAdminPublicPath.toString())
@@ -528,9 +553,20 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
             )
         }
 
+        let oldCap02: Capability? = self.account.capabilities.unpublish(self.ballotCollectionPublicPath)
+
+        if (oldCap02 != nil) {
+            log(
+                "Found an active capability at "
+                .concat(self.ballotCollectionPublicPath.toString())
+                .concat(" from account ")
+                .concat(self.account.address.toString())
+            )
+        }
+
         destroy anotherResource
 
-        self.account.storage.save(<- create BallotPrinterAdmin(), to: self.ballotPrinterAdminStoragePath)
+        self.account.storage.save(<- create BallotPrinterAdmin(ownerAddress: self.account.address), to: self.ballotPrinterAdminStoragePath)
 
         let printerCapability: Capability<&VoteBoothST.BallotPrinterAdmin> = self.account.capabilities.storage.issue<&VoteBoothST.BallotPrinterAdmin> (self.ballotPrinterAdminStoragePath)
 
