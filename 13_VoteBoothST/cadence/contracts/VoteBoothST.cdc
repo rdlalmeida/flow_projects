@@ -25,6 +25,8 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) event BallotModified(_ballotId: UInt64, _voterAddress: Address)
     access(all) event BallotBurned(_ballotId: UInt64, _voterAddress: Address)
     access(all) event ContractDataInconsistent(_ballotId: UInt64)
+    access(all) event VoteBoxCreated(_voterAddress: Address)
+    access(all) event BallotCollectionCreated(_accountAddress: Address)
 
     // CUSTOM VARIABLES
     access(all) let _name: String
@@ -248,6 +250,8 @@ access(all) contract VoteBoothST: NonFungibleToken {
         init() {
             self.ownedNFTs <- {}
             self.supportedTypes = {}
+
+            emit VoteBoothST.VoteBoxCreated(_voterAddress: self.owner!.address)
         }
     }
 // ----------------------------- VOTE BOX END ------------------------------------------------------
@@ -326,7 +330,8 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
         return "Hello from inside the VoteBoothST.BallotCollection resource!"
     }
 
-    init() {
+    // The idea with protecting the constructor with an entitlement is to prevent users other than the deployer to create these resources
+    access(Admin) init() {
         self.ownedNFTs <- {}
         self.supportedTypes = {}
         self.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
@@ -578,6 +583,8 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
         let ballotCollectionCap: Capability<&VoteBoothST.BallotCollection> = self.account.capabilities.storage.issue<&VoteBoothST.BallotCollection>(self.ballotCollectionStoragePath)
 
         self.account.capabilities.publish(ballotCollectionCap, at: self.ballotCollectionPublicPath)
+
+        emit VoteBoothST.BallotCollectionCreated(_accountAddress: self.account.address)
     }
 }
 // ----------------------------- CONSTRUCTOR END ---------------------------------------------------

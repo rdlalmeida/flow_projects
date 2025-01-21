@@ -26,11 +26,12 @@ access(all) let ballots: {String: {String: String}} = {}
 // TRANSACTIONS
 access(all) let testBallotPrinterTx: String = "../transactions/01_test_ballot_printer_admin.cdc"
 access(all) let testBallotPrinterAdminTx: String = "../transactions/02_test_ballot_printer_admin_reference.cdc"
-access(all) let testBallotPrinterAdminExtTx: String = "../transactions/03_test_ballot_printer_admin_reference_ext.cdc"
-access(all) let testBallotCollectionTx: String = "../transactions/04_test_ballot_collection_load.cdc"
-access(all) let testBallotCollectionRefTx: String = "../transactions/05_test_ballot_collection_reference.cdc"
-access(all) let voteBoxCreationTx: String = "../transactions/06_create_vote_box.cdc"
-access(all) let mintBallotToAccountTx: String = "../transactions/07_mint_ballot_to_account.cdc"
+access(all) let testBallotCollectionLoadTx: String = "../transactions/03_test_ballot_collection_load.cdc"
+access(all) let testBallotCollectionRefTx: String = "../transactions/04_test_ballot_collection_reference.cdc"
+access(all) let voteBoxCreationTx: String = "../transactions/05_create_vote_box.cdc"
+access(all) let mintBallotToAccountTx: String = "../transactions/06_mint_ballot_to_account.cdc"
+access(all) let withdrawBallotFromVoteBoxLoadTx: String = "../transactions/07_withdraw_ballot_from_vote_box_load.cdc"
+access(all) let withdrawBallotFromVoteBoxRefTx: String = "../transactions/08_withdraw_ballot_from_vote_box_ref.cdc"
 
 // SCRIPTS
 access(all) let testVoteBoxSc: String = "../scripts/01_test_vote_box.cdc"
@@ -51,6 +52,8 @@ access(all) let ballotSubmittedEventType: Type = Type<VoteBoothST.BallotSubmitte
 access(all) let ballotModifiedEventType: Type = Type<VoteBoothST.BallotModified>()
 access(all) let ballotBurnedEventType: Type = Type<VoteBoothST.BallotBurned>()
 access(all) let contractDataInconsistentEventType: Type = Type<VoteBoothST.ContractDataInconsistent>()
+access(all) let voteBoxCreatedEventType: Type = Type<VoteBoothST.VoteBoxCreated>()
+access(all) let ballotCollectionCreatedEventType: Type = Type<VoteBoothST.BallotCollectionCreated>()
 
 access(all) var successfulEventNumber: Int = 1;
 access(all) var unsuccessfulEventNumber: Int = 0;
@@ -63,6 +66,19 @@ access(all) fun setup() {
     )
 
     Test.expect(err, Test.beNil())
+
+    // Test that the BallotCollection event was emitted
+    var ballotCollectionCreatedEvents: [AnyStruct] = Test.eventsOfType(ballotCollectionCreatedEventType)
+
+    // Test that one and only one event of this type was emitted
+    Test.assertEqual(ballotCollectionCreatedEvents.length, 1)
+
+    log(ballotCollectionCreatedEvents)
+
+    // Test that the address in the event matched the deployer and none else
+    let ballotCollectionCreatedEvent: VoteBoothST.BallotCollectionCreated = ballotCollectionCreatedEvents[0] as! VoteBoothST.BallotCollectionCreated
+
+    Test.assertEqual(deployer.address, ballotCollectionCreatedEvent._accountAddress)
 }
 
 access(all) fun testGetElectionName() {
@@ -210,10 +226,10 @@ access(all) fun testMinterReference() {
 }
 
 // Test the 3rd transaction signing it with a user that should not be able to do the things in the transaction text
-access(all) fun testMinterReferenceExt() {
+access(all) fun testBallotCollectionLoad() {
     let txResult01: Test.TransactionResult = executeTransaction(
-        testBallotPrinterAdminExtTx,
-        [deployer.address],
+        testBallotCollectionLoadTx,
+        [],
         deployer
     )
 
@@ -235,8 +251,8 @@ access(all) fun testMinterReferenceExt() {
 
     // Run the transaction again, but with an invalid signer now
     let txResult02: Test.TransactionResult = executeTransaction(
-        testBallotPrinterAdminExtTx,
-        [deployer.address],
+        testBallotCollectionLoadTx,
+        [],
         account01
     )
 
@@ -248,6 +264,51 @@ access(all) fun testMinterReferenceExt() {
     contractDataInconsistentEvents = Test.eventsOfType(contractDataInconsistentEventType)
 
     // The event quantities must have remained unchanged. Test it
+    Test.assertEqual(ballotMintedEvents.length, successfulEventNumber)
+    Test.assertEqual(ballotBurnedEvents.length, successfulEventNumber)
+    Test.assertEqual(resourceDestroyedEvents.length, successfulEventNumber)
+    Test.assertEqual(contractDataInconsistentEvents.length, unsuccessfulEventNumber)
+}
+
+access(all) fun testBallotCollectionRef() {
+    let txResult01: Test.TransactionResult = executeTransaction(
+        testBallotCollectionRefTx,
+        [],
+        deployer
+    )
+
+    // As before, the expectation is that this transaction works with the deployer but with no one else
+    Test.expect(txResult01, Test.beSucceeded())
+
+    // Check the usual events
+    var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
+    var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
+    var resourceDestroyedEvents: [AnyStruct] = Test.eventsOfType(resourceDestroyedEventType)
+    var contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
+
+    // The successful transaction should increment the successful events number by one
+    successfulEventNumber = successfulEventNumber + 1
+
+    Test.assertEqual(ballotMintedEvents.length, successfulEventNumber)
+    Test.assertEqual(ballotBurnedEvents.length, successfulEventNumber)
+    Test.assertEqual(resourceDestroyedEvents.length, successfulEventNumber)
+    Test.assertEqual(contractDataInconsistentEvents.length, unsuccessfulEventNumber)
+
+    // Repeat the transaction but with the wrong signer. Everything must fail
+    let txResult02: Test.TransactionResult = executeTransaction(
+        testBallotCollectionRefTx,
+        [],
+        account01
+    )
+
+    Test.expect(txResult02, Test.beFailed())
+
+    // Check that the event array did not changed
+    ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
+    ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
+    resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
+    contractDataInconsistentEvents = Test.eventsOfType(contractDataInconsistentEventType)
+
     Test.assertEqual(ballotMintedEvents.length, successfulEventNumber)
     Test.assertEqual(ballotBurnedEvents.length, successfulEventNumber)
     Test.assertEqual(resourceDestroyedEvents.length, successfulEventNumber)
