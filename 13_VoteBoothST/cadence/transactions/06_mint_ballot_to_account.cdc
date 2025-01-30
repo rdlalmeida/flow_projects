@@ -2,7 +2,7 @@ import "VoteBoothST"
 import "NonFungibleToken"
 
 transaction(recipient: Address) {
-    let minterRef: &VoteBoothST.BallotPrinterAdmin
+    let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
     let voteBoxRef: &{NonFungibleToken.Receiver}
     let recipientAddress: Address
 
@@ -31,8 +31,12 @@ transaction(recipient: Address) {
 
         self.recipientAddress = recipient
 
-        // TODO: Test if borrowing this reference from the public capability instead changes anything in this process
-        self.minterRef = signer.storage.borrow<&VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
+        /*
+            NOTE: To print a new Ballot, I need an authorized reference requested by the contract deployer. This limits the printing of new Ballots to a single address, i.e., the one that deployed the contract in the first place.
+
+            Cadence only allows authorized references to be retrievable through the "<account>.storage.borrow<auth (...)>" API element. It is possible to publish a "normal" capability into the public domain and then retrieve it through the "<account>.capabilities.borrow<...>" API element, but any authorized elements from the original resource, i.e., parameters and functions with a "access(<ENTITLEMENT>)" modifier, are not available, only the ones with an "access(all)" modifier.
+        */
+        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
             "The signer does not store a VoteBoothST.BallotPrinterAdmin object at the path "
             .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())
@@ -41,15 +45,15 @@ transaction(recipient: Address) {
     }
 
     execute {
-        let mintedNFT: @VoteBoothST.Ballot <- self.minterRef.printBallot(voterAddress: self.recipientAddress)
+        let newBallot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: self.recipientAddress)
 
-        let tokenId: UInt64 = mintedNFT.id
+        let ballotId: UInt64 = newBallot.id
 
-        self.voteBoxRef.deposit(token: <-mintedNFT)
+        self.voteBoxRef.deposit(token: <- newBallot)
 
         log(
             "Successfully minted a Ballot with id "
-            .concat(tokenId.toString())
+            .concat(ballotId.toString())
             .concat(" into the VoteBoothST.VoteBox at ")
             .concat(VoteBoothST.voteBoxPublicPath.toString())
             .concat(" for account ")

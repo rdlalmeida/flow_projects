@@ -27,6 +27,17 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) event ContractDataInconsistent(_ballotId: UInt64)
     access(all) event VoteBoxCreated(_voterAddress: Address)
     access(all) event BallotCollectionCreated(_accountAddress: Address)
+    
+    /*
+        I've created this custom event to be emitted whenever I failed to deposit a valid Ballot in a VoteBox. This can happen for a bunch of reasons, hence why I added the '_reason' input field for that purpose. This is an Int value that indicated the motive behind this event, namely:
+
+        0 - All is OK. This is the default code.
+        1 - Unable to retrieve a valid VoteBox
+        2 - VoteBox already has a Ballot in it
+        3 - The VoteBox is empty but the 'owners' dictionary has an entry for the current address
+        4 - The VoteBox is empty but the 'ballotOwners' dictionary has an entry for the current Ballot id
+    */
+    access(all) event BallotNotDelivered(_voterAddress: Address, _reason: Int)
 
     // CUSTOM VARIABLES
     access(all) let _name: String
@@ -200,6 +211,18 @@ access(all) contract VoteBoothST: NonFungibleToken {
             return false
         }
 
+        // A simple function to return the address of the account where this resource is currently stored. This only works if this function is executed through a reference.
+        access(all) view fun getVoteBoxOwner(): Address {
+            if (self.owner == nil) {
+                panic(
+                    "ERROR: This VoteBox is not stored in a valid account. Unable to determine the storage account owner!"
+                )
+            }
+            else {
+                return self.owner!.address
+            }
+        }
+
         access(all) fun deposit(token: @{NonFungibleToken.NFT}) {
             // Each one of these boxes can only hold one vote of one type at a time. Validate this
             if (self.ownedNFTs.length > 0) {
@@ -250,8 +273,6 @@ access(all) contract VoteBoothST: NonFungibleToken {
         init() {
             self.ownedNFTs <- {}
             self.supportedTypes = {}
-
-            emit VoteBoothST.VoteBoxCreated(_voterAddress: self.owner!.address)
         }
     }
 // ----------------------------- VOTE BOX END ------------------------------------------------------
@@ -474,6 +495,15 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
     // Very simple function to determine the address of the account that deployed this contract in the first place
     access(all) view fun getContractDeployer(): Address {
         return self.account.address
+    }
+
+    // The next couple of functions are simple wrappers to allow emitting events from within a transaction
+    access(all) view fun emitVoteBoxCreated(voterAddress: Address) {
+        emit VoteBoothST.VoteBoxCreated(_voterAddress: voterAddress)
+    }
+
+    access(all) view fun emitBallotNotDelivered(voterAddress: Address, reason: Int) {
+        emit VoteBoothST.BallotNotDelivered(_voterAddress: voterAddress, _reason: reason)
     }
 
 // ----------------------------- CONTRACT LOGIC END ------------------------------------------------
