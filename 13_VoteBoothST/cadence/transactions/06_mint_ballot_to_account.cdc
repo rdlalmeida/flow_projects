@@ -42,13 +42,17 @@ transaction(recipient: Address) {
 
     execute {
         let newBallot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: self.recipientAddress)
+        let newBallot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: self.recipientAddress)
 
         let ballotId: UInt64 = newBallot.id
+        let ballotId: UInt64 = newBallot.id
 
+        self.voteBoxRef.deposit(token: <- newBallot)
         self.voteBoxRef.deposit(token: <- newBallot)
 
         log(
             "Successfully minted a Ballot with id "
+            .concat(ballotId.toString())
             .concat(ballotId.toString())
             .concat(" into the VoteBoothST.VoteBox at ")
             .concat(VoteBoothST.voteBoxPublicPath.toString())
