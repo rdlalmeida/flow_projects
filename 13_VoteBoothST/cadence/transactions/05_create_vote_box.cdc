@@ -2,7 +2,11 @@ import "VoteBoothST"
 import "NonFungibleToken"
 
 transaction() {
+    let signerAddress: Address
+
     prepare(signer: auth(Storage, Capabilities) &Account) {
+        self.signerAddress = signer.address
+
         let randomResource: @AnyResource? <- signer.storage.load<@AnyResource>(from: VoteBoothST.voteBoxStoragePath)
 
         if (randomResource != nil) {
@@ -41,6 +45,7 @@ transaction() {
     }
 
     execute {
-
+        // Emit the corresponding event if all went OK
+        VoteBoothST.emitVoteBoxCreated(voterAddress: self.signerAddress)
     }
 }
