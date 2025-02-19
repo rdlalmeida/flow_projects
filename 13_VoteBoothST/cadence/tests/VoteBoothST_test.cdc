@@ -35,6 +35,8 @@ access(all) let accounts: [Test.TestAccount] = [account01, account02, account03,
 */
 access(all) let ballots: {String: {String: String}} = {}
 
+access(all) let addresses: [Address] = [account01.address, account02.address, account03.address, account04.address, account05.address]
+
 // TRANSACTIONS
 access(all) let testBallotPrinterTx: String = "../transactions/01_test_ballot_printer_admin.cdc"
 access(all) let testBallotPrinterAdminTx: String = "../transactions/02_test_ballot_printer_admin_reference.cdc"
@@ -542,19 +544,10 @@ access(all) fun testBallotMintingToVoteBoxes() {
     var contractDataInconsistentEvents: [AnyStruct] = []
 
     var ballotMintedEvent: VoteBoothST.BallotMinted? = nil
-    var ballotBurnedEvent: VoteBoothST.BallotBurned? = nil
-
-    let addressesToMint: [Address] = [
-            account01.address, 
-            account02.address, 
-            account03.address, 
-            account04.address, 
-            account05.address
-        ]
 
     txResult = executeTransaction(
         mintBallotsToAccountsTx,
-        [addressesToMint],
+        [addresses],
         deployer
     )
 
@@ -578,7 +571,7 @@ access(all) fun testBallotMintingToVoteBoxes() {
 
     // Increment the minted events counter by the number of addresses in the input array
     // All the remaining structures should have not been changed
-    eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + addressesToMint.length
+    eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + addresses.length
 
     // Validate the event count
     Test.assertEqual(ballotMintedEvents.length, eventNumberCount[ballotMintedEventType]!)
@@ -635,7 +628,13 @@ access(all) fun testBallotMintingToVoteBoxes() {
     This function follows on the previous ones, i.e., it expects a valid VoteBox in each account in the accounts array with one and only one Ballot in it (the burnBallot transaction already validates this). The transaction in question loads and burns it without required more information.
 */
 access(all) fun testBurnBallots() {
-    // TODO: This one please!!!
+    var txResult: Test.TransactionResult? = nil
+    var ballotMintedEvents: [AnyStruct] = []
+    var ballotBurnedEvents: [AnyStruct] = []
+    var resourceDestroyedEvents: [AnyStruct] = []
+    var contractDataInconsistentEvents: [AnyStruct] = []
+
+    var ballotBurnedEvent: VoteBoothST.BallotBurned? = nil
 }
 
 // TODO: Modify Ballots (Vote)
