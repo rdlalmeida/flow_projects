@@ -1,5 +1,4 @@
 import "VoteBoothST"
-import "NonFungibleToken"
 
 transaction() {
     let signerAddress: Address

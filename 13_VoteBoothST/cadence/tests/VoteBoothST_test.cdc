@@ -24,6 +24,15 @@ access(all) let account04: Test.TestAccount = Test.createAccount()
 access(all) let account05: Test.TestAccount = Test.createAccount()
 
 access(all) let accounts: [Test.TestAccount] = [account01, account02, account03, account04, account05]
+
+// The idea is to use this dictionary to establish a quick way to validate a Ballot in a given account.
+/*
+    To simplify things, I've built the whole thing with Strings. This should be populated as
+    "account name": {
+            "address": <ADDRESS>,
+            "ballotID": <BALLOT_ID>
+            }
+*/
 access(all) let ballots: {String: {String: String}} = {}
 
 // TRANSACTIONS
@@ -33,8 +42,10 @@ access(all) let testBallotCollectionLoadTx: String = "../transactions/03_test_ba
 access(all) let testBallotCollectionRefTx: String = "../transactions/04_test_ballot_collection_reference.cdc"
 access(all) let voteBoxCreationTx: String = "../transactions/05_create_vote_box.cdc"
 access(all) let mintBallotToAccountTx: String = "../transactions/06_mint_ballot_to_account.cdc"
-access(all) let withdrawBallotFromVoteBoxLoadTx: String = "../transactions/07_withdraw_ballot_from_vote_box_load.cdc"
-access(all) let withdrawBallotFromVoteBoxRefTx: String = "../transactions/08_withdraw_ballot_from_vote_box_ref.cdc"
+access(all) let mintBallotsToAccountsTx: String = "../transactions/07_mint_ballots_to_accounts.cdc"
+access(all) let withdrawBallotFromVoteBoxLoadTx: String = "../transactions/08_withdraw_ballot_from_vote_box_load.cdc"
+access(all) let withdrawBallotFromVoteBoxRefTx: String = "../transactions/09_withdraw_ballot_from_vote_box_ref.cdc"
+access(all) let burnBallotTx: String = "../transactions/10_burnBallot.cdc"
 
 // SCRIPTS
 access(all) let testVoteBoxSc: String = "../scripts/01_test_vote_box.cdc"
@@ -342,7 +353,7 @@ access(all) fun _testBallotCollectionRef() {
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 }
 
-access(all) fun testCreateVoteBox() {
+access(all) fun _testCreateVoteBox() {
     // Create a VoteBox for each of the additional user accounts (account01 and account02)
     let txResult01: Test.TransactionResult = executeTransaction(
         voteBoxCreationTx,
@@ -389,14 +400,7 @@ access(all) fun testCreateVoteBox() {
     // NOTE: The way I've setup these transaction and the VoteBox resource itself, running this transaction again replaces the existing VoteBox, which can have some Ballots in it, for another "clean" one. Be careful with this
 }
 
-access(all) fun testBallotMintingToVoteBoxes() {
-    // NOTE: This test assumes that the "testCreateVoteBox" has run successfully first, i.e., account01 and account02 have a valid VoteBox in their storage area and a public capability published.
-    // NOTE2: This is just a simplified version of the next function, mainly to test the transaction 07 that allows for bulk minting of ballots. Since I destroy all ballots after the test, I need to do this one before.
-
-    // TODO: This one
-}
-
-access(all) fun testBallotMintingToVoteBox() {
+access(all) fun _testBallotMintingToVoteBox() {
     // NOTE: This test assumes that the "testCreateVoteBox" has run successfully first, i.e., account01 and account02 have a valid VoteBox in their storage area and a public capability published.
 
     // Mint and deposit a new Ballot to account01. Use the event emitted to retrieve the ballotId
@@ -478,3 +482,163 @@ access(all) fun testBallotMintingToVoteBox() {
     Test.assertEqual(eventBallotId02, storedBallotIDs[storedBallotIDs.length - 1])
 }
 
+/*
+    This test is simply a generalisation for the same test using the singular tense. All this does is to run the testCreateVoteBox but using a for cycle to automate stuff.
+
+    NOTE: This function and the next one are exclusive to the non-looped versions of the same functions
+    IMPORTANT: only one pair of these function should be "active", i.e., the name of the test function starts with "test". I'm using an underscore (_) to before the test part to deactivate the function
+*/
+access(all) fun testCreateVoteBoxes() {
+    var txResult: Test.TransactionResult? = nil
+    var voteBoxCreatedEvents: [AnyStruct] = []
+    var voteBoxCreatedEvent: VoteBoothST.VoteBoxCreated? = nil
+    var voteBoxAddress: Address? = nil
+    
+    for account in accounts {
+        txResult= executeTransaction(
+            voteBoxCreationTx,
+            [],
+            account
+        )
+
+        // Test if the transaction was successful
+        Test.expect(txResult, Test.beSucceeded())
+
+        // Grab the expected events to the proper structure
+        voteBoxCreatedEvents = Test.eventsOfType(voteBoxCreatedEventType)
+
+        // Increment the number of expected events from the main counter structure
+        eventNumberCount[voteBoxCreatedEventType] = eventNumberCount[voteBoxCreatedEventType]! + 1
+
+        // Check now if all quantities are matched OK
+        Test.assertEqual(voteBoxCreatedEvents.length, eventNumberCount[voteBoxCreatedEventType]!)
+
+        // Check also that the addresses emitted in the events matches the account used to sign the transaction
+        voteBoxCreatedEvent = voteBoxCreatedEvents[voteBoxCreatedEvents.length - 1] as! VoteBoothST.VoteBoxCreated
+
+        voteBoxAddress = voteBoxCreatedEvent!._voterAddress
+
+        Test.assertEqual(voteBoxAddress!, account.address)
+
+        log(
+            "Successfully created a VoteBox for account "
+            .concat(account.address.toString())
+        )
+    }
+
+}
+
+/*
+    This function, unlike the preceding one, serves mainly to test the transaction that mints and transfers NFTs in bulk
+*/
+access(all) fun testBallotMintingToVoteBoxes() {
+    var txResult: Test.TransactionResult? = nil
+    var scResult: Test.ScriptResult? = nil
+    var storedBallotIds: [UInt64] = []
+
+    var ballotMintedEvents: [AnyStruct] = []
+    var ballotBurnedEvents: [AnyStruct] = []
+    var resourceDestroyedEvents: [AnyStruct] = []
+    var contractDataInconsistentEvents: [AnyStruct] = []
+
+    var ballotMintedEvent: VoteBoothST.BallotMinted? = nil
+    var ballotBurnedEvent: VoteBoothST.BallotBurned? = nil
+
+    let addressesToMint: [Address] = [
+            account01.address, 
+            account02.address, 
+            account03.address, 
+            account04.address, 
+            account05.address
+        ]
+
+    txResult = executeTransaction(
+        mintBallotsToAccountsTx,
+        [addressesToMint],
+        deployer
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    log(
+        "Successfully minted one Ballot for accounts "
+    )
+
+    for account in accounts {
+        log(
+            account.address.toString()
+        )
+    }
+
+    // Populate the event structures
+    ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
+    ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
+    resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
+    contractDataInconsistentEvents = Test.eventsOfType(contractDataInconsistentEventType)
+
+    // Increment the minted events counter by the number of addresses in the input array
+    // All the remaining structures should have not been changed
+    eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + addressesToMint.length
+
+    // Validate the event count
+    Test.assertEqual(ballotMintedEvents.length, eventNumberCount[ballotMintedEventType]!)
+    Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+    Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
+    Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
+
+    // Populate the ballot structure
+    var ballotIDs: [UInt64] = []
+
+    // Keep this value to ease further calculations, since I have the events that I care for the the end of the array 
+    let maxEventIndex: Int = ballotMintedEvents.length - 1
+    let maxAccountIndex: Int = accounts.length - 1
+
+    for index, account in accounts {
+        /*
+            Grab the BallotMinted event that corresponds to the account element in question]
+            The calculation of the index of the event is quite tricky...
+            The problem resides in the fact that I have a fixed number of accounts (5) but an unknown number of corresponding events. All I know is, if things went OK, the event array should have a number of elements equal or greater than the number of accounts (I cannot guarantee that there are no previous events in the array).
+            That said, the way to ensure that I'm not dependent from the length of the event array is to calculate the index as follows:
+
+            accounts = [account01, account02, account03, account04, account05] => length: 5, max index: accounts.length - 1 = 4
+
+            events = [..., acc01Event, acc02Event, acc03Event, acc04Event, acc05Event] => length: ?, max index: events.length - 1
+
+            I need to set my base index for the events array where the "acc01Event" is and then navigate through the array by adding the index value
+        */
+        ballotMintedEvent = ballotMintedEvents[maxEventIndex - maxAccountIndex + index] as! VoteBoothST.BallotMinted
+
+        // List and validate the number of Ballots and their IDs in each account
+        scResult = executeScript(
+            getIDsSc,
+            [account.address]
+        )
+
+        storedBallotIds = (scResult!.returnValue as! [UInt64]?)!
+
+        // Only one Ballot should exist per account
+        Test.assertEqual(storedBallotIds.length, 1)
+        // And the IDs need to match!
+        Test.assertEqual(ballotMintedEvent!._ballotId, storedBallotIds[storedBallotIds.length - 1])
+        // The voter address should also match the current account being used
+        Test.assertEqual(ballotMintedEvent!._voterAddress, account.address)
+
+        // If none of the asserts before blew up, all is good. Proceed with building the ballot dictionary
+        ballots["account0".concat((index + 1).toString())] = {
+            "address": ballotMintedEvent!._voterAddress.toString(),
+            "ballotID": ballotMintedEvent!._ballotId.toString()
+        }
+    }
+}
+
+/* 
+    This function follows on the previous ones, i.e., it expects a valid VoteBox in each account in the accounts array with one and only one Ballot in it (the burnBallot transaction already validates this). The transaction in question loads and burns it without required more information.
+*/
+access(all) fun testBurnBallots() {
+    // TODO: This one please!!!
+}
+
+// TODO: Modify Ballots (Vote)
+// TODO: Multiple Vote Casting
+// TODO: Eligibility Module
+// TODO: Tally Contract
