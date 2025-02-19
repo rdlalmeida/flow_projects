@@ -42,12 +42,9 @@ transaction(recipient: Address) {
 
     execute {
         let newBallot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: self.recipientAddress)
-        let newBallot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: self.recipientAddress)
 
         let ballotId: UInt64 = newBallot.id
-        let ballotId: UInt64 = newBallot.id
 
-        self.voteBoxRef.deposit(token: <- newBallot)
         self.voteBoxRef.deposit(token: <- newBallot)
 
         log(
