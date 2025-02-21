@@ -143,6 +143,20 @@
         "type": "file",
         "location": "account03.pkey"
       }
+    },
+    "account04": {
+      "address": "0x045a1763c93006ca",
+      "key": {
+        "type": "file",
+        "location": "account04.pkey"
+      }
+    },
+    "account05": {
+      "address": "0x120e725050340cab",
+      "key": {
+        "type": "file",
+        "location": "account05.pkey"
+      }
     }
   },
   "deployments": {
