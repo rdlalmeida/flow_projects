@@ -367,6 +367,7 @@ access(all) fun testCreateVoteBox() {
     Test.expect(txResult01, Test.beSucceeded())
 
     var voteBoxCreatedEvents: [AnyStruct] = Test.eventsOfType(voteBoxCreatedEventType)
+    var resourceDestroyedEvents: [AnyStruct] = []
 
     eventNumberCount[voteBoxCreatedEventType] = eventNumberCount[voteBoxCreatedEventType]! + 1
     Test.assertEqual(voteBoxCreatedEvents.length, eventNumberCount[voteBoxCreatedEventType]!)
@@ -400,7 +401,17 @@ access(all) fun testCreateVoteBox() {
 
     Test.assertEqual(voteBoxAddress, account02.address)
 
-    // NOTE: The way I've setup these transaction and the VoteBox resource itself, running this transaction again replaces the existing VoteBox, which can have some Ballots in it, for another "clean" one. Be careful with this
+    /*
+        NOTE: The way I've setup these transaction and the VoteBox resource itself, running this transaction again replaces the existing VoteBox, which can have some Ballots in it, for another "clean" one. Be careful with this
+
+        NOTE2: This transaction "cleans" the storage spot to where the VoteBox is to be stored. This is done by "blindly" loading whatever is stored in the provided storage path into a variable and then destroying it. Update the event counter for this case
+    */
+
+    // Capture and log the last of these resourceDestroyed events just to confirm my suspicion
+    resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
+
+    eventNumberCount[resourceDestroyedEventType] = resourceDestroyedEvents.length
+
 }
 
 access(all) fun testBallot() {
@@ -418,12 +429,13 @@ access(all) fun testBallot() {
     let resourceDestroyedEvents: [AnyStruct] = Test.eventsOfType(resourceDestroyedEventType)
     let contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
 
-    // The BallotMinted events should have a new one and the resource destroyed events should
-    // have two more: one from the Ballot destruction and another from destroying an
-    // empty VoteBox. NOTE: the Ballot resource was destroyed with the 'destroy' function
-    // and not burned. No BallotBurned events should be emitted. Adjust the counters accordingly
+    /*
+    The BallotMinted events should have a new one and the resource destroyed events should have another one. Now, the trick is, the ResourceDestroyed event is only emitted when a NFT, as in a NonFungibleToken.NFT resource is destroyed. This is because the event itself is defined under the NFT standard definition, namely, NonFungibleToken.NFT.ResourceDestroyed, which means that the destruction of the VoteBox, which also happens in this transaction, does not emits this event, therefore it should not be taken into account.
+    
+    NOTE: the Ballot resource was destroyed with the 'destroy' function and not burned. No BallotBurned events should be emitted. Adjust the counters accordingly
+    */
     eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + 1
-    eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + 2
+    eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + 1
 
     // Validate the counters
     Test.assertEqual(ballotMintedEvents.length, eventNumberCount[ballotMintedEventType]!)

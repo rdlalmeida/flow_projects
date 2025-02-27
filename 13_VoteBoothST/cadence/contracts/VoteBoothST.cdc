@@ -91,7 +91,12 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
-            return <- create VoteBoothST.VoteBox()
+            let voteBox: @VoteBoothST.VoteBox <- create VoteBoothST.VoteBox()
+
+            // Add the @VoteBoothST.Ballot type to the list of allowed types to deposit in this collection
+            voteBox.supportedTypes[self.getType()] = true
+
+            return <- voteBox
         }
         
         access(all) view fun getElectionName(): String {
@@ -259,7 +264,14 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
-            return <- create VoteBoothST.VoteBox()
+            // Create the VoteBox first
+            let voteBox: @VoteBoothST.VoteBox <- create VoteBoothST.VoteBox()
+
+            // Register the Ballot type to the supported types to allow this collection to receive VoteBoothST.Ballots
+            self.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
+
+            // Return the resource
+            return <- voteBox
         }
 
         access(all) fun saySomething(): String {
@@ -279,7 +291,14 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
 // Contract-level Collection creation function
 access(all) fun createEmptyVoteBox(): @VoteBoothST.VoteBox {
-    return <- create VoteBoothST.VoteBox()
+    // Create a new VoteBox
+    let voteBox: @VoteBoothST.VoteBox <- create VoteBoothST.VoteBox()
+
+    // Set it to be able to store @VoteBoothST.Ballots
+    voteBox.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
+
+    // Return it
+    return <- voteBox
 }
 
 // ----------------------------- BALLOT COLLECTION BEGIN -------------------------------------------
@@ -303,8 +322,12 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
     }
 
     access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
-        // TODO: Protect this function such that only the contract deployer can invoke it
-        return <- create VoteBoothST.BallotCollection()
+        let ballotCollection: @VoteBoothST.BallotCollection <- create VoteBoothST.BallotCollection()
+
+        // Add the @VoteBoothST.Ballot type to allow Ballot to be deposited in this type of collection
+        ballotCollection.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
+
+        return <- ballotCollection
     }
 
     // NonFungibleToken.Receiver
@@ -427,7 +450,12 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
     }
 
     access(all) fun createEmptyCollection(nftType: Type): @{NonFungibleToken.Collection} {
-        return <- create VoteBoothST.VoteBox()
+        let voteBox: @VoteBoothST.VoteBox <- create VoteBoothST.VoteBox()
+
+        // Add the @VoteBoothST.Ballot type to the allowed deposit types for this collection
+        voteBox.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
+
+        return <- voteBox
     }
 
     access(all) view fun saySomething(): String {

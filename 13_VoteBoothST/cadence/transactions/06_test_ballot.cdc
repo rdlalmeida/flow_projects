@@ -1,6 +1,8 @@
 import "VoteBoothST"
 import "NonFungibleToken"
 
+//TODO: This shit still isn't working. I solve a bunch of problems but a few remain
+
 transaction() {
     let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
     let signerAddress: Address
@@ -55,29 +57,24 @@ transaction() {
             )
         }
 
-        // TODO: Continue from here. The transaction fails when it tries to create the emptyVoteBox resource because of a 'isSupportedTypes' blunder. Run the transaction again in the emulator to get the error back
-        // let emptyVoteBox: @{NonFungibleToken.Collection} <- ballot.createEmptyCollection()
+        let emptyVoteBox: @{NonFungibleToken.Collection} <- ballot.createEmptyCollection()
 
-        // // Test if the type matches
-        // if (emptyVoteBox.getType() != Type<@{NonFungibleToken.Collection}>()) {
-        //     panic(
-        //         "ERROR: The emptyVoteBox returned has type '"
-        //         .concat(emptyVoteBox.getType().identifier)
-        //         .concat("'. Expected: @{NonFungibleToken.Collection}")
-        //     )
-        // }
+        log(
+            "Got a VoteBox with type: "
+            .concat(emptyVoteBox.getType().identifier)
+        )
         
-        // // Check that the Collection was created empty
-        // if(emptyVoteBox.getLength() != 0) {
-        //     panic(
-        //         "ERROR: The VoteBox created is not empty! It was created with "
-        //         .concat(emptyVoteBox.getLength().toString())
-        //         .concat(" elements in it! It should be empty!")
-        //     )
-        // }
+        // Check that the Collection was created empty
+        if(emptyVoteBox.getLength() != 0) {
+            panic(
+                "ERROR: The VoteBox created is not empty! It was created with "
+                .concat(emptyVoteBox.getLength().toString())
+                .concat(" elements in it! It should be empty!")
+            )
+        }
 
-        // // Done. Destroy the emptyVoteBox
-        // destroy emptyVoteBox
+        // Done. Destroy the emptyVoteBox
+        destroy emptyVoteBox
 
         // Time to test the function that return the election parameters
         let contractElectionName: String = VoteBoothST.getElectionName()
