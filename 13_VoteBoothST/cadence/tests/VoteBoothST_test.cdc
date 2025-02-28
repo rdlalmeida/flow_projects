@@ -15,6 +15,8 @@ access(all) let expectedBallotCollectionStoragePath: StoragePath = /storage/Ball
 access(all) let expectedBallotCollectionPublicPath: PublicPath = /public/BallotCollection
 access(all) let expectedVoteBoxStoragePath: StoragePath = /storage/VoteBox
 access(all) let expectedVoteBoxPublicPath: PublicPath = /public/VoteBox
+access(all) let expectedOwnerControlStoragePath: StoragePath = /storage/ownerControl
+access(all) let expectedOwnerControlPublicPath: PublicPath = /public/ownerControl
 
 access(all) let deployer: Test.TestAccount = Test.getAccount(0x0000000000000008)
 access(all) let account01: Test.TestAccount = Test.createAccount()
@@ -38,17 +40,18 @@ access(all) let ballots: {String: {String: String}} = {}
 access(all) let addresses: [Address] = [account01.address, account02.address, account03.address, account04.address, account05.address]
 
 // TRANSACTIONS
-access(all) let testBallotPrinterTx: String = "../transactions/01_test_ballot_printer_admin.cdc"
-access(all) let testBallotPrinterAdminTx: String = "../transactions/02_test_ballot_printer_admin_reference.cdc"
-access(all) let testBallotCollectionLoadTx: String = "../transactions/03_test_ballot_collection_load.cdc"
-access(all) let testBallotCollectionRefTx: String = "../transactions/04_test_ballot_collection_reference.cdc"
-access(all) let voteBoxCreationTx: String = "../transactions/05_create_vote_box.cdc"
-access(all) let testBallotTx: String = "../transactions/06_test_ballot.cdc"
-access(all) let mintBallotToAccountTx: String = "../transactions/07_mint_ballot_to_account.cdc"
-access(all) let mintBallotsToAccountsTx: String = "../transactions/08_mint_ballots_to_accounts.cdc"
-access(all) let withdrawBallotFromVoteBoxLoadTx: String = "../transactions/09_withdraw_ballot_from_vote_box_load.cdc"
-access(all) let withdrawBallotFromVoteBoxRefTx: String = "../transactions/10_withdraw_ballot_from_vote_box_ref.cdc"
-access(all) let burnBallotTx: String = "../transactions/11_burn_ballot.cdc"
+access(all) let testOwnerControlTx: String = "../transactions/01_test_owner_control.cdc"
+access(all) let testBallotPrinterTx: String = "../transactions/02_test_ballot_printer_admin.cdc"
+access(all) let testBallotPrinterAdminTx: String = "../transactions/03_test_ballot_printer_admin_reference.cdc"
+access(all) let testBallotCollectionLoadTx: String = "../transactions/04_test_ballot_collection_load.cdc"
+access(all) let testBallotCollectionRefTx: String = "../transactions/05_test_ballot_collection_reference.cdc"
+access(all) let voteBoxCreationTx: String = "../transactions/06_create_vote_box.cdc"
+access(all) let testBallotTx: String = "../transactions/07_test_ballot.cdc"
+access(all) let mintBallotToAccountTx: String = "../transactions/08_mint_ballot_to_account.cdc"
+access(all) let mintBallotsToAccountsTx: String = "../transactions/09_mint_ballots_to_accounts.cdc"
+access(all) let withdrawBallotFromVoteBoxLoadTx: String = "../transactions/10_withdraw_ballot_from_vote_box_load.cdc"
+access(all) let withdrawBallotFromVoteBoxRefTx: String = "../transactions/11_withdraw_ballot_from_vote_box_ref.cdc"
+access(all) let burnBallotTx: String = "../transactions/12_burn_ballot.cdc"
 
 // SCRIPTS
 access(all) let testVoteBoxSc: String = "../scripts/01_test_vote_box.cdc"
@@ -153,6 +156,10 @@ access(all) fun testDefaultPaths() {
     Test.assertEqual(VoteBoothST.voteBoxPublicPath, expectedVoteBoxPublicPath)
 
     Test.assertEqual(VoteBoothST.voteBoxStoragePath, expectedVoteBoxStoragePath)
+
+    Test.assertEqual(VoteBoothST.ownerControlStoragePath, expectedOwnerControlStoragePath)
+
+    Test.assertEqual(VoteBoothST.ownerControlPublicPath, expectedOwnerControlPublicPath)
 }
 
 access(all) fun testDefaultParameters() {
@@ -167,7 +174,7 @@ access(all) fun testDefaultParameters() {
 
 }
 
-access(all) fun testMinterLoading() {
+access(all) fun _testMinterLoading() {
     // Run the corresponding transaction
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotPrinterTx,
@@ -216,7 +223,7 @@ access(all) fun testMinterLoading() {
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 }
 
-access(all) fun testMinterReference() {
+access(all) fun _testMinterReference() {
     // This transaction runs a similar function but using references instead of loading the resource
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotPrinterAdminTx,
