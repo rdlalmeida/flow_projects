@@ -165,16 +165,26 @@ access(all) fun testDefaultPaths() {
 access(all) fun testDefaultParameters() {
     Test.assertEqual(VoteBoothST.totalBallotsMinted, 0 as UInt64)
     Test.assertEqual(VoteBoothST.totalBallotsSubmitted, 0 as UInt64)
-    
-    // TODO: These two need an authorized transaction to run
-    // Test.assert(VoteBoothST.ownerControl.getBallotOwners() == {})
-
-    // Test.assert(VoteBoothST.getOwners() == {})
-
-
 }
 
-access(all) fun _testMinterLoading() {
+access(all) fun _testOwnerControl() {
+    let txResult: Test.TransactionResult = executeTransaction(
+        testOwnerControlTx,
+        [account01.address],
+        deployer
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    // This transaction should trigger 4 ContractDataInconsistent events. Check if that was the case
+    var contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
+
+    eventNumberCount[contractDataInconsistentEventType] = eventNumberCount[contractDataInconsistentEventType]! + 4
+
+    Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
+}
+
+access(all) fun testMinterLoading() {
     // Run the corresponding transaction
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotPrinterTx,
@@ -182,52 +192,15 @@ access(all) fun _testMinterLoading() {
         deployer
     )
 
-    // This transaction should emit a bunch of events and, if all, goes well, should NOT emit a warning event.
-    Test.expect(txResult01, Test.beSucceeded())
-
-    var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
-    var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
-    var resourceDestroyedEvents: [AnyStruct] = Test.eventsOfType(resourceDestroyedEventType)
-    var contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
-
-    // If the transaction was OK, the first 3 events should have been emitted, but not the 4th one. As such, start by increase the successful event counter by one before comparing
-    eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + 1
-    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + 1
-    eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + 1
-
-    Test.assertEqual(ballotMintedEvents.length, eventNumberCount[ballotMintedEventType]!)
-    Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
-    Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
-    Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
-
-    // Try to run the same transaction, but now signed by someone that is not authorized to access the resource. The expectation is for it to fail
-    let txResult02: Test.TransactionResult = executeTransaction(
-        testBallotPrinterTx,
-        [],
-        account01
-    )
-
-    Test.expect(txResult02, Test.beFailed())
-
-    // Also, this transaction should not emit any of the events from before, therefore the number of events emitted in the meantime should remain unchanged
-    // Recapture the events again
-    ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
-    ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
-    resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
-    contractDataInconsistentEvents = Test.eventsOfType(contractDataInconsistentEventType)
-
-    // And check that they haven't changed the count
-    Test.assertEqual(ballotMintedEvents.length, eventNumberCount[ballotMintedEventType]!)
-    Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
-    Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
-    Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
+    // This transaction is expected to fail in all circumstances! Check the transaction text for a detailed explanation.
+    Test.expect(txResult01, Test.beFailed())
 }
 
-access(all) fun _testMinterReference() {
+access(all) fun testMinterReference() {
     // This transaction runs a similar function but using references instead of loading the resource
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotPrinterAdminTx,
-        [],
+        [account01.address],
         deployer
     )
 
@@ -252,7 +225,7 @@ access(all) fun _testMinterReference() {
     // Repeat the transaction with an invalid (unauthorized) signer
     let txResult02: Test.TransactionResult = executeTransaction(
         testBallotPrinterAdminTx,
-        [],
+        [account02.address],
         account01
     )
 

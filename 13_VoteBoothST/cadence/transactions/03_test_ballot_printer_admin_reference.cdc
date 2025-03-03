@@ -1,31 +1,23 @@
 import "VoteBoothST"
 
-transaction() {
-    let printerReference: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
+transaction(newVoter: Address) {
+    let printerReference: auth(VoteBoothST.Admin, Insert) &VoteBoothST.BallotPrinterAdmin
     let ownerAddress: Address
 
-    prepare(signer: auth(Capabilities, Storage) &Account) {
+    prepare(signer: auth(Capabilities, Storage, VoteBoothST.Admin, Insert) &Account) {
         self.ownerAddress = signer.address
 
-        self.printerReference = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
+        self.printerReference = signer.storage.borrow<auth(VoteBoothST.Admin, Insert) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
             "Unable to get a &VoteBoothST.BallotPrinterAdmin from path "
             .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())
             .concat(" for account ")
             .concat(signer.address.toString())
         )
-
-        // self.printerReference = signer.capabilities.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(VoteBoothST.ballotPrinterAdminPublicPath) ??
-        // panic(
-        //     "Unable to get a &VoteBoothST.BallotPrinterAdmin from path "
-        //     .concat(VoteBoothST.ballotPrinterAdminPublicPath.toString())
-        //     .concat(" for account ")
-        //     .concat(signer.address.toString())
-        // )
     }
 
     execute {
-        let newBallot: @VoteBoothST.Ballot <- self.printerReference.printBallot(voterAddress: self.ownerAddress)
+        let newBallot: @VoteBoothST.Ballot <- self.printerReference.printBallot(voterAddress: newVoter)
 
         log(
             "Got a valid ballot with id "
