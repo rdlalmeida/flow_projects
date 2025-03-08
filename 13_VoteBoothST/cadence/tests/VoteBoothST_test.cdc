@@ -243,11 +243,10 @@ access(all) fun testMinterReference() {
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 }
 
-// Test the 3rd transaction signing it with a user that should not be able to do the things in the transaction text
-access(all) fun _testBallotCollectionLoad() {
+access(all) fun testBallotCollectionLoad() {
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotCollectionLoadTx,
-        [],
+        [account01.address],
         deployer
     )
 
@@ -290,10 +289,10 @@ access(all) fun _testBallotCollectionLoad() {
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 }
 
-access(all) fun _testBallotCollectionRef() {
+access(all) fun testBallotCollectionRef() {
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotCollectionRefTx,
-        [],
+        [account02.address],
         deployer
     )
 

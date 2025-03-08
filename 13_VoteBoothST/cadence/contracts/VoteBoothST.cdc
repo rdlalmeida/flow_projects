@@ -64,22 +64,37 @@ access(all) contract VoteBoothST: NonFungibleToken {
         access(self) var ballotOwners: {UInt64: Address}
         access(self) var owners: {Address: UInt64}
 
+        // Retrieve the ballotOwners dictionary
         access(all) fun getBallotOwners(): {UInt64: Address} {
             return self.ballotOwners
         }
 
+        // And this one returns just the size of the ballotOwners, i.e., it calculates how many owners exists for the ballots
+        access(all) fun getOwnersCount(): Int {
+            return self.ballotOwners.length
+        }
+
+        // Retrieve the owners dictionary
         access(all) fun getOwners(): {Address: UInt64} {
             return self.owners
         }
 
+        // And this one returns the number of ballots associated to owners in the system, i.e., the number of ballots minted/active so far
+        access(all) fun getBallotCount(): Int {
+            return self.owners.length
+        }
+
+        // Get the owner address for a given ballotId
         access(all) fun getBallotOwner(ballotId: UInt64): Address? {
             return self.ballotOwners[ballotId]
         }
 
+        // Get the ballotId for the given owner
         access(all) fun getBallotId(owner: Address): UInt64? {
             return self.owners[owner]
         }
 
+        // Set function to create a new entry in the ballotOwners dictionary
         access(all) fun setBallotOwner(ballotId: UInt64, ballotOwner: Address) {
             /* 
                 Check first that there are no ContractDataInconsistencies around. If there are, emit the ContractDataInconsistent event, but carry on. Replace the existing parameters.
@@ -96,6 +111,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
             self.ballotOwners[ballotId] = ballotOwner
         }
 
+        // Set function to create a new entry in the owners dictionary
         access(all) fun setOwner(ballotOwner: Address, ballotId: UInt64) {
             // Same process as before for this one as well
 
@@ -107,6 +123,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
             self.owners[ballotOwner] = ballotId
         }
 
+        // Remove function to delete the entry from the ballotOwners dictionary for the ballotId key provided
         access(all) fun removeBallotOwner(ballotId: UInt64, ballotOwner: Address) {
             let storedBallotOwner: Address? = self.ballotOwners.remove(key: ballotId)
 
@@ -116,6 +133,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
             }
         }
 
+        // Remove function to delete the entry from the owners dictionary for the ballotOwner key provided
         access(all) fun removeOwner(ballotOwner: Address, ballotId: UInt64) {
             let storedBallotId: UInt64? = self.owners.remove(key: ballotOwner)
 
@@ -125,6 +143,13 @@ access(all) contract VoteBoothST: NonFungibleToken {
             }
         }
 
+        // This function validates if this structure is still consistent or not. If all works well, the owners and ballotOwners dictionaries should ALWAYS have the same number of entries
+        // given that they are always modified at the same time.
+        access(all) fun isConsistent(): Bool {
+            return (self.ballotOwners.length == self.owners.length)
+        }
+
+        // Resource constructor. It simply sets the internal dictionaries to empty ones
         init() {
             self.ballotOwners = {}
             self.owners = {}
