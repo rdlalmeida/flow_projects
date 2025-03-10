@@ -1,6 +1,9 @@
 import "VoteBoothST"
 import "NonFungibleToken"
 
+// This transaction tests the deposit/withdraw mechanics for a loaded VoteBox
+// TODO: Finish this
+
 transaction() {
     prepare(signer: auth(Storage) &Account) {
         let voteBox: @VoteBoothST.VoteBox <- signer.storage.load<@VoteBoothST.VoteBox>(from: VoteBoothST.voteBoxStoragePath) ??

@@ -1,6 +1,9 @@
 import "VoteBoothST"
 import "NonFungibleToken"
 
+// This transaction tests the deposit/withdraw mechanics for a referenced VoteBox
+// TODO: Finish this
+
 transaction() {
     let voteBoxRef: auth(NonFungibleToken.Withdraw) &VoteBoothST.VoteBox
     let mainAddress: Address

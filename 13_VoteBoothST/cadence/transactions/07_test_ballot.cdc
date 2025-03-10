@@ -1,11 +1,10 @@
 import "VoteBoothST"
 import "NonFungibleToken"
 
-//TODO: This shit still isn't working. I solve a bunch of problems but a few remain
-
-transaction() {
+transaction(testAddress: Address) {
     let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
     let signerAddress: Address
+    let ownerControlRef: &VoteBoothST.OwnerControl
 
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.signerAddress = signer.address
@@ -17,11 +16,31 @@ transaction() {
             .concat(" from account ")
             .concat(self.signerAddress.toString())
         )
+
+        self.ownerControlRef = signer.capabilities.borrow<&VoteBoothST.OwnerControl>(VoteBoothST.ownerControlPublicPath) ??
+        panic(
+            "Unable to retrieve a valid &VoteBoothST.OwnerControl at "
+            .concat(VoteBoothST.ownerControlPublicPath.toString())
+            .concat(" from account ")
+            .concat(signer.address.toString())
+        )
     }
 
     execute {
         // Try and mint a ballot for testing purposes
-        let ballot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: self.signerAddress)
+        let ballot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: testAddress)
+
+        // Test the consistency of the OwnerControl structure, but use the functions for that and count the number of entries in both internal
+        // dictionaries. Previous tests have been more thorough in that aspect
+        if (!self.ownerControlRef.isConsistent()) {
+            panic(
+                "ERROR: Contract Data inconsistency detected! The OwnerControl.ballotOwners has "
+                .concat(self.ownerControlRef.getOwnersCount().toString())
+                .concat(" entries, while the OwnerControl.owners has ")
+                .concat(self.ownerControlRef.getBallotCount().toString())
+                .concat(" entries! These should have the same length!")
+            )
+        }
 
         // Use this opportunity to test a bunch of Ballot only functions
         let views: [Type] = ballot.getViews()
@@ -138,7 +157,27 @@ transaction() {
             )
         }
 
-        // Use the ballot to test stuff before destroying it
+        let testBallotId: UInt64 = ballot.id
+        let testBallotOwner: Address = ballot.ballotOwner
+
         destroy ballot
+
+        // Check the consistency as usual before exiting
+        if (!self.ownerControlRef.isConsistent()) {
+            panic(
+                "ERROR: Contract Data inconsistency detected! The OwnerControl.ballotOwners has "
+                .concat(self.ownerControlRef.getOwnersCount().toString())
+                .concat(" entries, while the OwnerControl.owners has ")
+                .concat(self.ownerControlRef.getBallotCount().toString())
+                .concat(" entries! These should have the same length!")
+            )
+        }
+
+        log(
+            "Successfully withdrawn and burned ballot #"
+            .concat(testBallotId.toString())
+            .concat(" from ballot owner ")
+            .concat(testBallotOwner.toString())
+        )
     }
 }

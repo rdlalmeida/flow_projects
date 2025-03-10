@@ -2,16 +2,16 @@ import "VoteBoothST"
 import "NonFungibleToken"
 
 transaction(testAddress: Address) {
-    let ballotCollectionRef: auth(NonFungibleToken.Withdraw) &VoteBoothST.BallotCollection
+    let BallotBoxRef: auth(NonFungibleToken.Withdraw) &VoteBoothST.BallotBox
     let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
     let signerAddress: Address
     let ownerControlRef: &VoteBoothST.OwnerControl
 
     prepare(signer: auth(Capabilities, Storage, VoteBoothST.Admin) &Account) {
-        self.ballotCollectionRef = signer.storage.borrow<auth(NonFungibleToken.Withdraw) &VoteBoothST.BallotCollection>(from: VoteBoothST.ballotCollectionStoragePath) ??
+        self.BallotBoxRef = signer.storage.borrow<auth(NonFungibleToken.Withdraw) &VoteBoothST.BallotBox>(from: VoteBoothST.BallotBoxStoragePath) ??
         panic(
-            "Unable to retrieve a valid &ValidBoothST.BallotCollection reference from "
-            .concat(VoteBoothST.ballotCollectionStoragePath.toString())
+            "Unable to retrieve a valid &ValidBoothST.BallotBox reference from "
+            .concat(VoteBoothST.BallotBoxStoragePath.toString())
             .concat(" for account ")
             .concat(signer.address.toString())
         )
@@ -38,21 +38,21 @@ transaction(testAddress: Address) {
     execute {
         log(
             "Ballot Collection reference retrieved from account "
-            .concat(VoteBoothST.ballotCollectionPublicPath.toString())
+            .concat(VoteBoothST.BallotBoxPublicPath.toString())
             .concat(" currently contains ")
-            .concat(self.ballotCollectionRef.ownedNFTs.length.toString())
+            .concat(self.BallotBoxRef.ownedNFTs.length.toString())
             .concat(" Ballots in it ")
         )
 
         log("Testing the Collection's 'saySomething' function: ")
-        log(self.ballotCollectionRef.saySomething())
+        log(self.BallotBoxRef.saySomething())
 
         let testBallot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: testAddress)
 
         let testBallotId: UInt64 = testBallot.id
         let testBallotOwner: Address = testBallot.ballotOwner
 
-        let currentCollectionSize: Int = self.ballotCollectionRef.getLength()
+        let currentCollectionSize: Int = self.BallotBoxRef.getLength()
 
         // Validate the consistency of the OwnerControl structure
         var storedBallotOwner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testBallotId)
@@ -102,14 +102,14 @@ transaction(testAddress: Address) {
                 .concat(self.ownerControlRef.getOwnersCount().toString())
                 .concat(" entries, while the OwnerControl.owners has ")
                 .concat(self.ownerControlRef.getBallotCount().toString())
-                .concat(" entries! These should have the same length! ")
+                .concat(" entries! These should have the same length!")
             )
         }
 
         // Deposit the ballot into the collection
-        self.ballotCollectionRef.deposit(token: <- testBallot)
+        self.BallotBoxRef.deposit(token: <- testBallot)
 
-        let newCollectionSize: Int = self.ballotCollectionRef.getLength()
+        let newCollectionSize: Int = self.BallotBoxRef.getLength()
 
         if (currentCollectionSize + 1 != newCollectionSize) {
             panic(
@@ -121,7 +121,7 @@ transaction(testAddress: Address) {
             )
         }
 
-        let depositedBallot: @VoteBoothST.Ballot <- self.ballotCollectionRef.withdraw(withdrawID: testBallotId) as! @VoteBoothST.Ballot
+        let depositedBallot: @VoteBoothST.Ballot <- self.BallotBoxRef.withdraw(withdrawID: testBallotId) as! @VoteBoothST.Ballot
 
         let depositedBallotId: UInt64 = depositedBallot.id
 

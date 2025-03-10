@@ -11,8 +11,8 @@ access(all) let electionOptions: String = "1;2;3;4"
 
 access(all) let expectedBallotPrinterAdminStoragePath: StoragePath = /storage/BallotPrinterAdmin
 access(all) let expectedBallotPrinterAdminPublicPath: PublicPath = /public/BallotPrinterAdmin
-access(all) let expectedBallotCollectionStoragePath: StoragePath = /storage/BallotCollection
-access(all) let expectedBallotCollectionPublicPath: PublicPath = /public/BallotCollection
+access(all) let expectedBallotBoxStoragePath: StoragePath = /storage/BallotBox
+access(all) let expectedBallotBoxPublicPath: PublicPath = /public/BallotBox
 access(all) let expectedVoteBoxStoragePath: StoragePath = /storage/VoteBox
 access(all) let expectedVoteBoxPublicPath: PublicPath = /public/VoteBox
 access(all) let expectedOwnerControlStoragePath: StoragePath = /storage/ownerControl
@@ -43,8 +43,8 @@ access(all) let addresses: [Address] = [account01.address, account02.address, ac
 access(all) let testOwnerControlTx: String = "../transactions/01_test_owner_control.cdc"
 access(all) let testBallotPrinterTx: String = "../transactions/02_test_ballot_printer_admin.cdc"
 access(all) let testBallotPrinterAdminTx: String = "../transactions/03_test_ballot_printer_admin_reference.cdc"
-access(all) let testBallotCollectionLoadTx: String = "../transactions/04_test_ballot_collection_load.cdc"
-access(all) let testBallotCollectionRefTx: String = "../transactions/05_test_ballot_collection_reference.cdc"
+access(all) let testBallotBoxLoadTx: String = "../transactions/04_test_ballot_collection_load.cdc"
+access(all) let testBallotBoxRefTx: String = "../transactions/05_test_ballot_collection_reference.cdc"
 access(all) let voteBoxCreationTx: String = "../transactions/06_create_vote_box.cdc"
 access(all) let testBallotTx: String = "../transactions/07_test_ballot.cdc"
 access(all) let mintBallotToAccountTx: String = "../transactions/08_mint_ballot_to_account.cdc"
@@ -73,7 +73,7 @@ access(all) let ballotModifiedEventType: Type = Type<VoteBoothST.BallotModified>
 access(all) let ballotBurnedEventType: Type = Type<VoteBoothST.BallotBurned>()
 access(all) let contractDataInconsistentEventType: Type = Type<VoteBoothST.ContractDataInconsistent>()
 access(all) let voteBoxCreatedEventType: Type = Type<VoteBoothST.VoteBoxCreated>()
-access(all) let ballotCollectionCreatedEventType: Type = Type<VoteBoothST.BallotCollectionCreated>()
+access(all) let BallotBoxCreatedEventType: Type = Type<VoteBoothST.BallotBoxCreated>()
 
 // Use the following dictionary to keep track of the number of events expected. The way Cadence tests work, new events are just added to the list of existing events, so to determine the success (or unsuccess) of an operation, I need to check the number of events for a given type detected in the test instance of the blockchain
 access(all) var eventNumberCount: {Type: Int} = {
@@ -88,7 +88,7 @@ access(all) var eventNumberCount: {Type: Int} = {
     ballotBurnedEventType: 0,
     contractDataInconsistentEventType: 0,
     voteBoxCreatedEventType: 0,
-    ballotCollectionCreatedEventType: 0
+    BallotBoxCreatedEventType: 0
 }
 
 access(all) fun setup() {
@@ -100,17 +100,17 @@ access(all) fun setup() {
 
     Test.expect(err, Test.beNil())
 
-    // Test that the BallotCollection event was emitted
-    var ballotCollectionCreatedEvents: [AnyStruct] = Test.eventsOfType(ballotCollectionCreatedEventType)
+    // Test that the BallotBox event was emitted
+    var BallotBoxCreatedEvents: [AnyStruct] = Test.eventsOfType(BallotBoxCreatedEventType)
 
     // Test that one and only one event of this type was emitted
-    eventNumberCount[ballotCollectionCreatedEventType] = eventNumberCount[ballotCollectionCreatedEventType]! + 1
-    Test.assertEqual(ballotCollectionCreatedEvents.length, eventNumberCount[ballotCollectionCreatedEventType]!)
+    eventNumberCount[BallotBoxCreatedEventType] = eventNumberCount[BallotBoxCreatedEventType]! + 1
+    Test.assertEqual(BallotBoxCreatedEvents.length, eventNumberCount[BallotBoxCreatedEventType]!)
 
     // Test that the address in the event matched the deployer and none else
-    let ballotCollectionCreatedEvent: VoteBoothST.BallotCollectionCreated = ballotCollectionCreatedEvents[0] as! VoteBoothST.BallotCollectionCreated
+    let BallotBoxCreatedEvent: VoteBoothST.BallotBoxCreated = BallotBoxCreatedEvents[0] as! VoteBoothST.BallotBoxCreated
 
-    Test.assertEqual(deployer.address, ballotCollectionCreatedEvent._accountAddress)
+    Test.assertEqual(deployer.address, BallotBoxCreatedEvent._accountAddress)
 }
 
 access(all) fun testGetElectionName() {
@@ -149,9 +149,9 @@ access(all) fun testDefaultPaths() {
 
     Test.assertEqual(VoteBoothST.ballotPrinterAdminPublicPath, expectedBallotPrinterAdminPublicPath)
 
-    Test.assertEqual(VoteBoothST.ballotCollectionStoragePath, expectedBallotCollectionStoragePath)
+    Test.assertEqual(VoteBoothST.BallotBoxStoragePath, expectedBallotBoxStoragePath)
 
-    Test.assertEqual(VoteBoothST.ballotCollectionPublicPath, expectedBallotCollectionPublicPath)
+    Test.assertEqual(VoteBoothST.BallotBoxPublicPath, expectedBallotBoxPublicPath)
 
     Test.assertEqual(VoteBoothST.voteBoxPublicPath, expectedVoteBoxPublicPath)
 
@@ -243,9 +243,9 @@ access(all) fun testMinterReference() {
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 }
 
-access(all) fun testBallotCollectionLoad() {
+access(all) fun testBallotBoxLoad() {
     let txResult01: Test.TransactionResult = executeTransaction(
-        testBallotCollectionLoadTx,
+        testBallotBoxLoadTx,
         [account01.address],
         deployer
     )
@@ -270,7 +270,7 @@ access(all) fun testBallotCollectionLoad() {
 
     // Run the transaction again, but with an invalid signer now
     let txResult02: Test.TransactionResult = executeTransaction(
-        testBallotCollectionLoadTx,
+        testBallotBoxLoadTx,
         [],
         account01
     )
@@ -289,9 +289,9 @@ access(all) fun testBallotCollectionLoad() {
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 }
 
-access(all) fun testBallotCollectionRef() {
+access(all) fun testBallotBoxRef() {
     let txResult01: Test.TransactionResult = executeTransaction(
-        testBallotCollectionRefTx,
+        testBallotBoxRefTx,
         [account02.address],
         deployer
     )
@@ -317,7 +317,7 @@ access(all) fun testBallotCollectionRef() {
 
     // Repeat the transaction but with the wrong signer. Everything must fail
     let txResult02: Test.TransactionResult = executeTransaction(
-        testBallotCollectionRefTx,
+        testBallotBoxRefTx,
         [],
         account01
     )
@@ -336,7 +336,7 @@ access(all) fun testBallotCollectionRef() {
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 }
 
-access(all) fun _testCreateVoteBox() {
+access(all) fun testCreateVoteBox() {
     // Create a VoteBox for each of the additional user accounts (account01 and account02)
     let txResult01: Test.TransactionResult = executeTransaction(
         voteBoxCreationTx,
@@ -394,14 +394,14 @@ access(all) fun _testCreateVoteBox() {
 
 }
 
-access(all) fun _testBallot() {
-    let txResult: Test.TransactionResult = executeTransaction(
+access(all) fun testBallot() {
+    let txResult01: Test.TransactionResult = executeTransaction(
         testBallotTx,
-        [],
+        [account03.address],
         deployer
     )
 
-    Test.expect(txResult, Test.beSucceeded())
+    Test.expect(txResult01, Test.beSucceeded())
 
     // The test ballot transaction should have emitted a pair of events. Test those too
     let ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
@@ -423,9 +423,19 @@ access(all) fun _testBallot() {
     Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 
+    // This transaction MUST FAIL if signed by any other than the contract deployer (account 'deployer') due to the lack of the VoteBoothST.Admin entitlement. 
+    // This is very important because it limits the minting of new Ballots to one and only one Admin entity. Test this
+    let txResult02: Test.TransactionResult = executeTransaction(
+        testBallotTx,
+        [account02.address],
+        account01
+    )
+
+    Test.expect(txResult02, Test.beFailed())
+
 }
 
-access(all) fun _testBallotMintingToVoteBox() {
+access(all) fun testBallotMintingToVoteBox() {
     // NOTE: This test assumes that the "testCreateVoteBox" has run successfully first, i.e., account01 and account02 have a valid VoteBox in their storage area and a public capability published.
 
     // Mint and deposit a new Ballot to account01. Use the event emitted to retrieve the ballotId
@@ -505,6 +515,15 @@ access(all) fun _testBallotMintingToVoteBox() {
 
     Test.assertEqual(storedBallotIDs.length, 1)
     Test.assertEqual(eventBallotId02, storedBallotIDs[storedBallotIDs.length - 1])
+
+    // Finally, trying this transaction with a signer different than the deployer should fail due to the lack of the Admin entitlement. Test this as well. Use account01 to sign the transaction instead
+    let txResult03: Test.TransactionResult = executeTransaction(
+        mintBallotToAccountTx,
+        [account03.address],
+        account01
+    )
+
+    Test.expect(txResult03, Test.beFailed())
 }
 
 /*

@@ -13,8 +13,8 @@ access(all) contract VoteBoothST: NonFungibleToken {
     // STORAGE PATHS
     access(all) let ballotPrinterAdminStoragePath: StoragePath
     access(all) let ballotPrinterAdminPublicPath: PublicPath
-    access(all) let ballotCollectionStoragePath: StoragePath
-    access(all) let ballotCollectionPublicPath: PublicPath
+    access(all) let BallotBoxStoragePath: StoragePath
+    access(all) let BallotBoxPublicPath: PublicPath
     access(all) let voteBoxStoragePath: StoragePath
     access(all) let voteBoxPublicPath: PublicPath
     access(all) let ownerControlStoragePath: StoragePath
@@ -28,7 +28,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) event BallotBurned(_ballotId: UInt64, _voterAddress: Address)
     access(all) event ContractDataInconsistent(_ballotId: UInt64?, _ballotOwner: Address?)
     access(all) event VoteBoxCreated(_voterAddress: Address)
-    access(all) event BallotCollectionCreated(_accountAddress: Address)
+    access(all) event BallotBoxCreated(_accountAddress: Address)
 
     // TODO: Complete this one also. I'm not emitting this one
     /*
@@ -65,7 +65,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         access(self) var owners: {Address: UInt64}
 
         // Retrieve the ballotOwners dictionary
-        access(all) fun getBallotOwners(): {UInt64: Address} {
+        access(Admin) fun getBallotOwners(): {UInt64: Address} {
             return self.ballotOwners
         }
 
@@ -75,7 +75,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         // Retrieve the owners dictionary
-        access(all) fun getOwners(): {Address: UInt64} {
+        access(Admin) fun getOwners(): {Address: UInt64} {
             return self.owners
         }
 
@@ -95,7 +95,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         // Set function to create a new entry in the ballotOwners dictionary
-        access(all) fun setBallotOwner(ballotId: UInt64, ballotOwner: Address) {
+        access(account) fun setBallotOwner(ballotId: UInt64, ballotOwner: Address) {
             /* 
                 Check first that there are no ContractDataInconsistencies around. If there are, emit the ContractDataInconsistent event, but carry on. Replace the existing parameters.
                 There's a chance that this might be the wrong approach, that I should just panic this and wait for it to be fixed. I need to keep an eye on this thing any way...
@@ -112,7 +112,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         // Set function to create a new entry in the owners dictionary
-        access(all) fun setOwner(ballotOwner: Address, ballotId: UInt64) {
+        access(account) fun setOwner(ballotOwner: Address, ballotId: UInt64) {
             // Same process as before for this one as well
 
             let storedBallotId: UInt64? = self.owners[ballotOwner]
@@ -124,7 +124,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         // Remove function to delete the entry from the ballotOwners dictionary for the ballotId key provided
-        access(all) fun removeBallotOwner(ballotId: UInt64, ballotOwner: Address) {
+        access(account) fun removeBallotOwner(ballotId: UInt64, ballotOwner: Address) {
             let storedBallotOwner: Address? = self.ballotOwners.remove(key: ballotId)
 
             // Check if the ballotOwner returned matches the one provided in the arguments. Emit the ContractDataInconsistency event
@@ -134,7 +134,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         // Remove function to delete the entry from the owners dictionary for the ballotOwner key provided
-        access(all) fun removeOwner(ballotOwner: Address, ballotId: UInt64) {
+        access(account) fun removeOwner(ballotOwner: Address, ballotId: UInt64) {
             let storedBallotId: UInt64? = self.owners.remove(key: ballotOwner)
 
             // Same as before, check for data inconsistencies and emit the usual event if that's the case
@@ -416,12 +416,12 @@ access(all) fun createEmptyVoteBox(): @VoteBoothST.VoteBox {
     return <- voteBox
 }
 
-// ----------------------------- BALLOT COLLECTION BEGIN -------------------------------------------
+// ----------------------------- BALLOT BOX BEGIN --------------------------------------------------
 /* 
     This other collection is used by this contract (because the only instance of it is stored in the contract's account) and this contract alone to store submitted ballots.
     So, to reiterate, this contract establishes 2 Collection resources: one to store a single Ballot from the voter side, another from the contract/vote booth side, to store all submitted ballots
 */
-access(all) resource BallotCollection: NonFungibleToken.Collection {
+access(all) resource BallotBox: NonFungibleToken.Collection {
     access(all) var ownedNFTs: @{UInt64: {NonFungibleToken.NFT}}
 
     access(contract) var supportedTypes: {Type: Bool}
@@ -437,12 +437,12 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
     }
 
     access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
-        let ballotCollection: @VoteBoothST.BallotCollection <- create VoteBoothST.BallotCollection()
+        let BallotBox: @VoteBoothST.BallotBox <- create VoteBoothST.BallotBox()
 
         // Add the @VoteBoothST.Ballot type to allow Ballot to be deposited in this type of collection
-        ballotCollection.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
+        BallotBox.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
 
-        return <- ballotCollection
+        return <- BallotBox
     }
 
     // NonFungibleToken.Receiver
@@ -486,7 +486,7 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
     }
 
     access(all) view fun saySomething(): String {
-        return "Hello from inside the VoteBoothST.BallotCollection resource!"
+        return "Hello from inside the VoteBoothST.BallotBox resource!"
     }
 
     // The idea with protecting the constructor with an entitlement is to prevent users other than the deployer to create these resources
@@ -497,7 +497,14 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
     }
 }
 
-// ----------------------------- BALLOT COLLECTION END ---------------------------------------------
+// ----------------------------- BALLOT BOX END ----------------------------------------------------
+
+// ----------------------------- BURN BOX BEGIN ----------------------------------------------------
+/*
+    Okey, since I added a whole security layer around the minting and burning of Ballots (through the OwnerControl), I now have a problem: how can voter burn a Ballot in his/her VoteBox, without Admin access to a BallotPrinterAdmin, and while maintaining data consistency in the OwnerControl resource, given that, obviously, they don't have access to this resource 
+    TODO: This one as well
+*/
+// ----------------------------- BURN BOX END ------------------------------------------------------
 
 // ----------------------------- BALLOT PRINTER BEGIN ----------------------------------------------
 /*
@@ -523,10 +530,8 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
 
             let newBallot: @Ballot <- create Ballot(_ballotOwner: voterAddress)
 
-            // Load a reference to the ownerControl resource from storage
-            let ownerAccount: &Account = getAccount(self.owner!.address)
-
-            let ownerControlRef: &VoteBoothST.OwnerControl = ownerAccount.capabilities.borrow<&VoteBoothST.OwnerControl>(VoteBoothST.ownerControlPublicPath) ??
+            // Load a reference to the ownerControl resource from public storage
+            let ownerControlRef: &VoteBoothST.OwnerControl = self.owner!.capabilities.borrow<&VoteBoothST.OwnerControl>(VoteBoothST.ownerControlPublicPath) ??
             panic(
                 "Unable to get a valid &VoteBoothST.OwnerControl at "
                 .concat(VoteBoothST.ownerControlPublicPath.toString())
@@ -709,8 +714,8 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
     init(name: String, symbol: String, ballot: String, location: String, options: String) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
         self.ballotPrinterAdminPublicPath = /public/BallotPrinterAdmin
-        self.ballotCollectionStoragePath = /storage/BallotCollection
-        self.ballotCollectionPublicPath = /public/BallotCollection
+        self.BallotBoxStoragePath = /storage/BallotBox
+        self.BallotBoxPublicPath = /public/BallotBox
         self.voteBoxStoragePath = /storage/VoteBox
         self.voteBoxPublicPath = /public/VoteBox
         self.ownerControlStoragePath = /storage/ownerControl
@@ -772,26 +777,26 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
             )
         }
 
-        let anotherResource: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.ballotCollectionStoragePath)
+        let anotherResource: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.BallotBoxStoragePath)
 
         if (anotherResource != nil) {
             log(
                 "Found a type '"
                 .concat(anotherResource.getType().identifier)
                 .concat("' object in at ")
-                .concat(self.ballotCollectionStoragePath.toString())
+                .concat(self.BallotBoxStoragePath.toString())
                 .concat(" path in account ")
                 .concat(self.account.address.toString())
                 .concat(" storage!")
             )
         }
 
-        let oldCap02: Capability? = self.account.capabilities.unpublish(self.ballotCollectionPublicPath)
+        let oldCap02: Capability? = self.account.capabilities.unpublish(self.BallotBoxPublicPath)
 
         if (oldCap02 != nil) {
             log(
                 "Found an active capability at "
-                .concat(self.ballotCollectionPublicPath.toString())
+                .concat(self.BallotBoxPublicPath.toString())
                 .concat(" from account ")
                 .concat(self.account.address.toString())
             )
@@ -840,14 +845,14 @@ access(all) resource BallotCollection: NonFungibleToken.Collection {
 
         self.account.capabilities.publish(printerCapability, at: self.ballotPrinterAdminPublicPath)
 
-        // Repeat the process for the BallotCollection
-        self.account.storage.save(<- create BallotCollection(), to: self.ballotCollectionStoragePath)
+        // Repeat the process for the BallotBox
+        self.account.storage.save(<- create BallotBox(), to: self.BallotBoxStoragePath)
 
-        let ballotCollectionCap: Capability<&VoteBoothST.BallotCollection> = self.account.capabilities.storage.issue<&VoteBoothST.BallotCollection>(self.ballotCollectionStoragePath)
+        let BallotBoxCap: Capability<&VoteBoothST.BallotBox> = self.account.capabilities.storage.issue<&VoteBoothST.BallotBox>(self.BallotBoxStoragePath)
 
-        self.account.capabilities.publish(ballotCollectionCap, at: self.ballotCollectionPublicPath)
+        self.account.capabilities.publish(BallotBoxCap, at: self.BallotBoxPublicPath)
 
-        emit VoteBoothST.BallotCollectionCreated(_accountAddress: self.account.address)
+        emit VoteBoothST.BallotBoxCreated(_accountAddress: self.account.address)
     }
 }
 // ----------------------------- CONSTRUCTOR END ---------------------------------------------------
