@@ -13,12 +13,14 @@ access(all) contract VoteBoothST: NonFungibleToken {
     // STORAGE PATHS
     access(all) let ballotPrinterAdminStoragePath: StoragePath
     access(all) let ballotPrinterAdminPublicPath: PublicPath
-    access(all) let BallotBoxStoragePath: StoragePath
-    access(all) let BallotBoxPublicPath: PublicPath
+    access(all) let ballotBoxStoragePath: StoragePath
+    access(all) let ballotBoxPublicPath: PublicPath
     access(all) let voteBoxStoragePath: StoragePath
     access(all) let voteBoxPublicPath: PublicPath
     access(all) let ownerControlStoragePath: StoragePath
     access(all) let ownerControlPublicPath: PublicPath
+    access(all) let burnBoxStoragePath: StoragePath
+    access(all) let burnBoxPublicPath: PublicPath
 
     // CUSTOM EVENTS
     access(all) event NonNilTokenReturned(_tokenType: Type)
@@ -29,6 +31,8 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) event ContractDataInconsistent(_ballotId: UInt64?, _ballotOwner: Address?)
     access(all) event VoteBoxCreated(_voterAddress: Address)
     access(all) event BallotBoxCreated(_accountAddress: Address)
+    // This event should emit when a Ballot is deposited in a BurnBox. NOTE: this doesn't mean that the Ballot was burned, it just set into an unrecoverable place where the Ballot is going to be burned at some point
+    access(all) event BallotSetToBurn(_ballotId: UInt64, _voterAddress: Address)
 
     // TODO: Complete this one also. I'm not emitting this one
     /*
@@ -501,9 +505,144 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
 
 // ----------------------------- BURN BOX BEGIN ----------------------------------------------------
 /*
-    Okey, since I added a whole security layer around the minting and burning of Ballots (through the OwnerControl), I now have a problem: how can voter burn a Ballot in his/her VoteBox, without Admin access to a BallotPrinterAdmin, and while maintaining data consistency in the OwnerControl resource, given that, obviously, they don't have access to this resource 
-    TODO: This one as well
+    Okey, since I added a whole security layer around the minting and burning of Ballots (through the OwnerControl), I now have a problem: how can voter burn a Ballot in his/her VoteBox, without Admin access to a BallotPrinterAdmin, and while maintaining data consistency in the OwnerControl resource, given that, obviously, they don't have access to this resource?
+    The solution is to create a (sort of) another Collection, but one without a withdraw function. This collection, which I'm calling BurnBox, to keep things consistent, can be used by any voter that wishes to burn their Ballot. Ballots deposited in this box have no other "exit" other than getting burned because... I'm writing it as so! Man, you gotta love blockchain and smart contracts. No other technology allows me this kind of control! Even if the deployer "forgets" to burn the Ballots in this box (unless I can came up with some sort of periodic burn function of sorts), there's no way to retrieve a Ballot that went into this box. Either they get burned or they stay in there forever.
 */
+access(all) resource BurnBox{
+    // I'm saving the ballots to be burned in this dictionary. For now, let's keep this one with self access... Maybe it's unnecessary but it doesn't hurt
+    access(self) var ballotsToBurn: @{UInt64: VoteBoothST.Ballot}
+
+    // This function receives a ballotId as argument, checks if there's a valid entry in the ballotsToBurn dictionary. If so, returns true because the ballot in question is mark for burn. If not, returns a false. This may mean that either no Ballot with that id was received, or the Ballot was burn already
+    access(all) fun isBallotToBeBurned(ballotId: UInt64): Bool {
+        if (self.ballotsToBurn[ballotId] == nil) {
+            return false
+        }
+
+        return true
+    }
+
+    access(all) fun depositBallotToBurn(ballotToBurn: @VoteBoothST.Ballot) {
+        // As usual, "clean up" the dictionary entry, while checking if whatever was in the dictionary position IS NOT a valid @VoteBoothST.Ballot
+        let ballotToBurnId: UInt64 = ballotToBurn.id
+        let ballotToBurnOwner: Address = ballotToBurn.ballotOwner
+
+        // Set the ballot in the dictionary
+        let randomResource: @AnyResource? <- self.ballotsToBurn[ballotToBurn.id] <- ballotToBurn
+
+        let randomResourceType: Type = randomResource.getType()
+
+        // This is the worst case: I'm trying to replace an already existing Ballot in this dictionary. Panic in this case to prevent unwanted burns
+        if (randomResource != nil && randomResourceType == Type<@VoteBoothST.Ballot>()) {
+            panic(
+                "ERROR: Found a valid @VoteBoothST.Ballot already stored with key "
+                .concat(ballotToBurnId.toString())
+                .concat(". Cannot continue!")
+            )
+        }
+        // The randomResource can be not nil but also not a Ballot. In this case, I need to panic as well. I need to be 100% sure that these things work consistently. 0 room for error in this contract!
+        else if (randomResource != nil) {
+            panic(
+                "ERROR: The BurnBox.ballotsToBurn has a non-nil entry for id "
+                .concat(ballotToBurnId.toString())
+                .concat(". Found a '")
+                .concat(randomResource.getType().identifier)
+                .concat("' resource in this slot! Cannot continue")
+            )
+        }
+
+        // If I got here, all went OK: The randomResource is nil and the ballot to burn is safely stored in the internal dictionary. All there's left to do is to destroy the (nil) randomResource and emit the respective event.
+        destroy randomResource
+
+        emit VoteBoothST.BallotSetToBurn(_ballotId: ballotToBurnId, _voterAddress: ballotToBurnOwner)
+    }
+    
+    // Get a list of Ids of the Ballots set to burn
+    access(Admin) fun getBallotsToBurn(): [UInt64] {
+        return self.ballotsToBurn.keys
+    }
+
+    // Simple function to determine how many ballots are set to be burn
+    access(Admin) fun howManyBallotsToBurn(): Int {
+        return self.ballotsToBurn.length
+    }
+
+    // This is the other important function in this resource. Think of this as the "empty garbage" button. It turns the incinerator on and burns all ballots stored in the internal dictionary. Because of access issues, I kinda need to replicate the burn function from the ballotPrinterAdmin resource
+    access(Admin) fun burnAllBallots(): Void {
+        // Get all the dictionary keys in a nice UInt64 list for iteration purposes
+        let ballotIdsToBurn: [UInt64] = self.ballotsToBurn.keys
+
+        // I also need a reference for the OwnerControl resource that it is stored in this same account storage
+        let ownerControlRef: &VoteBoothST.OwnerControl = self.owner!.capabilities.borrow<&VoteBoothST.OwnerControl>(VoteBoothST.ownerControlPublicPath) ??
+        panic(
+            "Unable to get a valid &VoteBoothSt.OwnerControl at "
+            .concat(VoteBoothST.ownerControlPublicPath.toString())
+            .concat(" for account ")
+            .concat(self.owner!.address.toString())
+        )
+
+        for ballotId in ballotIdsToBurn {
+            // Grab a Ballot to process
+            let ballotToBurn: @VoteBoothST.Ballot <- self.ballotsToBurn.remove(key: ballotId) ??
+            panic(
+                "Unable to recover a @VoteBoothST.Ballot from BurnBox.ballotsToBurn for id "
+                .concat(ballotId.toString())
+                .concat(". The dictionary returned a nil!")
+            )
+
+            // The Ballot set to burn should have valid entries in the OwnerControl resource. Check it
+            let storedBallotId: UInt64? = ownerControlRef.getBallotId(owner: ballotToBurn.ballotOwner)
+
+            if (storedBallotId == nil) {
+                // Data inconsistency detected! There is no ballotId associated to the owner in the ballot to burn in the OwnerControl.owners dictionary. Emit the ContractDataInconsistent but don't panic yet. This is recoverable. Ensure the other dictionary is consistent, burn the Ballot and move on
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId, _ballotOwner: ballotToBurn.ballotOwner)
+
+                // This Ballot should not exist. In this case, check the ballotOwners dictionary and correct it before burning the Ballot
+                let storedBallotOwner: Address? = ownerControlRef.getBallotOwner(ballotId: ballotToBurn.id)
+
+                if (storedBallotOwner != nil) {
+                    // Looks like there's an entry in ballotOwners dictionary for this ballot. Solve the inconsistency and move on
+                    ownerControlRef.removeBallotOwner(ballotId: ballotToBurn.id, ballotOwner: storedBallotOwner!)
+                }
+            }
+            else if (storedBallotId! != ballotToBurn.id) {
+                // In this case, the owner of the ballot to burn has a different ballotId associated to it, which means that, theoretically, the owner has two ballots... somehow. In this case, emit two events with the two ballotIds and the same address and then panic... This situation is critical and needs to be taken care before moving on. Ideally this branch should nevern be called
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId!, _ballotOwner: ballotToBurn.ballotOwner)
+
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotToBurn.id, _ballotOwner: ballotToBurn.ballotOwner)
+
+                panic(
+                    "ERROR: Major data inconsistency found: Address "
+                    .concat(ballotToBurn.ballotOwner.toString())
+                    .concat(" has two Ballots associated to it: the ballot to burn has id ")
+                    .concat(ballotToBurn.id.toString())
+                    .concat(" but the OwnerControl.owners has this address associated to ballotId ")
+                    .concat(storedBallotId!.toString())
+                    .concat(". Cannot continue until this inconsistency is solved!")
+                )
+            }
+
+            // All data is still consistent. Remove the related entries from both ballotOwners and owners dictionaries from the OwnerControl resource and finally burn the damn Ballot. Ish...
+            ownerControlRef.removeBallotOwner(ballotId: ballotToBurn.id, ballotOwner: ballotToBurn.ballotOwner)
+
+            ownerControlRef.removeOwner(ballotOwner: ballotToBurn.ballotOwner, ballotId: ballotToBurn.id)
+
+            // Destroy (burn) the Ballot
+            Burner.burn(<- ballotToBurn)
+
+            // Done. This is the end of the for loop cycle. This should repeat for all ballots set in storage to be burned.
+        }
+    }
+
+    // The usual saySomething function just to check if this thing is minimally working. I have one of these in each resource of this contract
+    access(all) fun saySomething(): String {
+        return "Hello from inside the BurnBox resource!"
+    }
+
+    init() {
+        self.ballotsToBurn <- {}
+    }
+
+}
 // ----------------------------- BURN BOX END ------------------------------------------------------
 
 // ----------------------------- BALLOT PRINTER BEGIN ----------------------------------------------
@@ -595,7 +734,7 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
 
             let ownerControlRef: &VoteBoothST.OwnerControl = ownerAccount.capabilities.borrow<&VoteBoothST.OwnerControl>(VoteBoothST.ownerControlPublicPath) ??
             panic(
-                "Unable to get a valid auth(Remove) &VoteBoothST.OwnerControl at "
+                "Unable to get a valid &VoteBoothST.OwnerControl at "
                 .concat(VoteBoothST.ownerControlPublicPath.toString())
                 .concat(" for account ")
                 .concat(self.owner!.address.toString())
@@ -606,7 +745,7 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
 
             if (storedBallotId == nil) {
                 // Data inconsistency detected! There is no ballotId associated to the owner in the ballot to burn in the 'owners' dictionary. Emit the event but don't panic: make sure both dictionaries are consistent, burn the token and get out
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId!, _ballotOwner: ballotToBurn.ballotOwner)
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId, _ballotOwner: ballotToBurn.ballotOwner)
 
                 // This ballot should not exist. In this case, check the other internal dictionary and correct it and burn the ballot before panicking
                 let storedBallotOwner: Address? = ownerControlRef.getBallotOwner(ballotId: ballotToBurn.id)
@@ -710,16 +849,19 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
     }
 
 // ----------------------------- CONTRACT LOGIC END ------------------------------------------------
+
 // ----------------------------- CONSTRUCTOR BEGIN -------------------------------------------------
     init(name: String, symbol: String, ballot: String, location: String, options: String) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
         self.ballotPrinterAdminPublicPath = /public/BallotPrinterAdmin
-        self.BallotBoxStoragePath = /storage/BallotBox
-        self.BallotBoxPublicPath = /public/BallotBox
+        self.ballotBoxStoragePath = /storage/BallotBox
+        self.ballotBoxPublicPath = /public/BallotBox
         self.voteBoxStoragePath = /storage/VoteBox
         self.voteBoxPublicPath = /public/VoteBox
-        self.ownerControlStoragePath = /storage/ownerControl
-        self.ownerControlPublicPath = /public/ownerControl
+        self.ownerControlStoragePath = /storage/OwnerControl
+        self.ownerControlPublicPath = /public/OwnerControl
+        self.burnBoxStoragePath = /storage/BurnBox
+        self.burnBoxPublicPath = /public/BurnBox
 
         self._name = name
         self._symbol = symbol
@@ -749,13 +891,13 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
         self.totalBallotsMinted = 0
         self.totalBallotsSubmitted = 0
 
-        // Clean up storage and capabilities
-        let randomResource: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.ballotPrinterAdminStoragePath)
+        // Clean up storage and capabilities for all the resources that I need to create in this constructor
+        let randomResource01: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.ballotPrinterAdminStoragePath)
 
-        if (randomResource != nil) {
+        if (randomResource01 != nil) {
             log(
                 "Found a type '"
-                .concat(randomResource.getType().identifier)
+                .concat(randomResource01.getType().identifier)
                 .concat("' object in at ")
                 .concat(self.ballotPrinterAdminStoragePath.toString())
                 .concat(" path in account ")
@@ -764,7 +906,7 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
             )
         }
 
-        destroy randomResource
+        destroy randomResource01
 
         let oldCap01: Capability? = self.account.capabilities.unpublish(self.ballotPrinterAdminPublicPath)
 
@@ -777,39 +919,39 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
             )
         }
 
-        let anotherResource: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.BallotBoxStoragePath)
+        let randomResource02: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.ballotBoxStoragePath)
 
-        if (anotherResource != nil) {
+        if (randomResource02 != nil) {
             log(
                 "Found a type '"
-                .concat(anotherResource.getType().identifier)
+                .concat(randomResource02.getType().identifier)
                 .concat("' object in at ")
-                .concat(self.BallotBoxStoragePath.toString())
+                .concat(self.ballotBoxStoragePath.toString())
                 .concat(" path in account ")
                 .concat(self.account.address.toString())
                 .concat(" storage!")
             )
         }
 
-        let oldCap02: Capability? = self.account.capabilities.unpublish(self.BallotBoxPublicPath)
+        destroy randomResource02
+
+        let oldCap02: Capability? = self.account.capabilities.unpublish(self.ballotBoxPublicPath)
 
         if (oldCap02 != nil) {
             log(
                 "Found an active capability at "
-                .concat(self.BallotBoxPublicPath.toString())
+                .concat(self.ballotBoxPublicPath.toString())
                 .concat(" from account ")
                 .concat(self.account.address.toString())
             )
         }
 
-        destroy anotherResource
+        let randomResource03: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.ownerControlStoragePath)
 
-        let oneMoreResource: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.ownerControlStoragePath)
-
-        if (oneMoreResource != nil) {
+        if (randomResource03 != nil) {
             log(
-                "Fount a type '"
-                .concat(oneMoreResource.getType().identifier)
+                "Found a type '"
+                .concat(randomResource03.getType().identifier)
                 .concat("' object in at ")
                 .concat(self.ownerControlStoragePath.toString())
                 .concat(" path in account ")
@@ -818,7 +960,7 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
             )
         }
 
-        destroy oneMoreResource
+        destroy randomResource03
 
         let oldCap03: Capability? = self.account.capabilities.unpublish(self.ownerControlPublicPath)
 
@@ -826,6 +968,33 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
             log(
                 "Found an active capability at "
                 .concat(self.ownerControlPublicPath.toString())
+                .concat(" from account ")
+                .concat(self.account.address.toString())
+            )
+        }
+
+        let randomResource04: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.burnBoxStoragePath)
+
+        if (randomResource04 != nil) {
+            log(
+                "Found a type '"
+                .concat(randomResource04.getType().identifier)
+                .concat("' object in at ")
+                .concat(self.ownerControlStoragePath.toString())
+                .concat(" path in account ")
+                .concat(self.account.address.toString())
+                .concat(" storage!")
+            )
+        }
+
+        destroy randomResource04
+
+        let oldCap04: Capability? = self.account.capabilities.unpublish(self.burnBoxPublicPath)
+
+        if (oldCap04 != nil) {
+            log(
+                "Found an active capability at "
+                .concat(self.burnBoxPublicPath.toString())
                 .concat(" from account ")
                 .concat(self.account.address.toString())
             )
@@ -846,11 +1015,17 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
         self.account.capabilities.publish(printerCapability, at: self.ballotPrinterAdminPublicPath)
 
         // Repeat the process for the BallotBox
-        self.account.storage.save(<- create BallotBox(), to: self.BallotBoxStoragePath)
+        self.account.storage.save(<- create BallotBox(), to: self.ballotBoxStoragePath)
 
-        let BallotBoxCap: Capability<&VoteBoothST.BallotBox> = self.account.capabilities.storage.issue<&VoteBoothST.BallotBox>(self.BallotBoxStoragePath)
+        let BallotBoxCap: Capability<&VoteBoothST.BallotBox> = self.account.capabilities.storage.issue<&VoteBoothST.BallotBox>(self.ballotBoxStoragePath)
 
-        self.account.capabilities.publish(BallotBoxCap, at: self.BallotBoxPublicPath)
+        self.account.capabilities.publish(BallotBoxCap, at: self.ballotBoxPublicPath)
+
+        // Process the BurnBox as well
+        self.account.storage.save(<- create BurnBox(), to: self.burnBoxStoragePath)
+
+        let BurnBoxCap: Capability<&VoteBoothST.BurnBox> = self.account.capabilities.storage.issue<&VoteBoothST.BurnBox> (self.burnBoxStoragePath)
+        self.account.capabilities.publish(BurnBoxCap, at: self.burnBoxPublicPath)
 
         emit VoteBoothST.BallotBoxCreated(_accountAddress: self.account.address)
     }

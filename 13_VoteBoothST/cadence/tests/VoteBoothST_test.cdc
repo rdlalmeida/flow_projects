@@ -15,8 +15,10 @@ access(all) let expectedBallotBoxStoragePath: StoragePath = /storage/BallotBox
 access(all) let expectedBallotBoxPublicPath: PublicPath = /public/BallotBox
 access(all) let expectedVoteBoxStoragePath: StoragePath = /storage/VoteBox
 access(all) let expectedVoteBoxPublicPath: PublicPath = /public/VoteBox
-access(all) let expectedOwnerControlStoragePath: StoragePath = /storage/ownerControl
-access(all) let expectedOwnerControlPublicPath: PublicPath = /public/ownerControl
+access(all) let expectedOwnerControlStoragePath: StoragePath = /storage/OwnerControl
+access(all) let expectedOwnerControlPublicPath: PublicPath = /public/OwnerControl
+access(all) let expectedBurnBoxStoragePath: StoragePath = /storage/BurnBox
+access(all) let expectedBurnBoxPublicPath: PublicPath = /public/BurnBox
 
 access(all) let deployer: Test.TestAccount = Test.getAccount(0x0000000000000008)
 access(all) let account01: Test.TestAccount = Test.createAccount()
@@ -49,9 +51,9 @@ access(all) let voteBoxCreationTx: String = "../transactions/06_create_vote_box.
 access(all) let testBallotTx: String = "../transactions/07_test_ballot.cdc"
 access(all) let mintBallotToAccountTx: String = "../transactions/08_mint_ballot_to_account.cdc"
 access(all) let mintBallotsToAccountsTx: String = "../transactions/09_mint_ballots_to_accounts.cdc"
-access(all) let withdrawBallotFromVoteBoxLoadTx: String = "../transactions/10_withdraw_ballot_from_vote_box_load.cdc"
-access(all) let withdrawBallotFromVoteBoxRefTx: String = "../transactions/11_withdraw_ballot_from_vote_box_ref.cdc"
-access(all) let burnBallotTx: String = "../transactions/12_burn_ballot.cdc"
+access(all) let withdrawBallotToBurnBoxLoadTx: String = "../transactions/10_withdraw_ballot_to_burn_box_load.cdc"
+access(all) let withdrawBallotToBurnBoxRefTx: String = "../transactions/11_withdraw_ballot_to_burn_box_ref.cdc"
+access(all) let burnBallotFromBurnBoxTx: String = "../transactions/12_burn_ballots_from_burn_box.cdc"
 
 // SCRIPTS
 access(all) let testVoteBoxSc: String = "../scripts/01_test_vote_box.cdc"
@@ -149,9 +151,9 @@ access(all) fun testDefaultPaths() {
 
     Test.assertEqual(VoteBoothST.ballotPrinterAdminPublicPath, expectedBallotPrinterAdminPublicPath)
 
-    Test.assertEqual(VoteBoothST.BallotBoxStoragePath, expectedBallotBoxStoragePath)
+    Test.assertEqual(VoteBoothST.ballotBoxStoragePath, expectedBallotBoxStoragePath)
 
-    Test.assertEqual(VoteBoothST.BallotBoxPublicPath, expectedBallotBoxPublicPath)
+    Test.assertEqual(VoteBoothST.ballotBoxPublicPath, expectedBallotBoxPublicPath)
 
     Test.assertEqual(VoteBoothST.voteBoxPublicPath, expectedVoteBoxPublicPath)
 
@@ -160,6 +162,10 @@ access(all) fun testDefaultPaths() {
     Test.assertEqual(VoteBoothST.ownerControlStoragePath, expectedOwnerControlStoragePath)
 
     Test.assertEqual(VoteBoothST.ownerControlPublicPath, expectedOwnerControlPublicPath)
+
+    Test.assertEqual(VoteBoothST.burnBoxStoragePath, expectedBurnBoxStoragePath)
+
+    Test.assertEqual(VoteBoothST.burnBoxPublicPath, expectedBurnBoxPublicPath)
 }
 
 access(all) fun testDefaultParameters() {
@@ -167,21 +173,33 @@ access(all) fun testDefaultParameters() {
     Test.assertEqual(VoteBoothST.totalBallotsSubmitted, 0 as UInt64)
 }
 
-access(all) fun _testOwnerControl() {
+access(all) fun testOwnerControl() {
     let txResult: Test.TransactionResult = executeTransaction(
         testOwnerControlTx,
-        [account01.address],
+        [account01.address, account02.address],
         deployer
     )
 
     Test.expect(txResult, Test.beSucceeded())
 
-    // This transaction should trigger 4 ContractDataInconsistent events. Check if that was the case
+    // This transaction mints and burns two ballots. Adjust the eventCounter dictionary accordingly and check if the events emitted match what is expected
+    eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + 2
+    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + 2
+    eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + 2
+
+    // No ContractDataInconsistent events should have been emitted. This entry should still be 0
+
+    // Check the usual event structured
+    var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
+    var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
+    var resourceDestroyedEvents: [AnyStruct] = Test.eventsOfType(resourceDestroyedEventType)
     var contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
 
-    eventNumberCount[contractDataInconsistentEventType] = eventNumberCount[contractDataInconsistentEventType]! + 4
-
+    Test.assertEqual(ballotMintedEvents.length, eventNumberCount[ballotMintedEventType]!)
+    Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+    Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
+
 }
 
 access(all) fun testMinterLoading() {
@@ -336,7 +354,7 @@ access(all) fun testBallotBoxRef() {
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 }
 
-access(all) fun testCreateVoteBox() {
+access(all) fun _testCreateVoteBox() {
     // Create a VoteBox for each of the additional user accounts (account01 and account02)
     let txResult01: Test.TransactionResult = executeTransaction(
         voteBoxCreationTx,
@@ -394,7 +412,7 @@ access(all) fun testCreateVoteBox() {
 
 }
 
-access(all) fun testBallot() {
+access(all) fun _testBallot() {
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotTx,
         [account03.address],
@@ -435,7 +453,7 @@ access(all) fun testBallot() {
 
 }
 
-access(all) fun testBallotMintingToVoteBox() {
+access(all) fun _testBallotMintingToVoteBox() {
     // NOTE: This test assumes that the "testCreateVoteBox" has run successfully first, i.e., account01 and account02 have a valid VoteBox in their storage area and a public capability published.
 
     // Mint and deposit a new Ballot to account01. Use the event emitted to retrieve the ballotId
@@ -532,7 +550,7 @@ access(all) fun testBallotMintingToVoteBox() {
     NOTE: This function and the next one are exclusive to the non-looped versions of the same functions
     IMPORTANT: only one pair of these function should be "active", i.e., the name of the test function starts with "test". I'm using an underscore (_) to before the test part to deactivate the function
 */
-access(all) fun _testCreateVoteBoxes() {
+access(all) fun testCreateVoteBoxes() {
     var txResult: Test.TransactionResult? = nil
     var voteBoxCreatedEvents: [AnyStruct] = []
     var voteBoxCreatedEvent: VoteBoothST.VoteBoxCreated? = nil
@@ -575,7 +593,7 @@ access(all) fun _testCreateVoteBoxes() {
 /*
     This function, unlike the preceding one, serves mainly to test the transaction that mints and transfers NFTs in bulk
 */
-access(all) fun _testBallotMintingToVoteBoxes() {
+access(all) fun testBallotMintingToVoteBoxes() {
     var txResult: Test.TransactionResult? = nil
     var scResult: Test.ScriptResult? = nil
     var storedBallotIds: [UInt64] = []
@@ -666,8 +684,17 @@ access(all) fun _testBallotMintingToVoteBoxes() {
     }
 }
 
+access(all) fun _testWithdrawBallotToBurnBoxLoad() {
+    // TODO: Finish this one
+}
+
+access(all) fun _testWithdrawBallotToBurnBoxRef() {
+    // TODO: And this one as well
+}
+
 /* 
     This function follows on the previous ones, i.e., it expects a valid VoteBox in each account in the accounts array with one and only one Ballot in it (the burnBallot transaction already validates this). The transaction in question loads and burns it without required more information.
+    TODO: Review this
 */
 access(all) fun _testBurnBallots() {
     var txResult: Test.TransactionResult? = nil
@@ -682,7 +709,7 @@ access(all) fun _testBurnBallots() {
     
     for index, account in accounts {
         txResult = executeTransaction(
-            burnBallotTx,
+            burnBallotFromBurnBoxTx,
             [],
             account
         )

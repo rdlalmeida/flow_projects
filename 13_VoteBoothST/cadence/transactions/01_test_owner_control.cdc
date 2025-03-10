@@ -1,5 +1,6 @@
-// NOTE: This stupid, stupid transaction crashes by no apparent reason when run in the normal emulator. But, if run as a test, it works fine! Go figure... The Flow dudes need to fix the CLI
-// TODO: Fix this test! It is actually working as it is supposed to!! The objective with setting the 'set' and 'remove' functions from the OwnerControl resource is to prevent these from being executed from outside of the account (hence why I created those with access(account)), i.e., these can only be executed from within other resources stored in the same account (such as from within the BallotPrinterAdmin resource), which is the contract deployer (Admin) account! I should NOT be able to directly execute these functions from outside of the account, such as this transaction for instance, hence why it is complaining about it!!! As it should! This shit is actually working as I want it to!!
+// NOTE: This stupid, stupid transaction crashes by no apparent reason when run in the normal emulator. But, if run as a test, it works fine! Go figure... The Flow dudes need to fix the CLI ASAP!
+
+// LOL! This is actually working as it is supposed to!! The objective with setting the 'set' and 'remove' functions from the OwnerControl resource is to prevent these from being executed from outside of the account (hence why I created those with access(account)), i.e., these can only be executed from within other resources stored in the same account (such as from within the BallotPrinterAdmin resource), which is the contract deployer (Admin) account! I should NOT be able to directly execute these functions from outside of the account, such as this transaction for instance, hence why it is complaining about it!!! As it should! This shit is actually working as I want it to!!
 
 import "VoteBoothST"
 
@@ -22,6 +23,7 @@ transaction(someAddress: Address, anotherAddress: Address) {
             .concat(signer.address.toString())
         )
 
+        // I need a printerAdminRef to mint a few test Ballots!
         self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
             "Unable to retrieve a valid auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin at "
@@ -84,7 +86,7 @@ transaction(someAddress: Address, anotherAddress: Address) {
         let testBallot02Owner: Address = testBallot02.ballotOwner
 
         // I've added a simple consistency checking function that checks if the lengths of both internal dictionaries match. A mismatch indicated a problem and this function returns false.
-        if (self.ownerControlRef.isConsistent()) {
+        if (!self.ownerControlRef.isConsistent()) {
             panic(
                 "ERROR: Contract Data inconsistency detected! The OwnerControl.ballotOwners has "
                 .concat(self.ownerControlRef.getOwnersCount().toString())
@@ -111,11 +113,11 @@ transaction(someAddress: Address, anotherAddress: Address) {
         }
 
         // All good so far. Check that entries do match
-        var storedBallot01Id: UInt64? = self.ownerControlRef.getBallotId(owner: testBallot01Owner)
-        var storedBallot02Id: UInt64? = self.ownerControlRef.getBallotId(owner: testBallot02Owner)
+        let storedBallot01Id: UInt64? = self.ownerControlRef.getBallotId(owner: testBallot01Owner)
+        let storedBallot02Id: UInt64? = self.ownerControlRef.getBallotId(owner: testBallot02Owner)
 
-        var storedBallot01Owner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testBallot01Id)
-        var storedBallot02Owner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testBallot02Id)
+        let storedBallot01Owner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testBallot01Id)
+        let storedBallot02Owner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testBallot02Id)
 
         // Check if all this data matches. Contract data consistency is fundamental
         if (storedBallot01Id == nil) {
@@ -165,7 +167,7 @@ transaction(someAddress: Address, anotherAddress: Address) {
                 .concat(" instead! These need to match!")
             )
         }
-        else if (testBallot02Id != storedBallot01Id!) {
+        else if (testBallot02Id != storedBallot02Id!) {
             panic(
                 "ERROR: Contract Data mismatch detected! TestBallot02 was minted with id "
                 .concat(testBallot02Id.toString())
@@ -193,156 +195,26 @@ transaction(someAddress: Address, anotherAddress: Address) {
             )
         }
 
-
         // All done. Burn the Ballots
         self.ballotPrinterRef.burnBallot(ballotToBurn: <- testBallot01)
         self.ballotPrinterRef.burnBallot(ballotToBurn: <- testBallot02)
 
-    //     // Insert a bogus record using the dedicated function and test if it was OK
-    //     let testId: UInt64 = 1234
+        ballotOwners = self.ownerControlRef.getBallotOwners()
+        owners = self.ownerControlRef.getOwners()
 
-    //     /*
-    //         The goal with this transaction is to test every line of the OwnerControl resource, which includes a couple of data inconsistency lines that need to be triggered. I'm purposely adding the same data twice to try and trigger these
-    //     */
-
-    //     self.ownerControlRef.setBallotOwner(ballotId: testId, ballotOwner: self.testAddress)
-    //     // The next execution does the same exact thing as above, but it should trigger an event emission
-    //     self.ownerControlRef.setBallotOwner(ballotId: testId, ballotOwner: self.testAddress)
-
-    //     self.ownerControlRef.setOwner(ballotOwner: self.testAddress, ballotId: testId)
-    //     self.ownerControlRef.setOwner(ballotOwner: self.testAddress, ballotId: testId)
-
-    //     // Get the internal structures back and check that there are OK
-    //     var newBallotOwners: {UInt64: Address} = self.ownerControlRef.getBallotOwners()
-    //     var newOwners: {Address: UInt64} = self.ownerControlRef.getOwners()
-
-    //     // Grab the new parameters using the dedicated functions as well
-    //     let newBallotOwner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testId)
-    //     let newBallotId: UInt64? = self.ownerControlRef.getBallotId(owner: self.testAddress)
-
-    //     if (newBallotOwners.length != 1) {
-    //         panic(
-    //             "ERROR: The ballotOwners dictionary has the wrong size! Expected size: 1, Current size: "
-    //             .concat(newBallotOwners.length.toString())
-    //         )
-    //     }
-
-    //     let newStoredOwner: Address? = newBallotOwners[testId]
-
-    //     if (newStoredOwner == nil) {
-    //         panic(
-    //             "ERROR: Unable to get a valid owner for ballotOwners["
-    //             .concat(testId.toString())
-    //             .concat("]. Got a nil instead.")
-    //         )
-    //     }
-    //     else if (newStoredOwner! != self.testAddress) {
-    //         panic(
-    //             "ERROR: The ballotOwners dictionary was wrongly constructed. For ballotOwners["
-    //             .concat(testId.toString())
-    //             .concat("] expected value = ")
-    //             .concat(self.testAddress.toString())
-    //             .concat(", but got ")
-    //             .concat(newStoredOwner!.toString())
-    //         )
-    //     }
-    //     else if (newBallotOwner == nil) {
-    //         panic(
-    //             "ERROR: The getBallotOwner function returned a nil owner!"
-    //         )
-    //     }
-    //     else if (newBallotOwner! != newStoredOwner!) {
-    //         panic(
-    //             "ERROR: The owner returned from getBallotOwner ("
-    //             .concat(newBallotOwner!.toString())
-    //             .concat(") does not match the one retrieved directly from ballotOwners (")
-    //             .concat(newStoredOwner!.toString())
-    //             .concat(").")
-    //         )
-    //     }
-    //     else {
-    //         log(
-    //             "Added a new record to the ballotOwners structure: ballotOwners["
-    //             .concat(testId.toString())
-    //             .concat("] = ")
-    //             .concat(newStoredOwner!.toString())
-    //         )
-    //     }
-
-    //     if (newOwners.length != 1) {
-    //         panic(
-    //             "ERROR: The owners dictionary has the wrong size!. Expected size: 1, Current size: "
-    //             .concat(newOwners.length.toString())
-    //         )
-    //     }
-
-    //     let newStoredId: UInt64? = newOwners[self.testAddress]
-
-    //     if (newStoredId == nil) {
-    //         panic(
-    //             "ERROR: Unable to get a valid ballotId for owners["
-    //             .concat(self.testAddress.toString())
-    //             .concat("]. Got a nil instead.")
-    //         )
-    //     }
-    //     else if (newStoredId! != testId) {
-    //         panic(
-    //             "ERROR: The owners dictionary was wrongly constructed. For owners["
-    //             .concat(self.testAddress.toString())
-    //             .concat("] expected value = ")
-    //             .concat(testId.toString())
-    //             .concat(", but got ")
-    //             .concat(newStoredId!.toString())
-    //         )
-    //     }
-    //     else if (newBallotId == nil) {
-    //         panic(
-    //             "ERROR: The getBallotId function returned a nil!"
-    //         )
-    //     }
-    //     else if (newBallotId! != newStoredId!) {
-    //         panic(
-    //             "ERROR: The ballotId returned from getBallotId ("
-    //             .concat(newBallotId!.toString())
-    //             .concat(") does not match the one retrieved directly from owners (")
-    //             .concat(newStoredId!.toString())
-    //             .concat(").")
-    //         )
-    //     }
-    //     else {
-    //         log(
-    //             "Added a new record to the owners structure: owners["
-    //             .concat(self.testAddress.toString())
-    //             .concat("] = ")
-    //             .concat(newStoredId!.toString())
-    //         )
-    //     }
-
-    //     // Cool. If I got to this point, remove the bogus records and check that the dictionaries were correctly modified
-    //     self.ownerControlRef.removeBallotOwner(ballotId: testId, ballotOwner: self.testAddress)
-    //     self.ownerControlRef.removeOwner(ballotOwner: self.testAddress, ballotId: testId)
-
-    //     // Same as above: If I repeat the instructions above, there should be a couple of ContractDataInconsistent events being emitted
-    //     self.ownerControlRef.removeBallotOwner(ballotId: testId, ballotOwner: self.testAddress)
-    //     self.ownerControlRef.removeOwner(ballotOwner: self.testAddress, ballotId: testId)
-
-    //     newBallotOwners = self.ownerControlRef.getBallotOwners()
-    //     newOwners = self.ownerControlRef.getOwners()
-
-    //     if (newBallotOwners != {}) {
-    //         panic(
-    //             "ERROR: The ballotOwners dictionary was not cleared correctly. The dictionary is not yet empty!"
-    //         )
-    //     }
-    //     else if (newOwners != {}) {
-    //         panic(
-    //             "ERROR: The owners dictionary was not cleared correctly. The dictionary is not yet empty!"
-    //         )
-    //     }
-    //     else {
-    //         log(
-    //             "Both owners and ballotOwners were cleared out correctly!"
-    //         )
-    //     }
+        if (ballotOwners != {}) {
+            panic(
+                "ERROR: Contract Data inconsistency detected! The OwnerControl.ballotOwners should be empty but currently has "
+                .concat(ballotOwners.length.toString())
+                .concat(" entries still!")
+            )
+        }
+        else if (owners != {}) {
+            panic(
+                "ERROR: Contract Data inconsistency detected! The OwnerControl.owners should be empty but currently has "
+                .concat(owners.length.toString())
+                .concat(" entries still!")
+            )
+        }
     }
 }
