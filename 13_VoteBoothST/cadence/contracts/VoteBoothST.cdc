@@ -27,9 +27,10 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) event BallotMinted(_ballotId: UInt64, _voterAddress: Address)
     access(all) event BallotSubmitted(_ballotId: UInt64, _voterAddress: Address)
     access(all) event BallotModified(_ballotId: UInt64, _voterAddress: Address)
-    access(all) event BallotBurned(_ballotId: UInt64, _voterAddress: Address)
+    access(all) event BallotBurned(_ballotId: UInt64?, _voterAddress: Address?)
     access(all) event ContractDataInconsistent(_ballotId: UInt64?, _ballotOwner: Address?)
     access(all) event VoteBoxCreated(_voterAddress: Address)
+    access(all) event VoteBoxDestroyed(_voterAddress: Address, _ballotId: UInt64?)
     access(all) event BallotBoxCreated(_accountAddress: Address)
     // This event should emit when a Ballot is deposited in a BurnBox. NOTE: this doesn't mean that the Ballot was burned, it just set into an unrecoverable place where the Ballot is going to be burned at some point
     access(all) event BallotSetToBurn(_ballotId: UInt64, _voterAddress: Address)
@@ -399,6 +400,25 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
         access(all) fun saySomething(): String {
             return "Hello from the inside of the VoteBoothST.VoteBox resource!"
+        }
+
+        // Set this function to be called whenever I destroy one of these VoteBoxes. IMPORTANT: For this to work, I need to use the Burner contract to destroy any VoteBoxes. If I simply use the 'destroy' function, this function is not called!
+        access(contract) fun burnCallback() {
+            // Prepare this to emit the VoteBoxDestroyed event, namely, check if there's any Ballot stored, and if it is, grab its Id first
+            let ballotIds: [UInt64] = self.getIDs()
+
+            let ballotId: UInt64? = (ballotIds.length == 0) ? nil : ballotIds[ballotIds.length - 1]
+
+            // If the ballotId is not nil, do this properly and burn the Ballot before finishing
+            if (ballotId != nil) {
+                let ballotToBurn: @{NonFungibleToken.NFT}? <- self.ownedNFTs.remove(key: ballotId!)
+
+                // Use the Burner contract to destroy this ballotToBurn.
+                // NOTE: To account for the possibility of this ballot being a nil, I've modified the event to be emit as burnCallback to accept nils as voterAddress and ballotId, which is going to be the case if this ballot is indeed a nil
+                Burner.burn(<- ballotToBurn)
+            }
+
+            emit VoteBoothST.VoteBoxDestroyed(_voterAddress: self.owner!.address, _ballotId: ballotId)
         }
 
         init() {

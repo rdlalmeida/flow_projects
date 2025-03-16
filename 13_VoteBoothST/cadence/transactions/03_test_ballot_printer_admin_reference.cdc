@@ -1,13 +1,13 @@
 import "VoteBoothST"
 
 transaction(newVoter: Address) {
-    let printerReference: auth(VoteBoothST.Admin, Insert) &VoteBoothST.BallotPrinterAdmin
+    let printerReference: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
     let ownerAddress: Address
 
-    prepare(signer: auth(Capabilities, Storage, VoteBoothST.Admin, Insert) &Account) {
+    prepare(signer: auth(Capabilities, Storage) &Account) {
         self.ownerAddress = signer.address
 
-        self.printerReference = signer.storage.borrow<auth(VoteBoothST.Admin, Insert) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
+        self.printerReference = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
             "Unable to get a &VoteBoothST.BallotPrinterAdmin from path "
             .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())
@@ -19,13 +19,23 @@ transaction(newVoter: Address) {
     execute {
         let newBallot: @VoteBoothST.Ballot <- self.printerReference.printBallot(voterAddress: newVoter)
 
+        let ballotId: UInt64 = newBallot.id
+        let ballotOwner: Address = newBallot.ballotOwner
+
         log(
             "Got a valid ballot with id "
-            .concat(newBallot.id.toString())
+            .concat(ballotId.toString())
             .concat(" for address ")
-            .concat(newBallot.ballotOwner.toString())
+            .concat(ballotOwner.toString())
         )
 
         self.printerReference.burnBallot(ballotToBurn: <- newBallot)
+
+        log(
+            "Successfully burned Ballot #"
+            .concat(ballotId.toString())
+            .concat(" from owner ")
+            .concat(ballotOwner.toString())
+        )
     }
 }

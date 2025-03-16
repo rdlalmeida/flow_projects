@@ -8,10 +8,10 @@ transaction(testAddress: Address) {
     let ownerControlRef: &VoteBoothST.OwnerControl
 
     prepare(signer: auth(Capabilities, Storage, VoteBoothST.Admin) &Account) {
-        self.BallotBoxRef = signer.storage.borrow<auth(NonFungibleToken.Withdraw) &VoteBoothST.BallotBox>(from: VoteBoothST.BallotBoxStoragePath) ??
+        self.BallotBoxRef = signer.storage.borrow<auth(NonFungibleToken.Withdraw) &VoteBoothST.BallotBox>(from: VoteBoothST.ballotBoxStoragePath) ??
         panic(
             "Unable to retrieve a valid &ValidBoothST.BallotBox reference from "
-            .concat(VoteBoothST.BallotBoxStoragePath.toString())
+            .concat(VoteBoothST.ballotBoxStoragePath.toString())
             .concat(" for account ")
             .concat(signer.address.toString())
         )
@@ -38,7 +38,7 @@ transaction(testAddress: Address) {
     execute {
         log(
             "Ballot Collection reference retrieved from account "
-            .concat(VoteBoothST.BallotBoxPublicPath.toString())
+            .concat(VoteBoothST.ballotBoxPublicPath.toString())
             .concat(" currently contains ")
             .concat(self.BallotBoxRef.ownedNFTs.length.toString())
             .concat(" Ballots in it ")

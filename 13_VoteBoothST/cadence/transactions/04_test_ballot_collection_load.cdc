@@ -1,17 +1,17 @@
 import "VoteBoothST"
 
 /*
-    This transaction is very similar to the one named "01_test_ballot_printer_admin.cdc", namely, it tries to load the ballot collection resource from storage and, if successful, try to print a ballot into the Collection, withdraw it and burn it to finish the test. If all is OK, only the contract deployer should be able to run this transaction successfully. Any other users should not be able to create BallotBoxs, therefore they should not be able to access them as well. The same logic applies to the BallotPrinterAdmin
+    This transaction is very similar to the one named "01_test_ballot_printer_admin.cdc", namely, it tries to load the ballot collection resource from storage and, if successful, try to print a ballot into the Collection, withdraw it and burn it to finish the test. If all is OK, only the contract deployer should be able to run this transaction successfully. Any other users should not be able to create BallotBoxes, therefore they should not be able to access them as well. The same logic applies to the BallotPrinterAdmin
 */
 transaction(testAddress: Address) {
     let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
     let ownerControlRef: &VoteBoothST.OwnerControl
 
     prepare(signer: auth(Storage, VoteBoothST.Admin) &Account) {
-        let storedBallotBox: @VoteBoothST.BallotBox <- signer.storage.load<@VoteBoothST.BallotBox>(from: VoteBoothST.BallotBoxStoragePath) ??
+        let storedBallotBox: @VoteBoothST.BallotBox <- signer.storage.load<@VoteBoothST.BallotBox>(from: VoteBoothST.ballotBoxStoragePath) ??
         panic(
             "Unable to retrieve a valid VoteBoothST.BallotBox resource from path "
-            .concat(VoteBoothST.BallotBoxStoragePath.toString())
+            .concat(VoteBoothST.ballotBoxStoragePath.toString())
             .concat(" for account ")
             .concat(signer.address.toString())
         )
@@ -188,7 +188,7 @@ transaction(testAddress: Address) {
         )
 
         // Done. Send the Resource back to storage
-        signer.storage.save<@VoteBoothST.BallotBox>(<- storedBallotBox, to: VoteBoothST.BallotBoxStoragePath)
+        signer.storage.save<@VoteBoothST.BallotBox>(<- storedBallotBox, to: VoteBoothST.ballotBoxStoragePath)
     }
 
     execute {
