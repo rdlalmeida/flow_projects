@@ -106,14 +106,16 @@ transaction(recipient: Address) {
 
         self.voteBoxRef.deposit(token: <- testBallot)
 
-        log(
-            "Successfully minted a Ballot with id "
-            .concat(testBallotId.toString())
-            .concat(testBallotId.toString())
-            .concat(" into the VoteBoothST.VoteBox at ")
-            .concat(VoteBoothST.voteBoxPublicPath.toString())
-            .concat(" for account ")
-            .concat(self.recipientAddress.toString())
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Successfully minted a Ballot with id "
+                .concat(testBallotId.toString())
+                .concat(testBallotId.toString())
+                .concat(" into the VoteBoothST.VoteBox at ")
+                .concat(VoteBoothST.voteBoxPublicPath.toString())
+                .concat(" for account ")
+                .concat(self.recipientAddress.toString())
+            )
+        }
     }
 }

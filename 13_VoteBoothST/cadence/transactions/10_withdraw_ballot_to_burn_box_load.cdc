@@ -2,6 +2,7 @@ import "VoteBoothST"
 import "NonFungibleToken"
 
 // This transaction tests the deposit/withdraw mechanics for a loaded VoteBox. It expects a Ballot in the user's VoteBox and deposits it to the deployer's BurnBox for future processing
+// NOTE: The way I've built the BurnBox, this can only be used through a reference. Regular users can get an unauthorized reference to deposit their Ballots but only deployer can get an authorized one to burn the Ballots. The burnBallots and related functions are VoteBoothST.Admin entitlement protected.
 
 transaction(deployerAddress: Address) {
     let burnBoxRef: &VoteBoothST.BurnBox
@@ -55,14 +56,16 @@ transaction(deployerAddress: Address) {
 
         signer.storage.save<@VoteBoothST.VoteBox>(<- voteBox, to: VoteBoothST.voteBoxStoragePath)
 
-        log(
-            "Successfully withdraw and set Ballot #"
-            .concat(ballotToBurnId.toString())
-            .concat(" from owner ")
-            .concat(ballotToBurnOwner.toString())
-            .concat(" from a VoteBox in account ")
-            .concat(signer.address.toString())
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Successfully withdraw and set Ballot #"
+                .concat(ballotToBurnId.toString())
+                .concat(" from owner ")
+                .concat(ballotToBurnOwner.toString())
+                .concat(" from a VoteBox in account ")
+                .concat(signer.address.toString())
+            )
+        }
     }
 
     execute {

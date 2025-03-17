@@ -30,7 +30,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) event BallotBurned(_ballotId: UInt64?, _voterAddress: Address?)
     access(all) event ContractDataInconsistent(_ballotId: UInt64?, _ballotOwner: Address?)
     access(all) event VoteBoxCreated(_voterAddress: Address)
-    access(all) event VoteBoxDestroyed(_voterAddress: Address, _ballotId: UInt64?)
+    access(all) event VoteBoxDestroyed(_ballotsInBox: Int, _ballotId: UInt64?)
     access(all) event BallotBoxCreated(_accountAddress: Address)
     // This event should emit when a Ballot is deposited in a BurnBox. NOTE: this doesn't mean that the Ballot was burned, it just set into an unrecoverable place where the Ballot is going to be burned at some point
     access(all) event BallotSetToBurn(_ballotId: UInt64, _voterAddress: Address)
@@ -60,6 +60,9 @@ access(all) contract VoteBoothST: NonFungibleToken {
     // I'm using these to do an internal tracking mechanism to protect this against double voting and the like
     access(all) var totalBallotsMinted: UInt64
     access(all) var totalBallotsSubmitted: UInt64
+
+    // Use this variable set (the contract constructor receives an argument to set it) to enable or disable the printing of logs in this project
+    access(all) let printLogs: Bool
 
 // ----------------------------- OWNER CONTROL BEGIN -------------------------------------------------
     /* 
@@ -193,6 +196,14 @@ access(all) contract VoteBoothST: NonFungibleToken {
             This function defines a callBack function to be automatically called when the Burner.burn function is invoked. I think (it's not clear yet) this call back needs to be implemented in the resource that is to be burned. This call back simply emits the related event.
         */
         access(contract) fun burnCallback() {
+            if (VoteBoothST.printLogs) {
+                log(
+                    "burnCallback called for Ballot with id"
+                    .concat(self.id.toString())
+                    .concat(" for owner ")
+                    .concat(self.ballotOwner.toString())
+                )
+            }
             emit VoteBoothST.BallotBurned(_ballotId: self.id, _voterAddress: self.ballotOwner)
         }
 
@@ -319,7 +330,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
 // ----------------------------- BALLOT END --------------------------------------------------------
 
 // ----------------------------- VOTE BOX BEGIN ----------------------------------------------------
-    access(all) resource VoteBox: NonFungibleToken.Collection {
+    access(all) resource VoteBox: NonFungibleToken.Collection, Burner.Burnable {
         access(all) var ownedNFTs: @{UInt64: {NonFungibleToken.NFT}}
         
         access(all) view fun getIDs(): [UInt64] {
@@ -372,7 +383,22 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         access(all) view fun borrowNFT(_ id: UInt64): &{NonFungibleToken.NFT}? {
-            return &self.ownedNFTs[id]
+            // I don't want people to be able to "borrow" the Ballot for obvious reasons
+            return nil
+        }
+
+        // If the VoteBox has a Ballot, it returns its owner. If not, returns a nil instead, as usual. Getting the Ballot owner is pretty innocuous, so keep this with access(all)
+        access(all) view fun getBallotOwner(): Address? {
+            if (self.ownedNFTs.length == 0) {
+                return nil
+            }
+
+            // If I got here, there's a Ballot in storage. Get a reference to it
+            let ballotIds: [UInt64] = self.getIDs()
+
+            let ballotRef: &{NonFungibleToken.NFT}? = &self.ownedNFTs[ballotIds[ballotIds.length - 1]]
+
+            return (ballotRef as! &VoteBoothST.Ballot).ballotOwner
         }
 
         access(NonFungibleToken.Withdraw) fun withdraw(withdrawID: UInt64): @{NonFungibleToken.NFT} {
@@ -418,7 +444,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
                 Burner.burn(<- ballotToBurn)
             }
 
-            emit VoteBoothST.VoteBoxDestroyed(_voterAddress: self.owner!.address, _ballotId: ballotId)
+            emit VoteBoothST.VoteBoxDestroyed(_ballotsInBox: ballotIds.length, _ballotId: ballotId)
         }
 
         init() {
@@ -646,7 +672,7 @@ access(all) resource BurnBox{
 
             ownerControlRef.removeOwner(ballotOwner: ballotToBurn.ballotOwner, ballotId: ballotToBurn.id)
 
-            // Destroy (burn) the Ballot
+            // Destroy (burn) the Ballot. This should emit a BallotBurned event
             Burner.burn(<- ballotToBurn)
 
             // Done. This is the end of the for loop cycle. This should repeat for all ballots set in storage to be burned.
@@ -871,7 +897,7 @@ access(all) resource BurnBox{
 // ----------------------------- CONTRACT LOGIC END ------------------------------------------------
 
 // ----------------------------- CONSTRUCTOR BEGIN -------------------------------------------------
-    init(name: String, symbol: String, ballot: String, location: String, options: String) {
+    init(name: String, symbol: String, ballot: String, location: String, options: String, printLogs: Bool) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
         self.ballotPrinterAdminPublicPath = /public/BallotPrinterAdmin
         self.ballotBoxStoragePath = /storage/BallotBox
@@ -910,6 +936,8 @@ access(all) resource BurnBox{
         self._options = newOptions
         self.totalBallotsMinted = 0
         self.totalBallotsSubmitted = 0
+
+        self.printLogs = printLogs
 
         // Clean up storage and capabilities for all the resources that I need to create in this constructor
         let randomResource01: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.ballotPrinterAdminStoragePath)
@@ -1051,3 +1079,5 @@ access(all) resource BurnBox{
     }
 }
 // ----------------------------- CONSTRUCTOR END ---------------------------------------------------
+
+// TODO: Implement the logic to manipulate the totalBallotMinted variable, namely, an access(account) function to increment this counter, call it when a new Ballot in minted by the ballotPrinterAdmin and decreased when you burn one (add this logic to the burnerCallback)

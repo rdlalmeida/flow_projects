@@ -85,14 +85,16 @@ transaction(voteBoxAccounts: [Address]) {
 
             self.voteBoxRefs[index].deposit(token: <- newBallot)
 
-            log(
-                "Successfully minted a Ballot with id "
-                .concat(newBallotId.toString())
-                .concat(" into the VoteBoothST.VoteBox at ")
-                .concat(VoteBoothST.voteBoxPublicPath.toString())
-                .concat(" for account ")
-                .concat(recipientAddress.toString())
-            )
+            if (VoteBoothST.printLogs) {
+                log(
+                    "Successfully minted a Ballot with id "
+                    .concat(newBallotId.toString())
+                    .concat(" into the VoteBoothST.VoteBox at ")
+                    .concat(VoteBoothST.voteBoxPublicPath.toString())
+                    .concat(" for account ")
+                    .concat(recipientAddress.toString())
+                )
+            }
         }
 
     }

@@ -22,20 +22,24 @@ transaction(newVoter: Address) {
         let ballotId: UInt64 = newBallot.id
         let ballotOwner: Address = newBallot.ballotOwner
 
-        log(
-            "Got a valid ballot with id "
-            .concat(ballotId.toString())
-            .concat(" for address ")
-            .concat(ballotOwner.toString())
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Got a valid ballot with id "
+                .concat(ballotId.toString())
+                .concat(" for address ")
+                .concat(ballotOwner.toString())
+            )
+        }
 
         self.printerReference.burnBallot(ballotToBurn: <- newBallot)
 
-        log(
-            "Successfully burned Ballot #"
-            .concat(ballotId.toString())
-            .concat(" from owner ")
-            .concat(ballotOwner.toString())
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Successfully burned Ballot #"
+                .concat(ballotId.toString())
+                .concat(" from owner ")
+                .concat(ballotOwner.toString())
+            )
+        }
     }
 }

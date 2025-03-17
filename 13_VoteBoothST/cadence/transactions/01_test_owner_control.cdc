@@ -57,14 +57,16 @@ transaction(someAddress: Address, anotherAddress: Address) {
             )
         }
 
-        // If all went OK, log a simple message acknowledging it
-        log(
-            "The OwnerControl resource at "
-            .concat(VoteBoothST.ownerControlStoragePath.toString())
-            .concat(" for account ")
-            .concat(self.ownerAddress.toString())
-            .concat(" is consistent. ballotOwners and owners are still empty.")
-        )
+        if (VoteBoothST.printLogs) {
+            // If all went OK, log a simple message acknowledging it
+            log(
+                "The OwnerControl resource at "
+                .concat(VoteBoothST.ownerControlStoragePath.toString())
+                .concat(" for account ")
+                .concat(self.ownerAddress.toString())
+                .concat(" is consistent. ballotOwners and owners are still empty.")
+            )
+        }
 
         /*
             I've devised the OwnerControl resource with set and remove function that have 'access(account)' as access control. This means that to set or remove entries to the ballotOwners and owners dictionaries can only happen through contract functions or other resources stored in the same account.

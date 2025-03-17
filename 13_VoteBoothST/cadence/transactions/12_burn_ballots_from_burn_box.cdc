@@ -60,12 +60,14 @@ transaction() {
         // If the transaction didn't blew up to this point, go ahead and burn the ballots
         self.burnBoxRef.burnAllBallots()
 
-        log(
-            "Successfully burned "
-            .concat(numberOfBallotsToBurn.toString())
-            .concat(" Ballots from account ")
-            .concat(self.signerAddress.toString())
-            .concat(" Burn Box.")
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Successfully burned "
+                .concat(numberOfBallotsToBurn.toString())
+                .concat(" Ballots from account ")
+                .concat(self.signerAddress.toString())
+                .concat(" Burn Box.")
+            )
+        }
     }
 }

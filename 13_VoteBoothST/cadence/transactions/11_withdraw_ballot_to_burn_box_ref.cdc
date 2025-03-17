@@ -58,13 +58,15 @@ transaction(deployerAddress: Address) {
         // Use the burnBoxRef to set this ballot to be burned, at some point
         self.burnBoxRef.depositBallotToBurn(ballotToBurn: <- ballot)
 
-        log(
-            "Successfully withdraw and set Ballot #"
-            .concat(ballotToBurnId.toString())
-            .concat(" from owner ")
-            .concat(ballotToBurnOwner.toString())
-            .concat(" from a VoteBox in account ")
-            .concat(self.signerAddress.toString())
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Successfully withdraw and set Ballot #"
+                .concat(ballotToBurnId.toString())
+                .concat(" from owner ")
+                .concat(ballotToBurnOwner.toString())
+                .concat(" from a VoteBox in account ")
+                .concat(self.signerAddress.toString())
+            )
+        }
     }
 }

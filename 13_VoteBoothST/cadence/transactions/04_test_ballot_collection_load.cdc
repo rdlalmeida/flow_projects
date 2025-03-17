@@ -18,14 +18,16 @@ transaction(testAddress: Address) {
 
         let collectionSize: Int = storedBallotBox.getLength()
 
-        // Test that this collection is still empty
-        log(
-            "Ballot Collection retrieved from account "
-            .concat(signer.address.toString())
-            .concat(" currently contains ")
-            .concat(collectionSize.toString())
-            .concat(" Ballots in it")
-        )
+        if (VoteBoothST.printLogs) {
+            // Test that this collection is still empty
+            log(
+                "Ballot Collection retrieved from account "
+                .concat(signer.address.toString())
+                .concat(" currently contains ")
+                .concat(collectionSize.toString())
+                .concat(" Ballots in it")
+            )
+        }
 
         // There's a "saySomething" function in it, as usual. Test it too
         log("Testing the Collection's 'saySomething' function: ")
@@ -108,12 +110,14 @@ transaction(testAddress: Address) {
         // All is OK. Deposit the ballot into the BallotBox
         storedBallotBox.deposit(token: <- testBallot)
 
-        log(
-            "Deposited Ballot with ID "
-            .concat(testBallotId.toString())
-            .concat(" to a Ballot Collection for account ")
-            .concat(testBallotOwner.toString())
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Deposited Ballot with ID "
+                .concat(testBallotId.toString())
+                .concat(" to a Ballot Collection for account ")
+                .concat(testBallotOwner.toString())
+            )
+        }
 
         // Validate that the size of the collection was adjusted accordingly
         if (storedBallotBox.getLength() != collectionSize + 1) {
@@ -180,12 +184,14 @@ transaction(testAddress: Address) {
             )
         }
 
-        log(
-            "Successfully withdrawn and burned ballot #"
-            .concat(depositedBallotId.toString())
-            .concat(" from account ")
-            .concat(signer.address.toString())
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Successfully withdrawn and burned ballot #"
+                .concat(depositedBallotId.toString())
+                .concat(" from account ")
+                .concat(signer.address.toString())
+            )
+        }
 
         // Done. Send the Resource back to storage
         signer.storage.save<@VoteBoothST.BallotBox>(<- storedBallotBox, to: VoteBoothST.ballotBoxStoragePath)

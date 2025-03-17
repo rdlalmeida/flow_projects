@@ -82,10 +82,12 @@ transaction(testAddress: Address) {
 
         let emptyVoteBox: @{NonFungibleToken.Collection} <- ballot.createEmptyCollection()
 
-        log(
-            "Got a VoteBox with type: "
-            .concat(emptyVoteBox.getType().identifier)
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Got a VoteBox with type: "
+                .concat(emptyVoteBox.getType().identifier)
+            )
+        }
         
         // Check that the Collection was created empty
         if(emptyVoteBox.getLength() != 0) {
@@ -187,11 +189,13 @@ transaction(testAddress: Address) {
             )
         }
 
-        log(
-            "Successfully withdrawn and burned ballot #"
-            .concat(testBallotId.toString())
-            .concat(" from ballot owner ")
-            .concat(testBallotOwner.toString())
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Successfully withdrawn and burned ballot #"
+                .concat(testBallotId.toString())
+                .concat(" from ballot owner ")
+                .concat(testBallotOwner.toString())
+            )
+        }
     }
 }

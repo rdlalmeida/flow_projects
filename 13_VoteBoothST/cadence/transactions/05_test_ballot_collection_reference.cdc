@@ -36,13 +36,15 @@ transaction(testAddress: Address) {
     }
 
     execute {
-        log(
-            "Ballot Collection reference retrieved from account "
-            .concat(VoteBoothST.ballotBoxPublicPath.toString())
-            .concat(" currently contains ")
-            .concat(self.BallotBoxRef.ownedNFTs.length.toString())
-            .concat(" Ballots in it ")
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Ballot Collection reference retrieved from account "
+                .concat(VoteBoothST.ballotBoxPublicPath.toString())
+                .concat(" currently contains ")
+                .concat(self.BallotBoxRef.ownedNFTs.length.toString())
+                .concat(" Ballots in it ")
+            )
+        }
 
         log("Testing the Collection's 'saySomething' function: ")
         log(self.BallotBoxRef.saySomething())
@@ -172,11 +174,13 @@ transaction(testAddress: Address) {
             )
         }
 
-        log(
-            "Successfully withdrawn and burned ballot #"
-            .concat(depositedBallotId.toString())
-            .concat(" from account ")
-            .concat(self.signerAddress.toString())
-        )
+        if (VoteBoothST.printLogs) {
+            log(
+                "Successfully withdrawn and burned ballot #"
+                .concat(depositedBallotId.toString())
+                .concat(" from account ")
+                .concat(self.signerAddress.toString())
+            )
+        }
     }
 }
