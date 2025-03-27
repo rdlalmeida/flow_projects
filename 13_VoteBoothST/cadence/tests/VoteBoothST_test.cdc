@@ -122,6 +122,23 @@ access(all) fun setup() {
     let BallotBoxCreatedEvent: VoteBoothST.BallotBoxCreated = BallotBoxCreatedEvents[0] as! VoteBoothST.BallotBoxCreated
 
     Test.assertEqual(deployer.address, BallotBoxCreatedEvent._accountAddress)
+
+    // Do a simple loop printing the addresses for each account so that I know, when a problem occurs, which one is the offending one
+    // Start with the deployer
+    log(
+        "Deployer account address = "
+        .concat(deployer.address.toString())
+    )
+
+    // And now for the remaining accounts
+    for index, account in accounts{
+        log(
+            "Account 0"
+            .concat((index + 1).toString())
+            .concat(" address = ")
+            .concat(account.address.toString())
+        )
+    }
 }
 
 access(all) fun testGetElectionName() {
@@ -826,6 +843,7 @@ access(all) fun testDestroyVoteBox() {
     // Validate the events. VoteBoxes are NOT NonFungibleTokens.NFTs, so they should NOT emit the ResourceDestroyed event. Test it
     var voteBoxDestroyedEvents: [AnyStruct] = Test.eventsOfType(voteBoxDestroyedEventType)
     var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
+    var ballotSetToBurnEvents: [AnyStruct] = Test.eventsOfType(ballotSetToBurnEventType)
     var resourceDestroyedEvents: [AnyStruct] = Test.eventsOfType(resourceDestroyedEventType)
     var contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
 
@@ -834,6 +852,7 @@ access(all) fun testDestroyVoteBox() {
 
     Test.assertEqual(voteBoxDestroyedEvents.length, eventNumberCount[voteBoxDestroyedEventType]!)
     Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+    Test.assertEqual(ballotSetToBurnEvents.length, eventNumberCount[ballotSetToBurnEventType]!)
     Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 
@@ -855,6 +874,7 @@ access(all) fun testDestroyVoteBox() {
     // Update the event structures
     voteBoxDestroyedEvents = Test.eventsOfType(voteBoxDestroyedEventType)
     ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
+    ballotSetToBurnEvents = Test.eventsOfType(ballotSetToBurnEventType)
     resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
     contractDataInconsistentEvents = Test.eventsOfType(contractDataInconsistentEventType)
 
@@ -862,6 +882,7 @@ access(all) fun testDestroyVoteBox() {
 
     Test.assertEqual(voteBoxDestroyedEvents.length, eventNumberCount[voteBoxDestroyedEventType]!)
     Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+    Test.assertEqual(ballotSetToBurnEvents.length, eventNumberCount[ballotSetToBurnEventType]!)
     Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 
@@ -888,6 +909,7 @@ access(all) fun testDestroyVoteBox() {
 
     let ballotToBurnOwner: Address = (scResult.returnValue as! Address?)!
 
+    // This one triggers the Ballot still stored in the VoteBox to be sent to the deployer's BurnBox (does not burn the actual Ballot, yet)
     txResult = executeTransaction(
         destroyVoteBoxTx,
         [],
@@ -896,28 +918,64 @@ access(all) fun testDestroyVoteBox() {
 
     Test.expect(txResult, Test.beSucceeded())
 
-    // Update the event structures taking into account the Ballot that was destroyed
+    // Update the event structures taking into account that when a VoteBox is destroyed while a valid Ballot is still in it, the Ballot is sent to the deployer's BurnBox instead. Test if the relevant event was emitted
     voteBoxDestroyedEvents = Test.eventsOfType(voteBoxDestroyedEventType)
     ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
+    ballotSetToBurnEvents = Test.eventsOfType(ballotSetToBurnEventType)
     resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
     contractDataInconsistentEvents = Test.eventsOfType(contractDataInconsistentEventType)
 
-    // I should have an increment in VoteBoxDestroyed, BallotBurned and resourceDestroyed events (because a Ballot IS a NonFungibleToken.NFT)
+    // I should have an increment in VoteBoxDestroyed and BallotSetToBurn and nothing else
     eventNumberCount[voteBoxDestroyedEventType] = eventNumberCount[voteBoxDestroyedEventType]! + 1
-    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + 1
-    eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + 1
+    eventNumberCount[ballotSetToBurnEventType] = eventNumberCount[ballotSetToBurnEventType]! + 1
+
 
     Test.assertEqual(voteBoxDestroyedEvents.length, eventNumberCount[voteBoxDestroyedEventType]!)
     Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+    Test.assertEqual(ballotSetToBurnEvents.length, eventNumberCount[ballotSetToBurnEventType]!)
     Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 
     voteBoxDestroyedEvent = voteBoxDestroyedEvents[voteBoxDestroyedEvents.length - 1] as! VoteBoothST.VoteBoxDestroyed
 
+    // Grab the proper BallotSetToBurn event as well. The arguments in this one should match the ones above
+    let ballotSetToBurnEvent: VoteBoothST.BallotSetToBurn = ballotSetToBurnEvents[ballotSetToBurnEvents.length - 1] as! VoteBoothST.BallotSetToBurn
+
     // In this case, the event should have 1 ballotsInBox and a non-nil ballotId equal to the ballotId retrieved above
     Test.assertEqual(voteBoxDestroyedEvent._ballotsInBox, 1)
     Test.assertEqual(voteBoxDestroyedEvent._ballotId!, ballotToBurnId)
 
+    Test.assertEqual(ballotSetToBurnEvent._ballotId, ballotToBurnId)
+    Test.assertEqual(ballotSetToBurnEvent._voterAddress, ballotToBurnOwner)
+
+    // I should have 1 Ballot in the contract deployer's BurnBox. Test this and set it to burn as in the previous test, while doing the usual checks and such
+
+    txResult = executeTransaction(
+        burnBallotFromBurnBoxTx,
+        [],
+        deployer
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    // Check all the events so far
+    voteBoxDestroyedEvents = Test.eventsOfType(voteBoxDestroyedEventType)
+    ballotSetToBurnEvents = Test.eventsOfType(ballotSetToBurnEventType)
+    ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
+    resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
+    contractDataInconsistentEvents = Test.eventsOfType(contractDataInconsistentEventType)
+
+    // Only the BallotBurned and ResourceDestroyed events should have been incremented by 1 (because, unlike the VoteBox, a Ballot IS a NonFungibleToken.NFT, therefore it automatically emits this event)
+    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + 1
+    eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + 1
+
+    Test.assertEqual(voteBoxDestroyedEvents.length, eventNumberCount[voteBoxDestroyedEventType]!)
+    Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+    Test.assertEqual(ballotSetToBurnEvents.length, eventNumberCount[ballotSetToBurnEventType]!)
+    Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
+    Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
+
+    // Validate the remaining parameters
     let ballotBurnedEvent: VoteBoothST.BallotBurned = ballotBurnedEvents[ballotBurnedEvents.length - 1] as! VoteBoothST.BallotBurned
 
     Test.assertEqual(ballotBurnedEvent._ballotId!, ballotToBurnId)
@@ -931,7 +989,7 @@ access(all) fun testDestroyVoteBox() {
     NOTE: This function and the next one are exclusive to the non-looped versions of the same functions
     IMPORTANT: only one pair of these function should be "active", i.e., the name of the test function starts with "test". I'm using an underscore (_) to before the test part to deactivate the function
 */
-access(all) fun _testCreateVoteBoxes() {
+access(all) fun testCreateVoteBoxes() {
     var txResult: Test.TransactionResult? = nil
     var voteBoxCreatedEvents: [AnyStruct] = []
     var voteBoxCreatedEvent: VoteBoothST.VoteBoxCreated? = nil
@@ -976,7 +1034,7 @@ access(all) fun _testCreateVoteBoxes() {
 /*
     This function, unlike the preceding one, serves mainly to test the transaction that mints and transfers NFTs in bulk
 */
-access(all) fun _testBallotMintingToVoteBoxes() {
+access(all) fun testBallotMintingToVoteBoxes() {
     var txResult: Test.TransactionResult? = nil
     var scResult: Test.ScriptResult? = nil
     var storedBallotIds: [UInt64] = []
@@ -1007,7 +1065,6 @@ access(all) fun _testBallotMintingToVoteBoxes() {
             )
         }
     }
-
 
     // Populate the event structures
     ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
@@ -1072,13 +1129,227 @@ access(all) fun _testBallotMintingToVoteBoxes() {
 
 /* 
     This function follows on the previous ones, i.e., it expects a valid VoteBox in each account in the accounts array with one and only one Ballot in it (the burnBallot transaction already validates this). The transaction in question loads and burns it without required more information.
-    TODO: Review this
+    This particular test burns the Ballots from the VoteBoxes for the first 3 accounts.
 */
-access(all) fun _testBurnBallots() {
-    // TODO: Complete this one. This test simply follows the loop logic so far, so this one does more of the same but for all accounts in a loop. Just follow the logic so far
+access(all) fun testWithdrawBallotsToBurnBox() {
+    var txResult: Test.TransactionResult? = nil
+    var scResult: Test.ScriptResult? = nil
+
+    var ballotSetToBurnEvents: [AnyStruct] = []
+
+    var ballotToBurnId: UInt64? = nil
+    var ballotToBurnOwner: Address? = nil
+
+    var ballotSetToBurnEvent: VoteBoothST.BallotSetToBurn? = nil
+
+    var ballotsToBurnIds: [UInt64] = []
+    var ballotsToBurnOwners: [Address] = []
+
+    // Create a subset of the accounts array for this purpose (only with the first 3 accounts)
+    let burnableBallotAccounts: [Test.TestAccount] = [account01, account02, account03]
+
+    // Before moving to the first loop, check that trying to withdraw a Ballot and deposit it to a BurnBox does not happens (transaction fails)
+    // for the deployer account since the deployer does not have a VoteBox nor a Ballot anywhere
+
+    txResult = executeTransaction(
+        withdrawBallotToBurnBoxRefTx,
+        [deployer.address],
+        deployer
+    )
+
+    Test.expect(txResult, Test.beFailed())
+
+    for account in burnableBallotAccounts {
+        // The fist attempt is made to fail on purpose. None of the accounts in the array has a BurnBox in their accounts, only the deployer has those.
+        txResult = executeTransaction(
+            withdrawBallotToBurnBoxRefTx,
+            [account.address],
+            account
+        )
+
+        Test.expect(txResult, Test.beFailed())
+
+        // Grab the Ballot's data for later comparison
+        scResult = executeScript(
+            getIDsSc,
+            [account.address]
+        )
+
+        ballotToBurnId = (scResult!.returnValue as! [UInt64]?)![0]
+
+        scResult = executeScript(
+            getBallotOwnerSc,
+            [account.address]
+        )
+
+        ballotToBurnOwner = (scResult!.returnValue as! Address?)!
+
+        // Now for the real one
+        txResult = executeTransaction(
+            withdrawBallotToBurnBoxRefTx,
+            [deployer.address],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+        // Capture and validate events
+        ballotSetToBurnEvents = Test.eventsOfType(ballotSetToBurnEventType)
+
+        // The event number should have been increased by one
+        eventNumberCount[ballotSetToBurnEventType] = eventNumberCount[ballotSetToBurnEventType]! + 1
+
+        Test.assertEqual(eventNumberCount[ballotSetToBurnEventType]!, ballotSetToBurnEvents.length)
+
+        // Grab the last event of the array and validate it
+        ballotSetToBurnEvent = ballotSetToBurnEvents[ballotSetToBurnEvents.length - 1] as! VoteBoothST.BallotSetToBurn
+
+        Test.assertEqual(ballotSetToBurnEvent!._ballotId, ballotToBurnId!)
+        Test.assertEqual(ballotSetToBurnEvent!._voterAddress, ballotToBurnOwner!)
+
+        // Before finishing this cycle, add the ballotIds and ballotOwners to the respective arrays for future comparison
+        ballotsToBurnIds.append(ballotToBurnId!)
+        ballotsToBurnOwners.append(ballotToBurnOwner!)
+    }
+
+    // Check that the ballotsToBurnIds and ballotsToBurnOwners match the length of the account array used
+    Test.assertEqual(ballotsToBurnIds.length, burnableBallotAccounts.length)
+    Test.assertEqual(ballotsToBurnOwners.length, burnableBallotAccounts.length)
+
+    // Finish this by setting the BurnBox to burn all existing Ballots. The BallotBurned events should match the ids and owners captured thus far
+    txResult = executeTransaction(
+        burnBallotFromBurnBoxTx,
+        [],
+        deployer
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    // I should have 3 more BallotBurned and ResourceDestroyed events and nothing more because, again, Ballots are NonFungibleToken.NFTs
+    let ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
+    let resourceDestroyedEvents: [AnyStruct] = Test.eventsOfType(resourceDestroyedEventType)
+    let contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
+
+    // Adjust the event counter
+    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + burnableBallotAccounts.length
+    eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + burnableBallotAccounts.length
+
+    Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+    Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
+    Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
+
+    var ballotBurnedEvent: VoteBoothST.BallotBurned? = nil
+
+    // Check that the BallotBurned events match
+    for index, ballotId in ballotsToBurnIds {
+        // Grab the BallotBurned event with index. Because of the unknown length of the event set, I need to be creative to get the proper event from the array
+        ballotBurnedEvent = ballotBurnedEvents[ballotBurnedEvents.length - ballotsToBurnIds.length + index] as! VoteBoothST.BallotBurned
+
+        // Test if the array of ballotsToBurnIds and ballotsToBurnOwners contain the arguments returned in the event. I cannot rely on the indexes because, by some reason, the events are not set in the array in order, so I need to use the "contains" function instead
+        Test.assertEqual(ballotsToBurnIds.contains(ballotBurnedEvent!._ballotId!), true)
+        Test.assertEqual(ballotsToBurnOwners.contains(ballotBurnedEvent!._voterAddress!), true)
+    }
 }
 
+/*
+    This function completes this cycle by destroying all the VoteBoxes, which implies that the Ballots in the remaining 2 accounts that were not burned in the previous function are going to set to the deployer's BurnBox, to be destroyed after the cycles are done
+*/
+access(all) fun _testDestroyVoteBoxes() {
+    var txResult: Test.TransactionResult? = nil
+    var scResult: Test.ScriptResult? = nil
+
+    var ballotBurnedEvents: [AnyStruct] = []
+    var ballotSetToBurnEvents: [AnyStruct] = []
+    var voteBoxDestroyedEvents: [AnyStruct] = []
+    var resourceDestroyedEvents: [AnyStruct] = []
+    var contractDataInconsistentEvents: [AnyStruct] = []
+
+    var ballotBurnedEvent: VoteBoothST.BallotBurned? = nil
+    var ballotSetToBurnEvent: VoteBoothST.BallotSetToBurn? = nil
+    var voteBoxDestroyedEvent: VoteBoothST.VoteBoxDestroyed? = nil
+
+    var ballotToBurnId: UInt64? = nil
+    var ballotToBurnOwner: Address? = nil
+
+    var ballotsToBurnIds: [UInt64] = []
+    var ballotsToBurnOwners: [Address] = []
+
+    // Set the remaining 2 accounts for this process
+    let burnableVoteBoxesAccounts: [Test.TestAccount] = [account04, account05]
+
+    // First, just to be sure, try to destroy a VoteBox from the deployer account. This should fail because the deployer has none
+    txResult = executeTransaction(
+        destroyVoteBoxTx,
+        [],
+        deployer
+    )
+
+    Test.expect(txResult, Test.beFailed())
+
+    // Now for the real deal
+    for account in burnableVoteBoxesAccounts {
+        // First, capture the ballotId and ballotOwner to the dedicated arrays for future comparison
+        scResult = executeScript(
+            getIDsSc,
+            [account.address]
+        )
+
+        ballotToBurnId = (scResult!.returnValue as! [UInt64]?)![0]
+        ballotsToBurnIds.append(ballotToBurnId!)
+
+        scResult = executeScript(
+            getBallotOwnerSc,
+            [account.address]
+        )
+
+        ballotToBurnOwner = (scResult!.returnValue as! Address?)
+        ballotsToBurnOwners.append(ballotToBurnOwner!)
+
+        txResult = executeTransaction(
+            destroyVoteBoxTx,
+            [],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+        // Check the event structures as usual
+        voteBoxDestroyedEvents = Test.eventsOfType(voteBoxDestroyedEventType)
+        ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
+        ballotSetToBurnEvents = Test.eventsOfType(ballotSetToBurnEventType)
+        resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
+        contractDataInconsistentEvents = Test.eventsOfType(contractDataInconsistentEventType)
+
+        // At this stage, only the VoteBoxDestroyed and BallotSetToBurn events should have been incremented by 1. Reflect this on the event counters
+        eventNumberCount[voteBoxDestroyedEventType] = eventNumberCount[voteBoxDestroyedEventType]! + 1
+        eventNumberCount[ballotSetToBurnEventType] = eventNumberCount[ballotSetToBurnEventType]! + 1
+
+        Test.assertEqual(voteBoxDestroyedEvents.length, eventNumberCount[voteBoxDestroyedEventType]!)
+        Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+        Test.assertEqual(ballotSetToBurnEvents.length, eventNumberCount[ballotSetToBurnEventType]!)
+        Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
+        Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
+
+        // Capture the new events and validate that the arguments match
+        voteBoxDestroyedEvent = voteBoxDestroyedEvents[voteBoxDestroyedEvents.length - 1] as! VoteBoothST.VoteBoxDestroyed
+
+        // VoteBoxDestroyed events should have 1 ballotsInBox and the ballotId should match with the one retrieved with the script before
+        Test.assertEqual(voteBoxDestroyedEvent!._ballotsInBox, 1)
+        Test.assertEqual(voteBoxDestroyedEvent!._ballotId!, ballotToBurnId!)
+
+        // Same for the BallotSetToBurn
+        ballotSetToBurnEvent = ballotSetToBurnEvents[ballotSetToBurnEvents.length - 1] as! VoteBoothST.BallotSetToBurn
+
+        Test.assertEqual(ballotSetToBurnEvent!._ballotId, ballotToBurnId!)
+        Test.assertEqual(ballotSetToBurnEvent!._voterAddress, ballotToBurnOwner!)
+    }
+
+    // TODO: Burn all the Ballots in the BurnBox and check the usual events and shit
+}
+
+// TODO: Move all these TODOs bellow to a new Test file. This one is getting too big
 // TODO: Modify Ballots (Vote)
 // TODO: Multiple Vote Casting
 // TODO: Eligibility Module
 // TODO: Tally Contract
+// TODO: Implement the Verifiability modules (check notes for the actual idea)

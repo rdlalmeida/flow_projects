@@ -184,6 +184,11 @@ access(all) contract VoteBoothST: NonFungibleToken {
         */
         access(all) let ballotOwner: Address
 
+        /*
+            I need the address of the VoteBoothST contract deployer to be able to process this Ballot properly in the event of its, or a VoteBox containing it, destruction. This is mainly to be able to retrieve a valid reference to the BurnBox to where this Ballot should be sent to if the VoteBox containing it is set to be destroyed
+        */
+        access(all) let voteBoothDeployer: Address
+
         access(all) view fun getViews(): [Type] {
             return []
         }
@@ -321,10 +326,11 @@ access(all) contract VoteBoothST: NonFungibleToken {
             }
         }
 
-        init(_ballotOwner: Address) {
+        init(_ballotOwner: Address, _voteBoothDeployer: Address) {
             self.id = self.uuid
             self.option = 0
             self.ballotOwner = _ballotOwner
+            self.voteBoothDeployer = _voteBoothDeployer
         }
     }
 // ----------------------------- BALLOT END --------------------------------------------------------
@@ -437,13 +443,26 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
             // If the ballotId is not nil, do this properly and burn the Ballot before finishing
             if (ballotId != nil) {
-                let ballotToBurn: @{NonFungibleToken.NFT}? <- self.ownedNFTs.remove(key: ballotId!)
+                let ballotToBurn: @VoteBoothST.Ballot <- self.ownedNFTs.remove(key: ballotId!) as! @VoteBoothST.Ballot
 
-                // Use the Burner contract to destroy this ballotToBurn.
-                // NOTE: To account for the possibility of this ballot being a nil, I've modified the event to be emit as burnCallback to accept nils as voterAddress and ballotId, which is going to be the case if this ballot is indeed a nil
-                Burner.burn(<- ballotToBurn)
+                let voteBoothDeployer: Address = ballotToBurn.voteBoothDeployer
+
+                /*
+                    In order to properly destroy (burn) any Ballot still in storage, send it to the VoteBooth deployer's BurnBox instead. At this level, this resource is unable to access the OwnerControl resource (only this deployer can do that) to maintain contract data consistency, i.e., to remove the respective entries from the internal dictionaries and such. Sending this Ballot to the BurnBox, which I can get from this resource because the reference to it is publicly accessible, solves all these problems. As such, I've set the contract deployer address, as in the address associated with the ballotPrinterAdmin resource required to mint the Ballot in the first place, as a access(all) parameter in the Ballot resource. Do it
+                */
+                let burnBoxRef: &VoteBoothST.BurnBox = getAccount(voteBoothDeployer).capabilities.borrow<&VoteBoothST.BurnBox>(VoteBoothST.burnBoxPublicPath) ??
+                panic(
+                    "Unable to retrieve a valid &VoteBoothST.BurnBox at "
+                    .concat(VoteBoothST.burnBoxPublicPath.toString())
+                    .concat(" from account ")
+                    .concat(voteBoothDeployer.toString())
+                )
+
+                // Send the Ballot to the BurnBox
+                burnBoxRef.depositBallotToBurn(ballotToBurn: <- ballotToBurn)
             }
 
+            // Emit the respective event. NOTE: any ballotId emitted with this event refers to a Ballot set to burn in a BurnBox and not a Ballot that was destroyed
             emit VoteBoothST.VoteBoxDestroyed(_ballotsInBox: ballotIds.length, _ballotId: ballotId)
         }
 
@@ -713,7 +732,7 @@ access(all) resource BurnBox{
                 self.owner!.address != voterAddress: "The contract owner is not allowed to vote!"
             }
 
-            let newBallot: @Ballot <- create Ballot(_ballotOwner: voterAddress)
+            let newBallot: @Ballot <- create Ballot(_ballotOwner: voterAddress, _voteBoothDeployer: self.owner!.address)
 
             // Load a reference to the ownerControl resource from public storage
             let ownerControlRef: &VoteBoothST.OwnerControl = self.owner!.capabilities.borrow<&VoteBoothST.OwnerControl>(VoteBoothST.ownerControlPublicPath) ??
