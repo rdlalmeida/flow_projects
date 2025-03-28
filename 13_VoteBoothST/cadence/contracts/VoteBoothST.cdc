@@ -58,8 +58,8 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) let _options: [UInt64]
 
     // I'm using these to do an internal tracking mechanism to protect this against double voting and the like
-    access(all) var totalBallotsMinted: UInt64
-    access(all) var totalBallotsSubmitted: UInt64
+    access(account) var totalBallotsMinted: UInt64
+    access(account) var totalBallotsSubmitted: UInt64
 
     // Use this variable set (the contract constructor receives an argument to set it) to enable or disable the printing of logs in this project
     access(all) let printLogs: Bool
@@ -694,6 +694,9 @@ access(all) resource BurnBox{
             // Destroy (burn) the Ballot. This should emit a BallotBurned event
             Burner.burn(<- ballotToBurn)
 
+            // Once a Ballot is destroyed, I also need to decrease the totalBallotsMinted by 1
+            VoteBoothST.decrementTotalBallotsMinted(ballots: 1)
+
             // Done. This is the end of the for loop cycle. This should repeat for all ballots set in storage to be burned.
         }
     }
@@ -782,6 +785,9 @@ access(all) resource BurnBox{
 
             emit BallotMinted(_ballotId: newBallot.id, _voterAddress: voterAddress)
 
+            // Increment the number of total Ballots minted by 1 before returning the Ballot
+            VoteBoothST.incrementTotalBallotsMinted(ballots: 1)
+
             return <- newBallot
         }
 
@@ -847,6 +853,9 @@ access(all) resource BurnBox{
 
             // Destroy (burn) the Ballot finally
             Burner.burn(<- ballotToBurn)
+
+            // Decrease the totalBallotsMinted by 1 to account for this burned Ballots
+            VoteBoothST.decrementTotalBallotsMinted(ballots: 1)
         }
 
         init() {
@@ -913,10 +922,67 @@ access(all) resource BurnBox{
         emit VoteBoothST.BallotNotDelivered(_voterAddress: voterAddress, _reason: reason)
     }
 
+    /*
+        The next six functions are getters and setters (2 to increase the totals, and another 2 for decrease them) for the totalBallotsMinted and totalBallotsSubmitted. The setters are set as access(account) so that they can only be invoked from other resources in the deployer account (such as the ballotPrinterAdmin) while the variables have access(self) so that they can only be manipulated by these functions. The getters have access(all) because they are read-only, so the risk is pretty much non-existent.
+    */
+    access(all) view fun getTotalBallotsMinted(): UInt64 {
+        return self.totalBallotsMinted
+    }
+
+    access(all) view fun getTotalBallotsSubmitted(): UInt64 {
+        return self.totalBallotsSubmitted
+    }
+
+    access(account) fun incrementTotalBallotsMinted(ballots: UInt64): Void {
+        log(
+            "Total Ballots Minted before: "
+            .concat(self.totalBallotsMinted.toString())
+        )
+        
+        self.totalBallotsMinted = self.totalBallotsMinted + ballots
+
+        log(
+            "Total Ballots Minted after: "
+            .concat(self.totalBallotsMinted.toString())
+        )
+    }
+
+    access(account) fun incrementTotalBallotsSubmitted(ballots: UInt64): Void {
+        self.totalBallotsSubmitted = self.totalBallotsSubmitted + ballots
+    }
+
+    access(account) fun decrementTotalBallotsMinted(ballots: UInt64): Void {
+        // Validate first that this decrement does not bring the total < 0 (which is not event possible because I've set this variable as a UInt64, the 'U' in it being unsigned)
+        if (ballots > self.totalBallotsMinted) {
+            panic(
+                "Unable to decrease the total Ballots minted! Cannot decrease a total of "
+                .concat(self.totalBallotsMinted.toString())
+                .concat(" minted ballots by ")
+                .concat(ballots.toString())
+            )
+        }
+
+        // The subtraction is possible (result >= 0). Carry on
+        self.totalBallotsMinted = self.totalBallotsMinted - ballots
+    }
+
+    access(account) fun decrementTotalBallotsSubmitted(ballots: UInt64): Void {
+        if (ballots > self.totalBallotsSubmitted) {
+            panic(
+                "Unable to decrease the total Ballots submitted! Cannot decrease the total of "
+                .concat(self.totalBallotsSubmitted.toString())
+                .concat(" submitted ballots by ")
+                .concat(ballots.toString())
+            )
+        }
+
+        self.totalBallotsSubmitted = self.totalBallotsSubmitted - ballots
+    }
+
 // ----------------------------- CONTRACT LOGIC END ------------------------------------------------
 
 // ----------------------------- CONSTRUCTOR BEGIN -------------------------------------------------
-    init(name: String, symbol: String, ballot: String, location: String, options: String, printLogs: Bool) {
+    init(name: String, symbol: String, ballot: String, location: String, options: [UInt64], printLogs: Bool) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
         self.ballotPrinterAdminPublicPath = /public/BallotPrinterAdmin
         self.ballotBoxStoragePath = /storage/BallotBox
@@ -932,27 +998,8 @@ access(all) resource BurnBox{
         self._symbol = symbol
         self._ballot = ballot
         self._location = location
+        self._options = options
 
-        // Process the options string into an array
-        var newOptions: [UInt64] = []
-        var newInt: UInt64? = nil
-        let inputOptions: [String] = options.split(separator: ";")
-
-        for option in inputOptions {
-            newInt = UInt64.fromString(option)
-
-            if (newInt != nil) {
-                newOptions.append(newInt!)
-            }
-            else {
-                panic(
-                    "VoteBoothST constructor - Found an invalid option element: "
-                    .concat(option)
-                )
-            }
-        }
-
-        self._options = newOptions
         self.totalBallotsMinted = 0
         self.totalBallotsSubmitted = 0
 
@@ -1098,5 +1145,3 @@ access(all) resource BurnBox{
     }
 }
 // ----------------------------- CONSTRUCTOR END ---------------------------------------------------
-
-// TODO: Implement the logic to manipulate the totalBallotMinted variable, namely, an access(account) function to increment this counter, call it when a new Ballot in minted by the ballotPrinterAdmin and decreased when you burn one (add this logic to the burnerCallback)

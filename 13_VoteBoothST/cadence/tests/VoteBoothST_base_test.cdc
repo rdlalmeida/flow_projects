@@ -7,7 +7,7 @@ access(all) let electionName: String = "World's best dog ever!"
 access(all) let electionSymbol: String = "WBDE"
 access(all) let electionLocation: String = "Campinho"
 access(all) let electionBallot: String = "Who was the best dog this summer? Options: \n1 - Eddie, \n2 - Argus, \n3 - Both, \n4 - None"
-access(all) let electionOptions: String = "1;2;3;4"
+access(all) let electionOptions: [UInt64] = [1, 2, 3, 4]
 
 // Use this flag to turn log printing on or off
 access(all) let printLogs: Bool = false
@@ -112,16 +112,16 @@ access(all) fun setup() {
     Test.expect(err, Test.beNil())
 
     // Test that the BallotBox event was emitted
-    var BallotBoxCreatedEvents: [AnyStruct] = Test.eventsOfType(ballotBoxCreatedEventType)
+    var ballotBoxCreatedEvents: [AnyStruct] = Test.eventsOfType(ballotBoxCreatedEventType)
 
     // Test that one and only one event of this type was emitted
     eventNumberCount[ballotBoxCreatedEventType] = eventNumberCount[ballotBoxCreatedEventType]! + 1
-    Test.assertEqual(BallotBoxCreatedEvents.length, eventNumberCount[ballotBoxCreatedEventType]!)
+    Test.assertEqual(ballotBoxCreatedEvents.length, eventNumberCount[ballotBoxCreatedEventType]!)
 
     // Test that the address in the event matched the deployer and none else
-    let BallotBoxCreatedEvent: VoteBoothST.BallotBoxCreated = BallotBoxCreatedEvents[0] as! VoteBoothST.BallotBoxCreated
+    let ballotBoxCreatedEvent: VoteBoothST.BallotBoxCreated = ballotBoxCreatedEvents[0] as! VoteBoothST.BallotBoxCreated
 
-    Test.assertEqual(deployer.address, BallotBoxCreatedEvent._accountAddress)
+    Test.assertEqual(deployer.address, ballotBoxCreatedEvent._accountAddress)
 
     // Do a simple loop printing the addresses for each account so that I know, when a problem occurs, which one is the offending one
     // Start with the deployer
@@ -154,21 +154,17 @@ access(all) fun testGetElectionLocation() {
     Test.assertEqual(electionLocation, VoteBoothST.getElectionLocation())
 }
 access(all) fun testGetElectionOptions() {
-    let options: [UInt64] = VoteBoothST.getElectionOptions()
+    let contractOptions: [UInt64] = VoteBoothST.getElectionOptions()
 
-    var parsedElectionOptions: [UInt64] = []
-    var optionElements: [String] = electionOptions.split(separator: ";")
-    var currentElement: UInt64? = nil
-
-    for optionElement in optionElements {
-        currentElement = UInt64.fromString(optionElement)
-
-        if (currentElement != nil) {
-            parsedElectionOptions.append(currentElement!)
-        }
+    for option in electionOptions {
+        Test.assertEqual(contractOptions.contains(option), true)
     }
-
-    Test.assertEqual(parsedElectionOptions, options)
+}
+access(all) fun testGetTotalBallotsMinted() {
+    Test.assertEqual(VoteBoothST.getTotalBallotsMinted(), 0 as (UInt64))
+}
+access(all) fun testGetTotalBallotsSubmitted() {
+    Test.assertEqual(VoteBoothST.getTotalBallotsSubmitted(), 0 as (UInt64))
 }
 
 // Continue with the constructor assertions
@@ -194,19 +190,20 @@ access(all) fun testDefaultPaths() {
     Test.assertEqual(VoteBoothST.burnBoxPublicPath, expectedBurnBoxPublicPath)
 }
 
-access(all) fun testDefaultParameters() {
-    Test.assertEqual(VoteBoothST.totalBallotsMinted, 0 as UInt64)
-    Test.assertEqual(VoteBoothST.totalBallotsSubmitted, 0 as UInt64)
-}
-
 access(all) fun testOwnerControl() {
-    let txResult: Test.TransactionResult = executeTransaction(
+    // Next transaction mints and burns 2 ballots. Check if the totalBallotsMinted keeps its consistency
+    let totalBallotsMintedBefore: UInt64 = VoteBoothST.getTotalBallotsMinted()
+
+    var txResult: Test.TransactionResult = executeTransaction(
         testOwnerControlTx,
         [account01.address, account02.address],
         deployer
     )
 
     Test.expect(txResult, Test.beSucceeded())
+
+    // This value should have been maintained after all the things
+    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     // This transaction mints and burns two ballots. Adjust the eventCounter dictionary accordingly and check if the events emitted match what is expected
     eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + 2
@@ -226,6 +223,19 @@ access(all) fun testOwnerControl() {
     Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 
+    // Try the same transaction again but with a normal account as signer. This should fail because non-deployer accounts do not have access to the OwnerControl resource
+    txResult = executeTransaction(
+        testOwnerControlTx,
+        [account01.address, account02.address],
+        account03
+    )
+
+    Test.expect(txResult, Test.beFailed())
+
+    // Test also that the totalBallotsMinted was not modified
+    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
+
+    // No need to check the events, since if there any error (i.e., an unexpected event being emitted) the next tests should blow up because I'm constantly verifying the event counters.
 }
 
 access(all) fun testMinterLoading() {
@@ -236,12 +246,15 @@ access(all) fun testMinterLoading() {
         deployer
     )
 
-    // This transaction is expected to fail in all circumstances! Check the transaction text for a detailed explanation.
+    // This transaction is expected to fail in all circumstances! I've set this resource to be usable only through authorized references, for obvious security reasons. Check the transaction text for a detailed explanation.
     Test.expect(txResult01, Test.beFailed())
 }
 
 access(all) fun testMinterReference() {
-    // This transaction runs a similar function but using references instead of loading the resource
+    // The next transaction mints and burns one test Ballot. Check that the totalBallotsMinted maintains consistency
+    let totalBallotsMintedBefore: UInt64 = VoteBoothST.getTotalBallotsMinted()
+
+    // This transaction runs a similar function but using an authorized reference instead of loading  the resource, as it is supposed to be used
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotPrinterAdminTx,
         [account01.address],
@@ -249,6 +262,9 @@ access(all) fun testMinterReference() {
     )
 
     Test.expect(txResult01, Test.beSucceeded())
+
+    // Validate that the total Ballots minted remained unchanged (0)
+    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
     var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
@@ -275,6 +291,9 @@ access(all) fun testMinterReference() {
 
     Test.expect(txResult02, Test.beFailed())
 
+    // Check that the number of total Ballots minted didn't changed
+    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
+
     ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
     ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
     resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
@@ -295,6 +314,9 @@ access(all) fun testMinterReference() {
 }
 
 access(all) fun testBallotBoxLoad() {
+    // The next transaction mints and burns a Ballot for testing purposes. Save the current totalBallotsMinted and verify that it is maintained after this transaction.
+    let totalBallotsMintedBefore: UInt64 = VoteBoothST.getTotalBallotsMinted()
+
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotBoxLoadTx,
         [account01.address],
@@ -303,6 +325,9 @@ access(all) fun testBallotBoxLoad() {
 
     // The expectation is for this transaction to run if signed by the deployer, but not if anyone else signs it instead
     Test.expect(txResult01, Test.beSucceeded())
+
+    // Check if the totalBallotsMinted was maintained
+    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
     var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
@@ -319,12 +344,16 @@ access(all) fun testBallotBoxLoad() {
     Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 
+
     // Run the transaction again, but with an invalid signer now
     let txResult02: Test.TransactionResult = executeTransaction(
         testBallotBoxLoadTx,
         [],
         account01
     )
+
+    // Test that this transaction did not affected the totalBallotsMinted
+    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     Test.expect(txResult02, Test.beFailed())
 
@@ -348,6 +377,8 @@ access(all) fun testBallotBoxLoad() {
 }
 
 access(all) fun testBallotBoxRef() {
+    let totalBallotsMintedBefore: UInt64 = VoteBoothST.getTotalBallotsMinted()
+
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotBoxRefTx,
         [account02.address],
@@ -356,6 +387,8 @@ access(all) fun testBallotBoxRef() {
 
     // As before, the expectation is that this transaction works with the deployer but with no one else
     Test.expect(txResult01, Test.beSucceeded())
+
+    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     // Check the usual events
     var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
@@ -476,6 +509,9 @@ access(all) fun testCreateVoteBox() {
 }
 
 access(all) fun testBallot() {
+    // As usual, this transaction mints and burns one test Ballot, so the total Ballots minted should remain the same
+    let totalBallotsMintedBefore: UInt64 = VoteBoothST.getTotalBallotsMinted()
+
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotTx,
         [account03.address],
@@ -483,6 +519,8 @@ access(all) fun testBallot() {
     )
 
     Test.expect(txResult01, Test.beSucceeded())
+
+    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     // The test ballot transaction should have emitted a pair of events. Test those too
     let ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
@@ -492,7 +530,7 @@ access(all) fun testBallot() {
     let contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
 
     /*
-        This transaction also destroys a test (and empty) VoteBox using the burn function. If the VoteBox is empty, only one VoteBoxDestroyed event should be emitted. If there was a Ballot inside (which it shouldn't), than a extra BallotBurned event should be emitted as well. But the expectation is that it isn't, so I should only have one BallotBurned event being emitted from the burning of the test Ballot at the end of the transaction. Adjust the eventCounters accordingly
+        This transaction also destroys a test (and empty) VoteBox using the burn function. If the VoteBox is empty, only one VoteBoxDestroyed event should be emitted. If there was a Ballot inside (which it shouldn't), than a extra BallotBurned event should be emitted as well, because I'm using a ballotPrinterAdmin burn function to do it. But the expectation is that it isn't, so I should only have one BallotBurned event being emitted from the burning of the test Ballot at the end of the transaction. Adjust the eventCounters accordingly
 
         NOTE: The ResourceDestroyed event is only emitted for when a NonFungibleToken.NFT resource is destroyed! Any other types of resources, such as the VoteBoothST.VoteBox DO NOT emit this event, so don't increase the event counter erroneously.
     */
@@ -522,6 +560,14 @@ access(all) fun testBallot() {
 access(all) fun testBallotMintingToVoteBox() {
     // NOTE: This test assumes that the "testCreateVoteBox" has run successfully first, i.e., account01 and account02 have a valid VoteBox in their storage area and a public capability published.
 
+    // This transaction increments the total Ballots minted by one in three occasions. Test the consistency of the totalBallotsMinted through this process
+    let initialBallotsMinted: UInt64 = VoteBoothST.getTotalBallotsMinted()
+
+    log(
+        "testBallotMintingToVoteBox.initialBallotsMinted: "
+        .concat(initialBallotsMinted.toString())
+    )
+
     // Mint and deposit a new Ballot to account01. Use the event emitted to retrieve the ballotId
     let txResult01: Test.TransactionResult = executeTransaction(
         mintBallotToAccountTx,
@@ -530,6 +576,16 @@ access(all) fun testBallotMintingToVoteBox() {
     )
 
     Test.expect(txResult01, Test.beSucceeded())
+
+    let finalTotalBallotsMinted: UInt64 = VoteBoothST.getTotalBallotsMinted()
+
+    log(
+        "testBallotMintingToVoteBox.finalBallotsMinted: "
+        .concat(finalTotalBallotsMinted.toString())
+    )
+
+    // This transaction should have incremented the totalBallotsMinted by 1
+    Test.assertEqual(VoteBoothST.getTotalBallotsMinted(), initialBallotsMinted + 1)
 
     var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
     var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
@@ -571,6 +627,9 @@ access(all) fun testBallotMintingToVoteBox() {
         deployer
     )
 
+    // Another +1 for the totalBallotsMinted after this one. Validate it
+    Test.assertEqual(VoteBoothST.getTotalBallotsMinted(), initialBallotsMinted + 2)
+
     Test.expect(txResult02, Test.beSucceeded())
 
     ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
@@ -610,6 +669,9 @@ access(all) fun testBallotMintingToVoteBox() {
         deployer
     )
 
+    // Finally, the third Ballot minted
+    Test.assertEqual(VoteBoothST.getTotalBallotsMinted(), initialBallotsMinted + 3)
+
     Test.expect(txResult03, Test.beSucceeded())
 
     ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
@@ -646,8 +708,13 @@ access(all) fun testBallotMintingToVoteBox() {
         account01
     )
 
+    // The previous transaction should have not increase the total Ballots minted from the last count(+3). Check it
+    Test.assertEqual(VoteBoothST.getTotalBallotsMinted(), initialBallotsMinted + 3)
+
     Test.expect(txResult04, Test.beFailed())
 }
+
+// TODO: Continue from here with the total Ballots Minted logic. Solve the problem that the variable is not being incremented
 
 /*
     Test the act of loading a VoteBox from a user, withdraw the Ballot from it and send it to burn at a later stage with a BurnBox reference
@@ -1254,7 +1321,7 @@ access(all) fun testWithdrawBallotsToBurnBox() {
 /*
     This function completes this cycle by destroying all the VoteBoxes, which implies that the Ballots in the remaining 2 accounts that were not burned in the previous function are going to set to the deployer's BurnBox, to be destroyed after the cycles are done
 */
-access(all) fun _testDestroyVoteBoxes() {
+access(all) fun testDestroyVoteBoxes() {
     var txResult: Test.TransactionResult? = nil
     var scResult: Test.ScriptResult? = nil
 
@@ -1344,12 +1411,37 @@ access(all) fun _testDestroyVoteBoxes() {
         Test.assertEqual(ballotSetToBurnEvent!._voterAddress, ballotToBurnOwner!)
     }
 
-    // TODO: Burn all the Ballots in the BurnBox and check the usual events and shit
-}
+    // If everything checks out, move to burn all ballots currently in the BurnBox
+    txResult = executeTransaction(
+        burnBallotFromBurnBoxTx,
+        [],
+        deployer
+    )
 
-// TODO: Move all these TODOs bellow to a new Test file. This one is getting too big
-// TODO: Modify Ballots (Vote)
-// TODO: Multiple Vote Casting
-// TODO: Eligibility Module
-// TODO: Tally Contract
-// TODO: Implement the Verifiability modules (check notes for the actual idea)
+    Test.expect(txResult, Test.beSucceeded())
+
+    // Update the event structures
+    voteBoxDestroyedEvents = Test.eventsOfType(voteBoxDestroyedEventType)
+    ballotSetToBurnEvents = Test.eventsOfType(ballotSetToBurnEventType)
+    ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
+    resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
+    contractDataInconsistentEvents = Test.eventsOfType(contractDataInconsistentEventType)
+
+    //  The BallotBurned and ResourceDestroyed events should have been increase by the number of accounts in question
+    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + burnableVoteBoxesAccounts.length
+    eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + burnableVoteBoxesAccounts.length
+
+    Test.assertEqual(voteBoxDestroyedEvents.length, eventNumberCount[voteBoxDestroyedEventType]!)
+    Test.assertEqual(ballotSetToBurnEvents.length, eventNumberCount[ballotSetToBurnEventType]!)
+    Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+    Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
+    Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
+
+    // Capture and validate that the last BallotBurned event arguments match the ids and owners captured before
+    for index, ballotId in ballotsToBurnIds {
+        ballotBurnedEvent = ballotBurnedEvents[ballotBurnedEvents.length - 1 - index] as! VoteBoothST.BallotBurned
+
+        Test.assertEqual(ballotsToBurnIds.contains(ballotBurnedEvent!._ballotId!), true)
+        Test.assertEqual(ballotsToBurnOwners.contains(ballotBurnedEvent!._voterAddress!), true)
+    }
+}
