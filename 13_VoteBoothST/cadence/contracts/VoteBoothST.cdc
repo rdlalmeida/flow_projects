@@ -55,7 +55,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) let _symbol: String
     access(all) let _ballot: String
     access(all) let _location: String
-    access(all) let _options: [UInt64]
+    access(all) let _options: [Int]
 
     // I'm using these to do an internal tracking mechanism to protect this against double voting and the like
     access(account) var totalBallotsMinted: UInt64
@@ -174,7 +174,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         access(all) let id: UInt64
 
         // The main option to represent the choice. A '0' indicates none selected yet
-        access(self) var option: UInt64
+        access(self) var option: Int
 
         /*
             TODO: To review in a later stage
@@ -237,14 +237,14 @@ access(all) contract VoteBoothST: NonFungibleToken {
         access(all) view fun getElectionLocation(): String {
             return VoteBoothST._location
         }
-        access(all) view fun getElectionOptions(): [UInt64] {
+        access(all) view fun getElectionOptions(): [Int] {
             return VoteBoothST._options
         }
 
         /*
             Because I have all my Ballot ownership structures neatly wrapped into a single and highly protected resource which can only be accessed by the contract owner, I need to trust that all the processes up to this point have validated that the current Ballot owner (this function runs from the Ballot resource), namely, if one and only one Ballot was minted to this account, that the contract owner has no ballots, etc.
         */
-        access(all) fun vote(newOption: UInt64) {
+        access(all) fun vote(newOption: Int) {
             // Get the current owner of this ballot from the internal Ballot parameter
             let ballotOwner: Address = self.ballotOwner
 
@@ -268,28 +268,23 @@ access(all) contract VoteBoothST: NonFungibleToken {
                 )
             }
 
-            let availableOptions: [UInt64] = self.getElectionOptions()
+            let availableOptions: [Int] = self.getElectionOptions()
 
             // Check if the option provided is valid
             if (!availableOptions.contains(newOption)) {
-                // Lets transform the array of options into a String. This takes a while...
+                var panicMessage: String = 
+                "ERROR: Invalid option provided: "
+                .concat(newOption.toString())
+                .concat(". Available options: ")
 
-                var availableOptionsString: String = "["
-
-                for index, option in availableOptions {
-                    availableOptionsString = availableOptionsString.concat(option.toString())
-
-                    if (index < (availableOptions.length - 1)) {
-                        availableOptionsString = availableOptionsString.concat(", ")
-                    }
+                for option in availableOptions {
+                    panicMessage = panicMessage
+                    .concat(option.toString())
+                    .concat(" ")
                 }
-                availableOptionsString = availableOptionsString.concat("]")
-
+                
                 panic(
-                    "ERROR: Invalid option provided: "
-                    .concat(newOption.toString())
-                    .concat(". Available options: ")
-                    .concat(availableOptionsString)
+                    panicMessage
                 )
             }
 
@@ -314,7 +309,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         // Simple function that validates the caller as the owner and, if OK, returns the option parameter
-        access(all) fun getVote(): UInt64? {
+        access(all) fun getVote(): Int? {
             let ballotOwner: Address = self.ballotOwner
 
             if (self.owner!.address != ballotOwner)
@@ -328,6 +323,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
         init(_ballotOwner: Address, _voteBoothDeployer: Address) {
             self.id = self.uuid
+            // Set the default option to an empty string as default
             self.option = 0
             self.ballotOwner = _ballotOwner
             self.voteBoothDeployer = _voteBoothDeployer
@@ -878,7 +874,7 @@ access(all) resource BurnBox{
     access(all) view fun getElectionBallot(): String {
         return self._ballot
     }
-    access(all) view fun getElectionOptions(): [UInt64] {
+    access(all) view fun getElectionOptions(): [Int] {
         return self._options
     }
 
@@ -933,18 +929,8 @@ access(all) resource BurnBox{
         return self.totalBallotsSubmitted
     }
 
-    access(account) fun incrementTotalBallotsMinted(ballots: UInt64): Void {
-        log(
-            "Total Ballots Minted before: "
-            .concat(self.totalBallotsMinted.toString())
-        )
-        
+    access(account) fun incrementTotalBallotsMinted(ballots: UInt64): Void {        
         self.totalBallotsMinted = self.totalBallotsMinted + ballots
-
-        log(
-            "Total Ballots Minted after: "
-            .concat(self.totalBallotsMinted.toString())
-        )
     }
 
     access(account) fun incrementTotalBallotsSubmitted(ballots: UInt64): Void {
@@ -982,7 +968,21 @@ access(all) resource BurnBox{
 // ----------------------------- CONTRACT LOGIC END ------------------------------------------------
 
 // ----------------------------- CONSTRUCTOR BEGIN -------------------------------------------------
-    init(name: String, symbol: String, ballot: String, location: String, options: [UInt64], printLogs: Bool) {
+/*
+    SUPER IMPORTANT NOTE: I want to define this contract to accept a [UInt64] as a election_options argument (which is used to directly set the self._options parameter) but stupid flow-cli does not accept [UInt64] in any freaking capacity! Weirder, I have no problems in doing this is a test file with the Test.deployContract (check the test files. I've commented the deployments with this function where I can provide this array as argument). But since I'm unable to do this with flow.json and the "flow project deploy" or "flow accounts add-contract" commands, I have only two choices from here:
+    1 - I need to switch the electionOptions argument to a String, provide something like "1;2;3;4" and then internally parse this to a [UInt64] - NOT IDEAL
+    2 - I omit this argument from the constructor altogether and hard-code it in the contract. I do this by accepting a UInt64 argument as electionOptions instead, which should be the number of options available, and construct the [UInt64] internally using the InclusiveRange thing
+    This is the current option I'm using because it has the least amount of headaches.
+
+    I've opened a ticket with the Flow people to inform them about this issue. I'm unable to provide the damn [UInt64] in the deployments section of the flow.json. If I add an element such as 
+    {
+        "type": "Array",
+        "value": <something>
+    }
+    the trick is to find <something> that flow-cli accepts. I've tried all combinations and then some and the thing just doesn't want any of that. It always complains of "expected JSON array, got..." and then a litany of things other than the ones I'm trying to do.
+    This is clearly an issue with the JSON-Cadence parser and I would not be surprised if I was the first one to get it. Anyway, if this gets resolved sometime, I need to redo this constructor at some point.
+*/
+    init(name: String, symbol: String, ballot: String, location: String, electionOptions: Int, printLogs: Bool) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
         self.ballotPrinterAdminPublicPath = /public/BallotPrinterAdmin
         self.ballotBoxStoragePath = /storage/BallotBox
@@ -998,7 +998,26 @@ access(all) resource BurnBox{
         self._symbol = symbol
         self._ballot = ballot
         self._location = location
-        self._options = options
+        // This argument is being hardcoded on purpose. Check the note above for explanation
+        if (electionOptions <= 1) {
+            panic(
+                "ERROR: Invalid electionOptions range provided: "
+                .concat(electionOptions.toString())
+                .concat(". Please provide a value > 1")
+            )
+        }
+        let range: InclusiveRange<Int> = InclusiveRange(1, electionOptions, step: 1)
+        var elements: [Int] = []
+
+        for element in range {
+            elements.append(element)
+        }
+
+        self._options = elements
+
+        log(
+            electionOptions
+        )
 
         self.totalBallotsMinted = 0
         self.totalBallotsSubmitted = 0

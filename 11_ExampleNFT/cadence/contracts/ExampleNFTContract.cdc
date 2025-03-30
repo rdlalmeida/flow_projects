@@ -10,6 +10,10 @@ access(all) contract ExampleNFTContract: NonFungibleToken {
     // Custom Events
     access(all) event NFTMinted(tokenId: UInt64)
 
+    
+    access(all) let parameter1: String
+
+
     /*
         Turns out that the latest Cadence upgrade (Octobre 2024) still has a bunch of problems, the biggest of them being the inability of capturing certain types of values from test scripts, I need to be a bit creative towards testing this contract properly. As such, I'm a bit limited to run scripts and transactions that encapsulate what I want to test given that the Test module is still ridden with hidden errors.
         Since transactions do not return values, I need to resort to Events to be able to test if the functions are working as they should. The next set of events serve this purpose only
@@ -137,10 +141,16 @@ access(all) contract ExampleNFTContract: NonFungibleToken {
     }
 
 
-    init() {
+    init(par1: String) {
         self.MinterStoragePath = /storage/exampleMinter
         self.CollectionStoragePath = /storage/exampleNFTCollection
         self.CollectionPublicPath = /public/exampleNFTCollection
+
+        self.parameter1 = par1
+
+        log(
+            self.parameter1
+        )
 
         // Clean the storage spot for the Minter in storage first. Whenever I amend a deployed contract, the Minter never gets deleted after deleting the contract
         let randomMinter: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.MinterStoragePath);

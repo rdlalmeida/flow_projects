@@ -71,7 +71,7 @@ access(all) fun setup() {
     let err: Test.Error? = Test.deployContract(
         name: "VoteBoothST",
         path: "../contracts/VoteBoothST.cdc",
-        arguments: [electionName, electionSymbol, electionBallot, electionLocation, electionOptions, printLogs]
+        arguments: [electionName, electionSymbol, electionBallot, electionLocation, printLogs]
     )
 
     Test.expect(err, Test.beNil())

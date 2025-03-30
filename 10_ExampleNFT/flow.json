@@ -1,7 +1,7 @@
 {
     "contracts": {
-        "ExampleNFTContract": {
-            "source": "cadence/contracts/ExampleNFTContract.cdc",
+        "ExampleContract": {
+            "source": "cadence/contracts/ExampleContract.cdc",
             "aliases": {
                 "emulator": "f8d6e0586b0a20c7",
                 "mainnet": "f233dcee88fe0abe",
@@ -84,21 +84,21 @@
     },
     "accounts": {
         "account01": {
-            "address": "179b6b1cb6755e31",
+            "address": "0x179b6b1cb6755e31",
             "key": {
                 "type": "file",
                 "location": "account01.pkey"
             }
         },
         "account02": {
-            "address": "f3fcd2c1a78f5eee",
+            "address": "0xf3fcd2c1a78f5eee",
             "key": {
                 "type": "file",
                 "location": "account02.pkey"
             }
         },
         "account03": {
-            "address": "e03daebed8ca0615",
+            "address": "0xe03daebed8ca0615",
             "key": {
                 "type": "file",
                 "location": "account03.pkey"
@@ -199,7 +199,28 @@
     "deployments": {
         "emulator": {
             "emulator-account": [
-                "ExampleNFTContract"
+                {
+                    "name": "ExampleContract",
+                    "args": [
+                        {
+                            "type": "Array",
+                            "value": [
+                                {
+                                    "type": "Int",
+                                    "value": "1"
+                                },
+                                {
+                                    "type": "Int",
+                                    "value": "5"
+                                },
+                                {
+                                    "type": "Int",
+                                    "value": "7"
+                                }
+                            ]
+                        }
+                    ]
+                }
             ]
         }
     }
