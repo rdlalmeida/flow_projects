@@ -245,80 +245,27 @@ access(all) contract VoteBoothST: NonFungibleToken {
             Because I have all my Ballot ownership structures neatly wrapped into a single and highly protected resource which can only be accessed by the contract owner, I need to trust that all the processes up to this point have validated that the current Ballot owner (this function runs from the Ballot resource), namely, if one and only one Ballot was minted to this account, that the contract owner has no ballots, etc.
         */
         access(all) fun vote(newOption: Int) {
-            // Get the current owner of this ballot from the internal Ballot parameter
-            let ballotOwner: Address = self.ballotOwner
-
-            if (ballotOwner == nil) {
-                // Simple consistency test, just to cover all my bases.
-                panic(
-                    "ERROR: Ballot #"
-                    .concat(self.id.toString())
-                    .concat(" does not has a owner yet!")
-                )
-            }
-
-            // Another invalid situation. Deal with it
-            if (ballotOwner != self.owner!.address) {
-                panic(
-                    "Invalid owner detected! Ballot #"
-                    .concat(self.id.toString())
-                    .concat(" has a different owner (function caller: ")
-                    .concat(self.owner!.address.toString())
-                    .concat(")")
-                )
-            }
-
-            let availableOptions: [Int] = self.getElectionOptions()
-
-            // Check if the option provided is valid
-            if (!availableOptions.contains(newOption)) {
-                var panicMessage: String = 
-                "ERROR: Invalid option provided: "
-                .concat(newOption.toString())
-                .concat(". Available options: ")
-
-                for option in availableOptions {
-                    panicMessage = panicMessage
-                    .concat(option.toString())
-                    .concat(" ")
-                }
-                
-                panic(
-                    panicMessage
-                )
-            }
-
-            // Test the current state of the Ballot to determine (later) if this is a first vote or a re-submission
-            var firstVote: Bool = true
-
-            if (self.option != 0) {
-                // The current option is not the default one anymore, which means this is a re-submission
-                firstVote = false
+            pre {
+                self.owner != nil: "Need a valid owner to vote"
+                self.owner!.address == self.ballotOwner: "Only the Ballot owner is allowed to vote!"
+                self.getElectionOptions().contains(newOption): "The option '".concat(newOption.toString()).concat("' is not a valid one")
             }
 
             // All validations are OK. Proceed with the vote
             self.option = newOption
 
-            // Finish by emitting the respective event
-            if (firstVote) {
-                emit VoteBoothST.BallotSubmitted(_ballotId: self.id, _voterAddress: self.owner!.address)
-            }
-            else {
-                emit VoteBoothST.BallotModified(_ballotId: self.id, _voterAddress: self.owner!.address)
-            }
+            // TODO: Add the logic to deposit the Ballot into the deployer's BallotBox after a successful vote
         }
 
-        // Simple function that validates the caller as the owner and, if OK, returns the option parameter
-        access(all) fun getVote(): Int? {
-            let ballotOwner: Address = self.ballotOwner
+        // NOTE: This function is for TEST and DEBUG purposes only. I mean, is not that serious given that I'm also going to encrypt the option value at a later stage, and this knowledge does violates voter privacy, but no one is going to die for it in a policy oriented democratic scenario. But just in case, this needs to be deleted/protected with an Admin entitlement before moving to a PROD environment. Worst case scenario, someone can calculate the tally before the "official" reveal. Bah, who cares really?
+        // TODO: Delete or protect this function with Admin entitlement before moving to PROD.
+        access(contract) fun getVote(): Int {
+            pre {
+                self.owner != nil: "This function can only be invoked through a reference!"
+                self.owner!.address == self.ballotOwner: "Only the owner can invoke this function"
+            }
 
-            if (self.owner!.address != ballotOwner)
-            {
-                return nil
-            }
-            else{
-                return self.option
-            }
+            return self.option
         }
 
         init(_ballotOwner: Address, _voteBoothDeployer: Address) {
@@ -462,6 +409,48 @@ access(all) contract VoteBoothST: NonFungibleToken {
             emit VoteBoothST.VoteBoxDestroyed(_ballotsInBox: ballotIds.length, _ballotId: ballotId)
         }
 
+        /*
+            NOTE: This function is for TEST and DEBUG purposes only.
+            This function returns the current option in a Ballot stored internally, or nil if there are none.
+            I've set the protections to prevent people other than the owner in the Ballot resource itself. If someone else tries to fetch the current vote other than the Ballot owner (which is also the VoteBox owner by obvious reasons), it fails a pre condition and panics. If there are no Ballots yet in the VoteBox, a nil is returned instead.
+        */
+        access(all) fun getCurrentVote(): Int? {
+            // Grab the id for the Ballot in storage, if any
+            let ballotIDs: [UInt64] = self.getIDs()
+
+            if (ballotIDs.length == 0) {
+                // If there are no Ballots stored yet, return a nil
+                return nil
+            }
+            else if (ballotIDs.length > 1) {
+                // If by some reason there are more than 1 Ballot stored, panic. I've made all sort of checks up to this point in this sense, but one more doesn't hurt. The contract is gigantic, but its worth it
+                panic(
+                    "ERROR: VoteBox for account "
+                    .concat(self.owner!.address.toString())
+                    .concat(" has ")
+                    .concat(ballotIDs.length.toString())
+                    .concat(" Ballots in it. Only one is allowed, max!")
+                )
+            }
+            
+            // Grab a reference to the ballot stored, but initially retrieve it as the higher &{NonFungibleToken.NFT}
+            let nftRef: &{NonFungibleToken.NFT}? = &self.ownedNFTs[ballotIDs[0]]
+
+            // Just to be sure, check if the reference obtained is not nil. Panic if, by some reason, it is
+            if (nftRef == nil) {
+                panic(
+                    "Unable to get a valid &{NonFungibleToken.NFT} for ballotId "
+                    .concat(ballotIDs[0].toString())
+                )
+            }
+
+            // Downcast the higher ref to the specific one the we need
+            let ballotRef: &VoteBoothST.Ballot = nftRef! as! &VoteBoothST.Ballot
+
+            // And invoke the function from the ballot reference itself.
+            return ballotRef.getVote()
+        }
+
         init() {
             self.ownedNFTs <- {}
             self.supportedTypes = {}
@@ -482,39 +471,18 @@ access(all) fun createEmptyVoteBox(): @VoteBoothST.VoteBox {
 }
 
 // ----------------------------- BALLOT BOX BEGIN --------------------------------------------------
-/* 
-    This other collection is used by this contract (because the only instance of it is stored in the contract's account) and this contract alone to store submitted ballots.
-    So, to reiterate, this contract establishes 2 Collection resources: one to store a single Ballot from the voter side, another from the contract/vote booth side, to store all submitted ballots
+/*
+    The BallotBox resource is going to be similar to a collection but not quite. I need it to store the ballots under an address key rather than an UInt64 key to keep one and only one Ballot submitted per voter, i.e., per address. Also, this allows me to properly implement the multiple vote casting feature in a more easy and flexible manner
 */
-access(all) resource BallotBox: NonFungibleToken.Collection {
-    access(all) var ownedNFTs: @{UInt64: {NonFungibleToken.NFT}}
-
-    access(contract) var supportedTypes: {Type: Bool}
-    access(all) view fun getSupportedNFTTypes(): {Type: Bool} {
-        return self.supportedTypes
-    }
-    access(all) view fun isSupportedNFTType(type: Type): Bool {
-        if (self.supportedTypes[type]!) {
-            return true
-        }
-
-        return false
-    }
-
-    access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
-        let BallotBox: @VoteBoothST.BallotBox <- create VoteBoothST.BallotBox()
-
-        // Add the @VoteBoothST.Ballot type to allow Ballot to be deposited in this type of collection
-        BallotBox.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
-
-        return <- BallotBox
-    }
+access(all) resource BallotBox {
+    access(self) var submittedBallots: @{Address: VoteBoothST.Ballot}
 
     // NonFungibleToken.Receiver
-    access(all) fun deposit(token: @{NonFungibleToken.NFT}) {
-        let ballot: @VoteBoothST.Ballot <- token as! @VoteBoothST.Ballot
+    access(all) fun submitBallot(ballot: @VoteBoothST.Ballot) {
 
-        let randomResource: @AnyResource? <- self.ownedNFTs[ballot.id] <- ballot
+        let randomResource: @AnyResource? <- self.submittedBallots[ballot.ballotOwner] <- ballot
+
+        // TODO: Test if the randomResource is a VoteBoothST.Ballot. If so, emit the BallotModified event instead
 
         if (randomResource != nil) {
             emit NonNilTokenReturned(_tokenType: randomResource.getType())
@@ -523,24 +491,10 @@ access(all) resource BallotBox: NonFungibleToken.Collection {
         destroy randomResource
     }
 
-    // NonFungibleToken.Collection
-    access(all) view fun borrowNFT(_ id: UInt64): &{NonFungibleToken.NFT}? {
-        let voteRef: &{NonFungibleToken.NFT}? = &self.ownedNFTs[id]
-
-        if (voteRef != nil) {
-            return voteRef
-        }
-        else {
-            panic(
-                "Unable to retrieve a valid NFT reference for token with id "
-                .concat(id.toString())
-                .concat(" from storage from account ")
-                .concat(self.owner!.address.toString())
-            )
-        }
-    }
-
-    access(NonFungibleToken.Withdraw) fun withdraw(withdrawID: UInt64): @{NonFungibleToken.NFT} {
+    /*
+        This function should be
+    */
+    access(Admin) fun withdrawBallot(ballotOwner: Address): @VoteBoothST.Ballot {
         let vote: @{NonFungibleToken.NFT} <- self.ownedNFTs.remove(key: withdrawID) ??
         panic(
             "Unable to retrieve a vote with id "
