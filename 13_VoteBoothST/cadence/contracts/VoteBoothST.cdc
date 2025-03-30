@@ -977,7 +977,17 @@ access(all) resource BurnBox{
     I've opened a ticket with the Flow people to inform them about this issue. I'm unable to provide the damn [UInt64] in the deployments section of the flow.json. If I add an element such as 
     {
         "type": "Array",
-        "value": <something>
+        "value": [
+            {
+                "type": "UInt64",
+                "value": "1"
+            },
+            {
+                "type": "UInt64",
+                "value": "2"
+            },
+            ...
+        ]
     }
     the trick is to find <something> that flow-cli accepts. I've tried all combinations and then some and the thing just doesn't want any of that. It always complains of "expected JSON array, got..." and then a litany of things other than the ones I'm trying to do.
     This is clearly an issue with the JSON-Cadence parser and I would not be surprised if I was the first one to get it. Anyway, if this gets resolved sometime, I need to redo this constructor at some point.

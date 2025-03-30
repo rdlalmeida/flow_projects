@@ -64,6 +64,8 @@ access(all) let testVoteBoxSc: String = "../scripts/01_test_vote_box.cdc"
 access(all) let getVoteOptionsSc: String = "../scripts/02_get_vote_option.cdc"
 access(all) let getIDsSc: String = "../scripts/03_get_IDs.cdc"
 access(all) let getBallotOwnerSc: String = "../scripts/04_get_ballot_owner.cdc"
+access(all) let getTotalBallotsMintedSc: String = "../scripts/05_get_total_ballots_minted.cdc"
+access(all) let getTotalBallotsSubmittedSc: String = "../scripts/06_get_total_ballots_submitted.cdc"
 
 // EVENTS
 // NonFungibleToken events
@@ -160,12 +162,14 @@ access(all) fun testGetElectionLocation() {
 access(all) fun testGetElectionOptions() {
     let contractOptions: [Int] = VoteBoothST.getElectionOptions()
 
-    log(
-        "Range of election Options in the contract: "
-    )
-    log(
-        contractOptions
-    )
+    if (printLogs) {
+        log(
+            "Range of election Options in the contract: "
+        )
+        log(
+            contractOptions
+        )
+    }
 
     let range: InclusiveRange<Int> = InclusiveRange(1, electionOptions, step: 1)
     var expectedElectionOptions: [Int] = []
@@ -178,11 +182,23 @@ access(all) fun testGetElectionOptions() {
         Test.assertEqual(contractOptions.contains(option), true)
     }
 }
+
 access(all) fun testGetTotalBallotsMinted() {
-    Test.assertEqual(VoteBoothST.getTotalBallotsMinted(), 0 as (UInt64))
+    let scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    Test.assertEqual((scResult.returnValue as! UInt64), 0 as (UInt64))
 }
+
 access(all) fun testGetTotalBallotsSubmitted() {
-    Test.assertEqual(VoteBoothST.getTotalBallotsSubmitted(), 0 as (UInt64))
+    let scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsSubmittedSc,
+        []
+    )
+
+    Test.assertEqual((scResult.returnValue as! UInt64), 0 as (UInt64))
 }
 
 // Continue with the constructor assertions
@@ -210,7 +226,12 @@ access(all) fun testDefaultPaths() {
 
 access(all) fun testOwnerControl() {
     // Next transaction mints and burns 2 ballots. Check if the totalBallotsMinted keeps its consistency
-    let totalBallotsMintedBefore: UInt64 = VoteBoothST.getTotalBallotsMinted()
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = (scResult.returnValue as! UInt64)
 
     var txResult: Test.TransactionResult = executeTransaction(
         testOwnerControlTx,
@@ -219,9 +240,6 @@ access(all) fun testOwnerControl() {
     )
 
     Test.expect(txResult, Test.beSucceeded())
-
-    // This value should have been maintained after all the things
-    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     // This transaction mints and burns two ballots. Adjust the eventCounter dictionary accordingly and check if the events emitted match what is expected
     eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + 2
@@ -251,7 +269,15 @@ access(all) fun testOwnerControl() {
     Test.expect(txResult, Test.beFailed())
 
     // Test also that the totalBallotsMinted was not modified
-    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = (scResult.returnValue as! UInt64)
+
+    // This value should have been maintained after all the things
+    Test.assertEqual(initialTotalBallotsMinted, finalTotalBallotsMinted)
 
     // No need to check the events, since if there any error (i.e., an unexpected event being emitted) the next tests should blow up because I'm constantly verifying the event counters.
 }
@@ -270,7 +296,12 @@ access(all) fun testMinterLoading() {
 
 access(all) fun testMinterReference() {
     // The next transaction mints and burns one test Ballot. Check that the totalBallotsMinted maintains consistency
-    let totalBallotsMintedBefore: UInt64 = VoteBoothST.getTotalBallotsMinted()
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
 
     // This transaction runs a similar function but using an authorized reference instead of loading  the resource, as it is supposed to be used
     let txResult01: Test.TransactionResult = executeTransaction(
@@ -280,9 +311,6 @@ access(all) fun testMinterReference() {
     )
 
     Test.expect(txResult01, Test.beSucceeded())
-
-    // Validate that the total Ballots minted remained unchanged (0)
-    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
     var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
@@ -309,9 +337,6 @@ access(all) fun testMinterReference() {
 
     Test.expect(txResult02, Test.beFailed())
 
-    // Check that the number of total Ballots minted didn't changed
-    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
-
     ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
     ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
     resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
@@ -329,11 +354,26 @@ access(all) fun testMinterReference() {
             .concat(ballotBurnedEvents.length.toString())
         )
     }
+
+    // Finish by making sure that the total number of minted ballots is still the same as in the beginning
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsMinted, finalTotalBallotsMinted)
 }
 
 access(all) fun testBallotBoxLoad() {
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
     // The next transaction mints and burns a Ballot for testing purposes. Save the current totalBallotsMinted and verify that it is maintained after this transaction.
-    let totalBallotsMintedBefore: UInt64 = VoteBoothST.getTotalBallotsMinted()
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
 
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotBoxLoadTx,
@@ -343,9 +383,6 @@ access(all) fun testBallotBoxLoad() {
 
     // The expectation is for this transaction to run if signed by the deployer, but not if anyone else signs it instead
     Test.expect(txResult01, Test.beSucceeded())
-
-    // Check if the totalBallotsMinted was maintained
-    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
     var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
@@ -370,9 +407,6 @@ access(all) fun testBallotBoxLoad() {
         account01
     )
 
-    // Test that this transaction did not affected the totalBallotsMinted
-    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
-
     Test.expect(txResult02, Test.beFailed())
 
     ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
@@ -392,10 +426,25 @@ access(all) fun testBallotBoxLoad() {
             .concat(ballotBurnedEvents.length.toString())
         )
     }
+
+    // Check that the total ballots minted remained the same
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsMinted, finalTotalBallotsMinted)
 }
 
 access(all) fun testBallotBoxRef() {
-    let totalBallotsMintedBefore: UInt64 = VoteBoothST.getTotalBallotsMinted()
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
 
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotBoxRefTx,
@@ -405,8 +454,6 @@ access(all) fun testBallotBoxRef() {
 
     // As before, the expectation is that this transaction works with the deployer but with no one else
     Test.expect(txResult01, Test.beSucceeded())
-
-    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     // Check the usual events
     var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
@@ -450,6 +497,16 @@ access(all) fun testBallotBoxRef() {
             .concat(ballotBurnedEvents.length.toString())
         )
     }
+
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    // Validate that the total number of ballots minted was maintained
+    Test.assertEqual(initialTotalBallotsMinted, finalTotalBallotsMinted)
 }
 
 access(all) fun testCreateVoteBox() {
@@ -528,7 +585,12 @@ access(all) fun testCreateVoteBox() {
 
 access(all) fun testBallot() {
     // As usual, this transaction mints and burns one test Ballot, so the total Ballots minted should remain the same
-    let totalBallotsMintedBefore: UInt64 = VoteBoothST.getTotalBallotsMinted()
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
 
     let txResult01: Test.TransactionResult = executeTransaction(
         testBallotTx,
@@ -537,8 +599,6 @@ access(all) fun testBallot() {
     )
 
     Test.expect(txResult01, Test.beSucceeded())
-
-    Test.assertEqual(totalBallotsMintedBefore, VoteBoothST.getTotalBallotsMinted())
 
     // The test ballot transaction should have emitted a pair of events. Test those too
     let ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
@@ -573,10 +633,28 @@ access(all) fun testBallot() {
 
     Test.expect(txResult02, Test.beFailed())
 
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsMinted, finalTotalBallotsMinted)
+
 }
 
 access(all) fun testBallotMintingToVoteBox() {
     // NOTE: This test assumes that the "testCreateVoteBox" has run successfully first, i.e., account01 and account02 have a valid VoteBox in their storage area and a public capability published.
+    var scResult: Test.ScriptResult? = nil
+
+    // Grab the number of current ballots minted using the script
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = (scResult!.returnValue as! UInt64)
 
     // Mint and deposit a new Ballot to account01. Use the event emitted to retrieve the ballotId
     let txResult01: Test.TransactionResult = executeTransaction(
@@ -705,23 +783,29 @@ access(all) fun testBallotMintingToVoteBox() {
     )
 
     Test.expect(txResult04, Test.beFailed())
-}
 
-access(all) fun testToTalBallotsMinted2() {
-    let finalTotalBallotsMinted: UInt64 = VoteBoothST.getTotalBallotsMinted()
-
-    log(
-        "Final total ballots minted: "
-        .concat(finalTotalBallotsMinted.toString())
+    // Before finishing, grab the total ballots minted again and check that it is +3
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
     )
-}
 
-// TODO: Continue from here with the total Ballots Minted logic. Use script 05 to get the totalBallotsMinted instead of calling the function itself. Maybe it works...
+    let finalTotalBallotsMinted: UInt64 = (scResult!.returnValue as! UInt64)
+
+    Test.assertEqual(initialTotalBallotsMinted + 3, finalTotalBallotsMinted)
+}
 
 /*
     Test the act of loading a VoteBox from a user, withdraw the Ballot from it and send it to burn at a later stage with a BurnBox reference
 */
 access(all) fun testWithdrawBallotToBurnBoxLoad() {
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
     // First, try to execute the withdraw transaction with the wrong signer. This transaction must be signed by the owner of the VoteBox in question
     var txResult: Test.TransactionResult = executeTransaction(
         withdrawBallotToBurnBoxLoadTx,
@@ -742,7 +826,7 @@ access(all) fun testWithdrawBallotToBurnBoxLoad() {
     Test.expect(txResult, Test.beFailed())
 
     // Before running the transaction that works, retrieve the ID of the Ballot in account01 VoteBox
-    var scResult: Test.ScriptResult = executeScript(
+    scResult = executeScript(
         getIDsSc,
         [account01.address]
     )
@@ -784,12 +868,28 @@ access(all) fun testWithdrawBallotToBurnBoxLoad() {
     Test.assertEqual(ballotSetToBurnEvent._voterAddress, ballotToBurnOwner)
 
     // The burning of the Ballots is going to happen a little further down the line.
+    // This test should not have changed the total ballots minted. Check it
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsMinted, finalTotalBallotsMinted)
 }
 
 /*
-    This transaction is a bit of a repetition of the above one, but applied to account02
+    This transaction is a bit of a repetition of the above one, but applied to account02 and using a reference rather than loading the resource
 */
 access(all) fun testWithdrawBallotToBurnBoxRef() {
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
     // Start by forcing the transaction to fail like before
     var txResult: Test.TransactionResult = executeTransaction(
         withdrawBallotToBurnBoxRefTx,
@@ -810,7 +910,7 @@ access(all) fun testWithdrawBallotToBurnBoxRef() {
     Test.expect(txResult, Test.beFailed())
 
     // Grab the ballotId and owner from account02 VoteBox before running the successful transaction
-    var scResult: Test.ScriptResult = executeScript(
+    scResult = executeScript(
         getIDsSc,
         [account02.address]
     )
@@ -847,12 +947,29 @@ access(all) fun testWithdrawBallotToBurnBoxRef() {
 
     Test.assertEqual(ballotSetToBurnEvent._ballotId, ballotToBurnId)
     Test.assertEqual(ballotSetToBurnEvent._voterAddress, ballotToBurnOwner)
+
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    // The total ballots minted in this process should have remained the same. Test it
+    Test.assertEqual(initialTotalBallotsMinted, finalTotalBallotsMinted) 
 }
 
 /*
     There should be 2 Ballots in the BurnBox at this point. Test this
 */
 access(all) fun testBurnBox() {
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
     var txResult: Test.TransactionResult = executeTransaction(
         burnBallotFromBurnBoxTx,
         [],
@@ -884,12 +1001,29 @@ access(all) fun testBurnBox() {
     Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
     Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
+
+    // This test burns two ballots in the BurnBox, which means that that total ballots minted are going  to be decremented by 2. Check this
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsMinted - 2, finalTotalBallotsMinted)
 }
 
 /*
     This test destroys all VoteBoxes used so far, i.e., for account01, account02 and account03. The last one (account03) still has a valid Ballot in it (I left it there on purpose), so check that the relevant events are emitted as well
 */
 access(all) fun testDestroyVoteBox() {
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
     // Destroy the VoteBoxes for account01 and account02 and check that no BallotBurned events were emitted. Only the VoteBoxDestroyed event should be emitted twice
     var txResult: Test.TransactionResult = executeTransaction(
         destroyVoteBoxTx,
@@ -962,7 +1096,7 @@ access(all) fun testDestroyVoteBox() {
 
     // Finally, destroy the VoteBox in account03. This one still has a valid Ballot in it, so deal with accordingly!
     // First, extract the ballotId and ballotOwner from the VoteBox in account03
-    var scResult: Test.ScriptResult = executeScript(
+    scResult = executeScript(
         getIDsSc,
         [account03.address]
     )
@@ -1049,6 +1183,16 @@ access(all) fun testDestroyVoteBox() {
 
     Test.assertEqual(ballotBurnedEvent._ballotId!, ballotToBurnId)
     Test.assertEqual(ballotBurnedEvent._voterAddress!, ballotToBurnOwner)
+
+    // No ballots were minted in this test but one got burned. The total number should have been decreased by one at the end
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsMinted - 1, finalTotalBallotsMinted)
 }
 
 
@@ -1063,6 +1207,13 @@ access(all) fun testCreateVoteBoxes() {
     var voteBoxCreatedEvents: [AnyStruct] = []
     var voteBoxCreatedEvent: VoteBoothST.VoteBoxCreated? = nil
     var voteBoxAddress: Address? = nil
+    
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
     
     for account in accounts {
         txResult= executeTransaction(
@@ -1098,6 +1249,15 @@ access(all) fun testCreateVoteBoxes() {
         }
     }
 
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    // No ballots minted with this one as well. Test it
+    Test.assertEqual(initialTotalBallotsMinted, finalTotalBallotsMinted)
 }
 
 /*
@@ -1105,7 +1265,6 @@ access(all) fun testCreateVoteBoxes() {
 */
 access(all) fun testBallotMintingToVoteBoxes() {
     var txResult: Test.TransactionResult? = nil
-    var scResult: Test.ScriptResult? = nil
     var storedBallotIds: [UInt64] = []
 
     var ballotMintedEvents: [AnyStruct] = []
@@ -1114,6 +1273,13 @@ access(all) fun testBallotMintingToVoteBoxes() {
     var contractDataInconsistentEvents: [AnyStruct] = []
 
     var ballotMintedEvent: VoteBoothST.BallotMinted? = nil
+
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
 
     txResult = executeTransaction(
         mintBallotsToAccountsTx,
@@ -1179,7 +1345,7 @@ access(all) fun testBallotMintingToVoteBoxes() {
             [account.address]
         )
 
-        storedBallotIds = (scResult!.returnValue as! [UInt64]?)!
+        storedBallotIds = (scResult.returnValue as! [UInt64]?)!
 
         // Only one Ballot should exist per account
         Test.assertEqual(storedBallotIds.length, 1)
@@ -1194,6 +1360,16 @@ access(all) fun testBallotMintingToVoteBoxes() {
             "ballotID": ballotMintedEvent!._ballotId.toString()
         }
     }
+
+    // This test should have increase the total of ballots minted by the size of the addresses array
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsMinted + UInt64(accounts.length), finalTotalBallotsMinted)
 }
 
 /* 
@@ -1202,7 +1378,6 @@ access(all) fun testBallotMintingToVoteBoxes() {
 */
 access(all) fun testWithdrawBallotsToBurnBox() {
     var txResult: Test.TransactionResult? = nil
-    var scResult: Test.ScriptResult? = nil
 
     var ballotSetToBurnEvents: [AnyStruct] = []
 
@@ -1213,6 +1388,13 @@ access(all) fun testWithdrawBallotsToBurnBox() {
 
     var ballotsToBurnIds: [UInt64] = []
     var ballotsToBurnOwners: [Address] = []
+
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
 
     // Create a subset of the accounts array for this purpose (only with the first 3 accounts)
     let burnableBallotAccounts: [Test.TestAccount] = [account01, account02, account03]
@@ -1244,14 +1426,14 @@ access(all) fun testWithdrawBallotsToBurnBox() {
             [account.address]
         )
 
-        ballotToBurnId = (scResult!.returnValue as! [UInt64]?)![0]
+        ballotToBurnId = (scResult.returnValue as! [UInt64]?)![0]
 
         scResult = executeScript(
             getBallotOwnerSc,
             [account.address]
         )
 
-        ballotToBurnOwner = (scResult!.returnValue as! Address?)!
+        ballotToBurnOwner = (scResult.returnValue as! Address?)!
 
         // Now for the real one
         txResult = executeTransaction(
@@ -1318,6 +1500,16 @@ access(all) fun testWithdrawBallotsToBurnBox() {
         Test.assertEqual(ballotsToBurnIds.contains(ballotBurnedEvent!._ballotId!), true)
         Test.assertEqual(ballotsToBurnOwners.contains(ballotBurnedEvent!._voterAddress!), true)
     }
+
+    // There was a number of ballots burned in this test, specifically burnableBallotAccounts.length. Check that the total ballots minted checks was decremented by this quantity
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsMinted - UInt64(burnableBallotAccounts.length), finalTotalBallotsMinted)
 }
 
 /*
@@ -1325,7 +1517,6 @@ access(all) fun testWithdrawBallotsToBurnBox() {
 */
 access(all) fun testDestroyVoteBoxes() {
     var txResult: Test.TransactionResult? = nil
-    var scResult: Test.ScriptResult? = nil
 
     var ballotBurnedEvents: [AnyStruct] = []
     var ballotSetToBurnEvents: [AnyStruct] = []
@@ -1346,6 +1537,13 @@ access(all) fun testDestroyVoteBoxes() {
     // Set the remaining 2 accounts for this process
     let burnableVoteBoxesAccounts: [Test.TestAccount] = [account04, account05]
 
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
     // First, just to be sure, try to destroy a VoteBox from the deployer account. This should fail because the deployer has none
     txResult = executeTransaction(
         destroyVoteBoxTx,
@@ -1363,7 +1561,7 @@ access(all) fun testDestroyVoteBoxes() {
             [account.address]
         )
 
-        ballotToBurnId = (scResult!.returnValue as! [UInt64]?)![0]
+        ballotToBurnId = (scResult.returnValue as! [UInt64]?)![0]
         ballotsToBurnIds.append(ballotToBurnId!)
 
         scResult = executeScript(
@@ -1371,7 +1569,7 @@ access(all) fun testDestroyVoteBoxes() {
             [account.address]
         )
 
-        ballotToBurnOwner = (scResult!.returnValue as! Address?)
+        ballotToBurnOwner = (scResult.returnValue as! Address?)
         ballotsToBurnOwners.append(ballotToBurnOwner!)
 
         txResult = executeTransaction(
@@ -1446,4 +1644,15 @@ access(all) fun testDestroyVoteBoxes() {
         Test.assertEqual(ballotsToBurnIds.contains(ballotBurnedEvent!._ballotId!), true)
         Test.assertEqual(ballotsToBurnOwners.contains(ballotBurnedEvent!._voterAddress!), true)
     }
+
+    // At the end of this test, the remaining burnableVoteBoxAccount.length ballots were burned, so the total ballots minted should have been decremented by this amount. Check it
+
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsMinted - UInt64(burnableVoteBoxesAccounts.length), finalTotalBallotsMinted)
 }

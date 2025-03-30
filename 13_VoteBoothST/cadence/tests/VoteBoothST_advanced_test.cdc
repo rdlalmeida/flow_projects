@@ -8,7 +8,7 @@ access(all) let electionSymbol: String = "WBDE"
 access(all) let electionLocation: String = "Campinho"
 access(all) let electionBallot: String = "Who was the best dog this summer? Options: \n1 - Eddie, \n2 - Argus, \n3 - Both, \n4 - None"
 // access(all) let electionOptions: String = "1;2;3;4"
-access(all) let electionOptions: [UInt64] = [1, 2, 3, 4]
+access(all) let electionOptions: Int = 4
 
 access(all) let printLogs: Bool = false
 
@@ -71,7 +71,7 @@ access(all) fun setup() {
     let err: Test.Error? = Test.deployContract(
         name: "VoteBoothST",
         path: "../contracts/VoteBoothST.cdc",
-        arguments: [electionName, electionSymbol, electionBallot, electionLocation, printLogs]
+        arguments: [electionName, electionSymbol, electionBallot, electionLocation, electionOptions, printLogs]
     )
 
     Test.expect(err, Test.beNil())
