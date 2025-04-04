@@ -3,14 +3,14 @@ import "NonFungibleToken"
 import "Burner"
 
 transaction(testAddress: Address) {
-    let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
+    let ballotPrinterRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin
     let signerAddress: Address
     let ownerControlRef: &VoteBoothST.OwnerControl
 
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.signerAddress = signer.address
 
-        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
+        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
             "Unable to retrieve a valid &VoteBoothST.ballotPrinterAdmin at "
             .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())

@@ -4,10 +4,10 @@ import "VoteBoothST"
     This transaction is very similar to the one named "01_test_ballot_printer_admin.cdc", namely, it tries to load the ballot collection resource from storage and, if successful, try to print a ballot into the Collection, withdraw it and burn it to finish the test. If all is OK, only the contract deployer should be able to run this transaction successfully. Any other users should not be able to create BallotBoxes, therefore they should not be able to access them as well. The same logic applies to the BallotPrinterAdmin
 */
 transaction(testAddress: Address) {
-    let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
+    let ballotPrinterRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin
     let ownerControlRef: &VoteBoothST.OwnerControl
 
-    prepare(signer: auth(Storage, VoteBoothST.Admin) &Account) {
+    prepare(signer: auth(Storage, VoteBoothST.BoothAdmin) &Account) {
         let storedBallotBox: @VoteBoothST.BallotBox <- signer.storage.load<@VoteBoothST.BallotBox>(from: VoteBoothST.ballotBoxStoragePath) ??
         panic(
             "Unable to retrieve a valid VoteBoothST.BallotBox resource from path "
@@ -16,7 +16,7 @@ transaction(testAddress: Address) {
             .concat(signer.address.toString())
         )
 
-        let collectionSize: Int = storedBallotBox.getLength()
+        let collectionSize: Int = storedBallotBox.getSubmittedBallotCount()
 
         if (VoteBoothST.printLogs) {
             // Test that this collection is still empty
@@ -34,7 +34,7 @@ transaction(testAddress: Address) {
         log(storedBallotBox.saySomething())
 
         // Load the BallotPrinterAdmin resource reference 
-        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
+        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
             "Unable to retrieve a valid &VoteBoothST.BallotPrinterAdmin at "
             .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())
@@ -42,7 +42,7 @@ transaction(testAddress: Address) {
             .concat(signer.address.toString())
         )
 
-        // Print a test ballot under the deployer's address
+        // Print a test ballot under a test address because the contract deployer is forbidden from minting Ballots
         let testBallot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: testAddress)
         let testBallotId: UInt64 = testBallot.id
         let testBallotOwner: Address = testBallot.ballotOwner
@@ -108,7 +108,34 @@ transaction(testAddress: Address) {
         }
 
         // All is OK. Deposit the ballot into the BallotBox
-        storedBallotBox.deposit(token: <- testBallot)
+        storedBallotBox.submitBallot(ballot: <- testBallot)
+
+        // Check the size of the BallotBox again
+        let newBallotBoxSize: Int = storedBallotBox.getSubmittedBallotCount()
+
+        // Check that the function that verifies if the ballotOwner has a valid submitted Ballot returns true
+        var ballotSubmitted: Bool = storedBallotBox.getIfOwnerVoted(ballotOwner: testBallotOwner)
+
+        if (!ballotSubmitted) {
+            // If I got a false in this one
+            panic(
+                "ERROR: Ballot owner "
+                .concat(testBallotOwner.toString())
+                .concat(" does not have a valid Ballot submitted yet!")
+            )
+        }
+
+        // Conversely, there should be no Ballots submitted by the contract deployer. Test this as well
+        ballotSubmitted = storedBallotBox.getIfOwnerVoted(ballotOwner: signer.address)
+
+        if (ballotSubmitted) {
+            // If there's a Ballot submitted under this contract deployer's address, that's clearly an error as well!
+            panic(
+                "ERROR: The VotingBoothST contract deployer "
+                .concat(signer.address.toString())
+                .concat(" has a valid Ballot submitted!")
+            )
+        }
 
         if (VoteBoothST.printLogs) {
             log(
@@ -120,19 +147,19 @@ transaction(testAddress: Address) {
         }
 
         // Validate that the size of the collection was adjusted accordingly
-        if (storedBallotBox.getLength() != collectionSize + 1) {
+        if (newBallotBoxSize != collectionSize + 1) {
             panic(
                 "Collection size mismatch detected: Initial collection size: "
                 .concat(collectionSize.toString())
                 .concat(" Ballots. After depositing one ballot, the collection size is now ")
-                .concat(storedBallotBox.getLength().toString())
+                .concat(newBallotBoxSize.toString())
                 .concat(" Ballots!")
             )
         }
 
         // All good. Withdraw the ballot again
 
-        let depositedBallot: @VoteBoothST.Ballot <- storedBallotBox.withdraw(withdrawID: testBallotId) as! @VoteBoothST.Ballot
+        let depositedBallot: @VoteBoothST.Ballot <- storedBallotBox.withdrawBallot(ballotOwner: testBallotOwner)
         let depositedBallotId: UInt64 = depositedBallot.id
 
         // Check also that the before and after Ballot ids match

@@ -5,15 +5,15 @@ import "NonFungibleToken"
     This transaction requires no arguments. It simply sets all the Ballots inside the contract deployer BurnBox resource to be destroyed (burned)
 */
 transaction() {
-    let burnBoxRef: auth(VoteBoothST.Admin) &VoteBoothST.BurnBox
+    let burnBoxRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BurnBox
     let signerAddress: Address
 
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.signerAddress = signer.address
 
-        self.burnBoxRef = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BurnBox>(from: VoteBoothST.burnBoxStoragePath) ??
+        self.burnBoxRef = signer.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.BurnBox>(from: VoteBoothST.burnBoxStoragePath) ??
         panic(
-            "Unable to retrieve an auth(VoteBoothST.Admin) &VoteBoothST.BurnBox at "
+            "Unable to retrieve an auth(VoteBoothST.BoothAdmin) &VoteBoothST.BurnBox at "
             .concat(VoteBoothST.burnBoxStoragePath.toString())
             .concat(" for account ")
             .concat(signer.address.toString())

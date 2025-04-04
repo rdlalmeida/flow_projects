@@ -26,7 +26,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) event NonNilTokenReturned(_tokenType: Type)
     access(all) event BallotMinted(_ballotId: UInt64, _voterAddress: Address)
     access(all) event BallotSubmitted(_ballotId: UInt64, _voterAddress: Address)
-    access(all) event BallotModified(_ballotId: UInt64, _voterAddress: Address)
+    access(all) event BallotModified(_oldBallotId: UInt64, _newBallotId: UInt64, _voterAddress: Address)
     access(all) event BallotBurned(_ballotId: UInt64?, _voterAddress: Address?)
     access(all) event ContractDataInconsistent(_ballotId: UInt64?, _ballotOwner: Address?)
     access(all) event VoteBoxCreated(_voterAddress: Address)
@@ -48,7 +48,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) event BallotNotDelivered(_voterAddress: Address, _reason: Int)
 
     // CUSTOM ENTITLEMENTS
-    access(all) entitlement Admin
+    access(all) entitlement BoothAdmin
 
     // CUSTOM VARIABLES
     access(all) let _name: String
@@ -73,7 +73,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         access(self) var owners: {Address: UInt64}
 
         // Retrieve the ballotOwners dictionary
-        access(Admin) fun getBallotOwners(): {UInt64: Address} {
+        access(BoothAdmin) fun getBallotOwners(): {UInt64: Address} {
             return self.ballotOwners
         }
 
@@ -83,7 +83,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         }
 
         // Retrieve the owners dictionary
-        access(Admin) fun getOwners(): {Address: UInt64} {
+        access(BoothAdmin) fun getOwners(): {Address: UInt64} {
             return self.owners
         }
 
@@ -257,8 +257,8 @@ access(all) contract VoteBoothST: NonFungibleToken {
             // TODO: Add the logic to deposit the Ballot into the deployer's BallotBox after a successful vote
         }
 
-        // NOTE: This function is for TEST and DEBUG purposes only. I mean, is not that serious given that I'm also going to encrypt the option value at a later stage, and this knowledge does violates voter privacy, but no one is going to die for it in a policy oriented democratic scenario. But just in case, this needs to be deleted/protected with an Admin entitlement before moving to a PROD environment. Worst case scenario, someone can calculate the tally before the "official" reveal. Bah, who cares really?
-        // TODO: Delete or protect this function with Admin entitlement before moving to PROD.
+        // NOTE: This function is for TEST and DEBUG purposes only. I mean, is not that serious given that I'm also going to encrypt the option value at a later stage, and this knowledge does violates voter privacy, but no one is going to die for it in a policy oriented democratic scenario. But just in case, this needs to be deleted/protected with an BoothAdmin entitlement before moving to a PROD environment. Worst case scenario, someone can calculate the tally before the "official" reveal. Bah, who cares really?
+        // TODO: Delete or protect this function with BoothAdmin entitlement before moving to PROD.
         access(contract) fun getVote(): Int {
             pre {
                 self.owner != nil: "This function can only be invoked through a reference!"
@@ -477,31 +477,99 @@ access(all) fun createEmptyVoteBox(): @VoteBoothST.VoteBox {
 access(all) resource BallotBox {
     access(self) var submittedBallots: @{Address: VoteBoothST.Ballot}
 
-    // NonFungibleToken.Receiver
+    /*
+        This function is one of the most important ones in this resource. It receives a Ballot NFT and puts it in the internal dictionary for future processing.
+        I'm allowing multiple vote casting in this system, which is made insanely easy by the way Flow deals with resources storing other resources.
+        These NFTs are stored in an internal @{Address: VoteBoothST.Ballot} dictionary, which invalidates double voting in the simplest, easiest possible, just by using a dictionary's base properties. Seeing how others have to bend themselves backwards to implement similar features in centralised (one election server doing everything) systems, makes their approach laughably over complicated. I'm completely preventing double voting and enabling multiple vote casting just by using a semi-basic data structure, which is what dictionaries are in Flow.
+        Anyway, because I want this to be as informed as possible, I need to be a bit picky when processing a new Ballot, but even that is super easy: Instead of loading whatever may be at the dictionary position for the ballot.ballotOwner parameter, I'm getting a reference to it first and test its type. If it is indeed a Ballot, I'm loading it as such and processing it properly (as a vote re-submission). Otherwise, it's just more of the same, i.e., standard Flow.Collection behaviour.
+    */
     access(all) fun submitBallot(ballot: @VoteBoothST.Ballot) {
+        // Grab a reference to the value currently at the position self.submittedBallots[ballot.ballotOwner]
+        let randomResourceRef: &AnyResource? = &self.submittedBallots[ballot.ballotOwner]
 
-        let randomResource: @AnyResource? <- self.submittedBallots[ballot.ballotOwner] <- ballot
+        // Test first if its a nil (which would be the most common case). Proceed with standard NonFungibleToken.Collection behaviour
+        if (randomResourceRef == nil) {
+            // Save the ballot data for the event emission first
+            let newBallotId: UInt64 = ballot.id
+            let newBallotOwner: Address = ballot.ballotOwner
 
-        // TODO: Test if the randomResource is a VoteBoothST.Ballot. If so, emit the BallotModified event instead
+            let randomResource: @AnyResource? <- self.submittedBallots[ballot.ballotOwner] <- ballot
 
-        if (randomResource != nil) {
-            emit NonNilTokenReturned(_tokenType: randomResource.getType())
+            // The randomResource is a nil, but I need to destroy it anyways
+            destroy randomResource
+
+            // Emit the BallotSubmitted event to finish this
+            emit VoteBoothST.BallotSubmitted(_ballotId: newBallotId, _voterAddress: newBallotOwner)
+
         }
+        // If the type got was not nil, test if there's an old Ballot there instead. If so, replace it but emit a BallotModified event to warn that a Ballot was re-submitted
+        else if (randomResourceRef.getType() == Type<&VoteBoothST.Ballot>()) {
+            // Replace the old Ballot for the new one
+            let newBallotId: UInt64 = ballot.id
+            let newBallotOwner: Address = ballot.ballotOwner
 
-        destroy randomResource
+            // The process of replacing a type specific resource is a bit tricky and verbose, but still far easier than in any centralised approach. First, I need to retrieve a proper @VoteBooth.Ballot to get its id and ballotOwner
+            let oldBallot: @VoteBoothST.Ballot <- self.submittedBallots.remove(key: ballot.ballotOwner) as! @VoteBoothST.Ballot
+
+            let oldBallotId: UInt64 = oldBallot.id
+
+            // Destroy the oldBallot and store the new one in its place
+            destroy oldBallot
+            let nilResource: @AnyResource? <- self.submittedBallots[newBallotOwner] <- ballot
+            destroy nilResource
+
+            // Emit the relevant event to finish this. The BallotModified even has 3 arguments: the id of the old Ballot, the id of the new Ballot, and the voterAddress, which is the same for both for obvious reason
+            emit VoteBoothST.BallotModified(_oldBallotId: oldBallotId, _newBallotId: newBallotId, _voterAddress: newBallotOwner)
+
+
+        }
+        // The last possible case is that something else was there instead, which should not happen in any circumstance. Store he Ballot anyways but emit a NonNilTokenReturned event in the process.
+        else {
+            // Replace the Ballot by whatever non-nil resource was in that Ballot owner slot
+            let newBallotId: UInt64 = ballot.id
+            let newBallotOwner: Address = ballot.ballotOwner
+
+            let nonNilResource: @AnyResource <- self.submittedBallots[ballot.ballotOwner] <- ballot
+
+            // Emit the event and destroy the non nil resource
+            emit VoteBoothST.NonNilTokenReturned(_tokenType: nonNilResource.getType())
+
+            destroy nonNilResource
+        }
     }
 
     /*
-        This function should be
+        This function is quite important but also very simple. It should only be invoked by the Tally contract
     */
-    access(Admin) fun withdrawBallot(ballotOwner: Address): @VoteBoothST.Ballot {
-        let vote: @{NonFungibleToken.NFT} <- self.ownedNFTs.remove(key: withdrawID) ??
+    // TODO: Create a 'TallyAdmin' entitlement in the Tally contract (at some point) and replace the current 'BoothAdmin' entitlement with it. This means that not even this contract deployer can withdraw Ballots willy nilly. Only the Tally contract should be able to withdraw Ballots from this resource. This is kinda tricky to do, but I think it should be possible to do.
+    access(BoothAdmin) fun withdrawBallot(ballotOwner: Address): @VoteBoothST.Ballot {
+        // Standard NonFungibleToken.Collection.withdraw behaviour. I don't need any more fancy bells and whistles with this one, really.
+        let vote: @VoteBoothST.Ballot <- self.submittedBallots.remove(key: ballotOwner) ??
         panic(
-            "Unable to retrieve a vote with id "
-            .concat(withdrawID.toString())
+            "Unable to retrieve a vote from owner "
+            .concat(ballotOwner.toString())
         )
 
         return <- vote
+    }
+
+    // Simple function just to check how many Ballots were submitted thus far
+    access(all) view fun getSubmittedBallotCount(): Int {
+        return self.submittedBallots.length
+    }
+
+    // Another simple function that simply returns if a Ballot for a given address is already in storage (was submitted) or not. This function is BoothAdmin protected to preserve voter privacy as much as possible. I don't anyone other than the contract deployer to be able to determine if a given voter has vote already or not.
+    access(BoothAdmin) view fun getIfOwnerVoted(ballotOwner: Address): Bool {
+        // Grab a reference to a potential Ballot in the position 'ballotOwner' and test if it is a nil or not. Return false or true accordingly
+        let resourceRef: &AnyResource? = &self.submittedBallots[ballotOwner]
+
+        if (resourceRef.getType() == Type<Never?>() || resourceRef.getType() != Type<&VoteBoothST.Ballot?>()) {
+            // If the resource is a nil (which corresponds to type Never?) or some other type than the VoteBoothST.Ballot, return a false. There's no valid Ballot submitted under this address
+            return false
+        }
+
+        // If the above condition is not triggered, the resource is of the correct type, so return a true instead
+        return true
     }
 
     access(all) view fun saySomething(): String {
@@ -509,10 +577,8 @@ access(all) resource BallotBox {
     }
 
     // The idea with protecting the constructor with an entitlement is to prevent users other than the deployer to create these resources
-    access(Admin) init() {
-        self.ownedNFTs <- {}
-        self.supportedTypes = {}
-        self.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
+    access(BoothAdmin) init() {
+        self.submittedBallots <- {}
     }
 }
 
@@ -520,7 +586,7 @@ access(all) resource BallotBox {
 
 // ----------------------------- BURN BOX BEGIN ----------------------------------------------------
 /*
-    Okey, since I added a whole security layer around the minting and burning of Ballots (through the OwnerControl), I now have a problem: how can voter burn a Ballot in his/her VoteBox, without Admin access to a BallotPrinterAdmin, and while maintaining data consistency in the OwnerControl resource, given that, obviously, they don't have access to this resource?
+    Okey, since I added a whole security layer around the minting and burning of Ballots (through the OwnerControl), I now have a problem: how can voter burn a Ballot in his/her VoteBox, without BoothAdmin access to a BallotPrinterAdmin, and while maintaining data consistency in the OwnerControl resource, given that, obviously, they don't have access to this resource?
     The solution is to create a (sort of) another Collection, but one without a withdraw function. This collection, which I'm calling BurnBox, to keep things consistent, can be used by any voter that wishes to burn their Ballot. Ballots deposited in this box have no other "exit" other than getting burned because... I'm writing it as so! Man, you gotta love blockchain and smart contracts. No other technology allows me this kind of control! Even if the deployer "forgets" to burn the Ballots in this box (unless I can came up with some sort of periodic burn function of sorts), there's no way to retrieve a Ballot that went into this box. Either they get burned or they stay in there forever.
 */
 access(all) resource BurnBox{
@@ -572,17 +638,17 @@ access(all) resource BurnBox{
     }
     
     // Get a list of Ids of the Ballots set to burn
-    access(Admin) fun getBallotsToBurn(): [UInt64] {
+    access(BoothAdmin) fun getBallotsToBurn(): [UInt64] {
         return self.ballotsToBurn.keys
     }
 
     // Simple function to determine how many ballots are set to be burn
-    access(Admin) fun howManyBallotsToBurn(): Int {
+    access(BoothAdmin) fun howManyBallotsToBurn(): Int {
         return self.ballotsToBurn.length
     }
 
     // This is the other important function in this resource. Think of this as the "empty garbage" button. It turns the incinerator on and burns all ballots stored in the internal dictionary. Because of access issues, I kinda need to replicate the burn function from the ballotPrinterAdmin resource
-    access(Admin) fun burnAllBallots(): Void {
+    access(BoothAdmin) fun burnAllBallots(): Void {
         // Get all the dictionary keys in a nice UInt64 list for iteration purposes
         let ballotIdsToBurn: [UInt64] = self.ballotsToBurn.keys
 
@@ -665,10 +731,10 @@ access(all) resource BurnBox{
 
 // ----------------------------- BALLOT PRINTER BEGIN ----------------------------------------------
 /*
-    To protect the most sensible functions of the BallotPrinterAdmin resource, namely the printBallot function, I'm protecting it with a custom 'Admin' entitlement defined at the contract level.
+    To protect the most sensible functions of the BallotPrinterAdmin resource, namely the printBallot function, I'm protecting it with a custom 'BoothAdmin' entitlement defined at the contract level.
     This means that, in order to have the 'printBallot' and 'sot' available in a &BallotPrinterAdmin, I need an authorized reference instead of a normal one.
-    Authorized references are indicated with a 'auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin' and these can only be successfully obtained from the
-    'account.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(PATH)', instead of the usual 'account.capabilities.borrow...'
+    Authorized references are indicated with a 'auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin' and these can only be successfully obtained from the
+    'account.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin>(PATH)', instead of the usual 'account.capabilities.borrow...'
     Because I now need to access the 'storage' subset of the Flow API, I necessarily need to obtain this reference from the transaction signer and no one else! The transaction need to be signed by the deployed to work! Cool, that's exactly what I want!
     It is now impossible to call the 'printBallot' function from a reference obtained by the usual, capability-based reference retrievable by a simple account reference, namely, from 'let account: &Account = getAccount(accountAddress)'
 
@@ -679,7 +745,7 @@ access(all) resource BurnBox{
     access(all) resource BallotPrinterAdmin {
         // Use this parameter to store the contract owner, given that this resource is only (can only) be created in the contract constructor, and use it to prevent the contract owner from voting. It's a simple but probably necessary precaution.
 
-        access(Admin) fun printBallot(voterAddress: Address): @Ballot {
+        access(BoothAdmin) fun printBallot(voterAddress: Address): @Ballot {
             pre {
                 // First, ensure that the contract owner (obtainable via self.owner!.address) does not match the address provided.
                 self.owner!.address != voterAddress: "The contract owner is not allowed to vote!"
@@ -746,10 +812,10 @@ access(all) resource BurnBox{
         }
 
         /*
-            This function receives the identification number of a token that was minted by the Admin Ballot printer and removes all entries from the internal dictionaries. This is useful for when a token is burned, so that the internal contract data structure maintains its consistency.
-            For obvious reasons, this function is also Admin entitlement protected. Also, I've decided to mix the burnBallot function with this one to minimize the probability of creating inconsistencies in these structures
+            This function receives the identification number of a token that was minted by the BoothAdmin Ballot printer and removes all entries from the internal dictionaries. This is useful for when a token is burned, so that the internal contract data structure maintains its consistency.
+            For obvious reasons, this function is also BoothAdmin entitlement protected. Also, I've decided to mix the burnBallot function with this one to minimize the probability of creating inconsistencies in these structures
         */
-        access(Admin) fun burnBallot(ballotToBurn: @VoteBoothST.Ballot): Void {
+        access(BoothAdmin) fun burnBallot(ballotToBurn: @VoteBoothST.Ballot): Void {
             // Get an authorized reference to the OwnerControl resource with a Remove modifier
             let ownerAccount: &Account = getAccount(self.owner!.address)
 

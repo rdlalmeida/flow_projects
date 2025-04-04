@@ -1,7 +1,7 @@
 import "VoteBoothST"
 
 transaction() {
-    prepare(signer: auth(VoteBoothST.Admin) &Account) {
+    prepare(signer: auth(VoteBoothST.BoothAdmin) &Account) {
         log(
             "Current ballotOwners: "
         )

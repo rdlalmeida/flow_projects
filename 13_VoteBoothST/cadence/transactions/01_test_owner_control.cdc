@@ -1,20 +1,20 @@
 // NOTE: This stupid, stupid transaction crashes by no apparent reason when run in the normal emulator. But, if run as a test, it works fine! Go figure... The Flow dudes need to fix the CLI ASAP!
 
-// LOL! This is actually working as it is supposed to!! The objective with setting the 'set' and 'remove' functions from the OwnerControl resource is to prevent these from being executed from outside of the account (hence why I created those with access(account)), i.e., these can only be executed from within other resources stored in the same account (such as from within the BallotPrinterAdmin resource), which is the contract deployer (Admin) account! I should NOT be able to directly execute these functions from outside of the account, such as this transaction for instance, hence why it is complaining about it!!! As it should! This shit is actually working as I want it to!!
+// LOL! This is actually working as it is supposed to!! The objective with setting the 'set' and 'remove' functions from the OwnerControl resource is to prevent these from being executed from outside of the account (hence why I created those with access(account)), i.e., these can only be executed from within other resources stored in the same account (such as from within the BallotPrinterAdmin resource), which is the contract deployer (BoothAdmin) account! I should NOT be able to directly execute these functions from outside of the account, such as this transaction for instance, hence why it is complaining about it!!! As it should! This shit is actually working as I want it to!!
 
 import "VoteBoothST"
 
 transaction(someAddress: Address, anotherAddress: Address) {
-    let ownerControlRef: auth(VoteBoothST.Admin) &VoteBoothST.OwnerControl
+    let ownerControlRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.OwnerControl
     let ownerAddress: Address
     let testAddress: Address
-    let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
+    let ballotPrinterRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin
 
     prepare(signer: auth(Storage, Capabilities) &Account) {
         self.ownerAddress = signer.address
         self.testAddress = someAddress
         // Test the OwnerControl resource by pulling an authorized reference and running some functions of it
-        self.ownerControlRef = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.OwnerControl>(from: VoteBoothST.ownerControlStoragePath)
+        self.ownerControlRef = signer.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.OwnerControl>(from: VoteBoothST.ownerControlStoragePath)
         ??
         panic(
             "Unable to retrieve a valid &VoteBoothST.OwnerControl at "
@@ -24,9 +24,9 @@ transaction(someAddress: Address, anotherAddress: Address) {
         )
 
         // I need a printerAdminRef to mint a few test Ballots!
-        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
+        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
-            "Unable to retrieve a valid auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin at "
+            "Unable to retrieve a valid auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin at "
             .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())
             .concat(" for account ")
             .concat(signer.address.toString())
@@ -70,7 +70,7 @@ transaction(someAddress: Address, anotherAddress: Address) {
 
         /*
             I've devised the OwnerControl resource with set and remove function that have 'access(account)' as access control. This means that to set or remove entries to the ballotOwners and owners dictionaries can only happen through contract functions or other resources stored in the same account.
-            So, knowing this, I've restricted this function to the printBallot and burnBallot function from the ballotPrinterAdmin resource, which in itself if already restricted with the VoteBoothST.Admin entitlement! In other words, only the contract deployer has this entitlement (because I've defined it in the contract itself) and only he/she can get an authorized reference to use the printBallot and burnBallot functions.
+            So, knowing this, I've restricted this function to the printBallot and burnBallot function from the ballotPrinterAdmin resource, which in itself if already restricted with the VoteBoothST.BoothAdmin entitlement! In other words, only the contract deployer has this entitlement (because I've defined it in the contract itself) and only he/she can get an authorized reference to use the printBallot and burnBallot functions.
             This to say that, the only way I have to change these dictionaries is to print and burn Ballots, and only the contract deployer is able to sign a transaction (this one) to do so.
         */
 

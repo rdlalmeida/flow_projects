@@ -1,7 +1,7 @@
 import "VoteBoothST"
 
 transaction() {
-    prepare(signer: auth(Storage, Capabilities, VoteBoothST.Admin) &Account) {
+    prepare(signer: auth(Storage, Capabilities, VoteBoothST.BoothAdmin) &Account) {
     }
 
     execute {

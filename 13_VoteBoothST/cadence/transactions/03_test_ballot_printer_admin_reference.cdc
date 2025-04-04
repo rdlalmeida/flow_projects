@@ -1,13 +1,13 @@
 import "VoteBoothST"
 
 transaction(newVoter: Address) {
-    let printerReference: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
+    let printerReference: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin
     let ownerAddress: Address
 
     prepare(signer: auth(Capabilities, Storage) &Account) {
         self.ownerAddress = signer.address
 
-        self.printerReference = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
+        self.printerReference = signer.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
             "Unable to get a &VoteBoothST.BallotPrinterAdmin from path "
             .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())

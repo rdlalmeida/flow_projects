@@ -8,7 +8,7 @@ import "NonFungibleToken"
 */
 
 transaction(voteBoxAccounts: [Address]) {
-    let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
+    let ballotPrinterRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin
     var voteBoxRefs: [&{NonFungibleToken.Receiver}]
     var recipientAddresses: [Address]
 
@@ -18,7 +18,7 @@ transaction(voteBoxAccounts: [Address]) {
         self.recipientAddresses = []
 
         // Prepare the base references
-        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
+        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
             "Unable to retrieve a valid &VoteBoothST.BallotPrinterAdmin at "
             .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())

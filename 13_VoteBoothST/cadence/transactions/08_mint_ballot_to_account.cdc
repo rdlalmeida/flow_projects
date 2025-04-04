@@ -2,7 +2,7 @@ import "VoteBoothST"
 import "NonFungibleToken"
 
 transaction(recipient: Address) {
-    let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
+    let ballotPrinterRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin
     let voteBoxRef: &{NonFungibleToken.Receiver}
     let recipientAddress: Address
     let ownerControlRef: &VoteBoothST.OwnerControl
@@ -32,7 +32,7 @@ transaction(recipient: Address) {
 
         self.recipientAddress = recipient
 
-        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
+        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
             "The signer does not store a VoteBoothST.BallotPrinterAdmin object at the path "
             .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())

@@ -2,15 +2,15 @@ import "VoteBoothST"
 import "NonFungibleToken"
 
 transaction(testAddress: Address) {
-    let BallotBoxRef: auth(NonFungibleToken.Withdraw) &VoteBoothST.BallotBox
-    let ballotPrinterRef: auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin
+    let ballotBoxRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotBox
+    let ballotPrinterRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin
     let signerAddress: Address
     let ownerControlRef: &VoteBoothST.OwnerControl
 
-    prepare(signer: auth(Capabilities, Storage, VoteBoothST.Admin) &Account) {
-        self.BallotBoxRef = signer.storage.borrow<auth(NonFungibleToken.Withdraw) &VoteBoothST.BallotBox>(from: VoteBoothST.ballotBoxStoragePath) ??
+    prepare(signer: auth(Capabilities, Storage, VoteBoothST.BoothAdmin) &Account) {
+        self.ballotBoxRef = signer.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotBox>(from: VoteBoothST.ballotBoxStoragePath) ??
         panic(
-            "Unable to retrieve a valid &ValidBoothST.BallotBox reference from "
+            "Unable to retrieve a valid auth(VoteBoothST.BoothAdmin) &ValidBoothST.BallotBox reference from "
             .concat(VoteBoothST.ballotBoxStoragePath.toString())
             .concat(" for account ")
             .concat(signer.address.toString())
@@ -18,9 +18,9 @@ transaction(testAddress: Address) {
 
         self.signerAddress = signer.address
 
-        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.Admin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
+        self.ballotPrinterRef = signer.storage.borrow<auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin>(from: VoteBoothST.ballotPrinterAdminStoragePath) ??
         panic(
-            "Unable to retrieve a valid &VoteBoothST.BallotPrinterAdmin at "
+            "Unable to retrieve a valid auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin at "
             .concat(VoteBoothST.ballotPrinterAdminStoragePath.toString())
             .concat(" from account ")
             .concat(self.signerAddress.toString())
@@ -36,25 +36,25 @@ transaction(testAddress: Address) {
     }
 
     execute {
+        let currentBallotBoxSize: Int = self.ballotBoxRef.getSubmittedBallotCount()
+
         if (VoteBoothST.printLogs) {
             log(
-                "Ballot Collection reference retrieved from account "
+                "BallotBox reference retrieved from account "
                 .concat(VoteBoothST.ballotBoxPublicPath.toString())
                 .concat(" currently contains ")
-                .concat(self.BallotBoxRef.ownedNFTs.length.toString())
+                .concat(currentBallotBoxSize.toString())
                 .concat(" Ballots in it ")
             )
         }
 
-        log("Testing the Collection's 'saySomething' function: ")
-        log(self.BallotBoxRef.saySomething())
+        log("Testing the BallotBox's 'saySomething' function: ")
+        log(self.ballotBoxRef.saySomething())
 
         let testBallot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: testAddress)
 
         let testBallotId: UInt64 = testBallot.id
         let testBallotOwner: Address = testBallot.ballotOwner
-
-        let currentCollectionSize: Int = self.BallotBoxRef.getLength()
 
         // Validate the consistency of the OwnerControl structure
         var storedBallotOwner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testBallotId)
@@ -109,21 +109,45 @@ transaction(testAddress: Address) {
         }
 
         // Deposit the ballot into the collection
-        self.BallotBoxRef.deposit(token: <- testBallot)
+        self.ballotBoxRef.submitBallot(ballot: <- testBallot)
 
-        let newCollectionSize: Int = self.BallotBoxRef.getLength()
+        // Check that the function that verifies if the ballotOwner has a valid submitted Ballot returns true
+        var ballotSubmitted: Bool = self.ballotBoxRef.getIfOwnerVoted(ballotOwner: testBallotOwner)
 
-        if (currentCollectionSize + 1 != newCollectionSize) {
+        if (!ballotSubmitted) {
+            // If I got a false in this one
+            panic(
+                "ERROR: Ballot owner "
+                .concat(testBallotOwner.toString())
+                .concat(" does not have a valid Ballot submitted yet!")
+            )
+        }
+
+        // Conversely, there should be no Ballots submitted by the contract deployer. Test this as well
+        ballotSubmitted = self.ballotBoxRef.getIfOwnerVoted(ballotOwner: self.signerAddress)
+
+        if (ballotSubmitted) {
+            // If there's a Ballot submitted under this contract deployer's address, that's clearly an error as well!
+            panic(
+                "ERROR: The VotingBoothST contract deployer "
+                .concat(self.signerAddress.toString())
+                .concat(" has a valid Ballot submitted!")
+            )
+        }
+
+        let newBallotBoxSize: Int = self.ballotBoxRef.getSubmittedBallotCount()
+
+        if (currentBallotBoxSize + 1 != newBallotBoxSize) {
             panic(
                 "Collection size mismatch detected: Initial collection size: "
-                .concat(currentCollectionSize.toString())
+                .concat(currentBallotBoxSize.toString())
                 .concat(" Ballots. After depositing one ballot, the collection size is now ")
-                .concat(newCollectionSize.toString())
+                .concat(newBallotBoxSize.toString())
                 .concat(" Ballots!")
             )
         }
 
-        let depositedBallot: @VoteBoothST.Ballot <- self.BallotBoxRef.withdraw(withdrawID: testBallotId) as! @VoteBoothST.Ballot
+        let depositedBallot: @VoteBoothST.Ballot <- self.ballotBoxRef.withdrawBallot(ballotOwner: testBallotOwner)
 
         let depositedBallotId: UInt64 = depositedBallot.id
 
