@@ -314,13 +314,10 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
         access(all) fun deposit(token: @{NonFungibleToken.NFT}) {
             // Each one of these boxes can only hold one vote of one type at a time. Validate this
-            if (self.ownedNFTs.length > 0) {
-                panic(
-                    "Account "
-                    .concat(self.owner!.address.toString())
-                    .concat(" already has a Ballot in storage")
-                )
+            pre {
+                self.ownedNFTs.length == 0: "Account ".concat(self.owner!.address.toString()).concat(" already has a Ballot in storage. Submit it or burn it to continue.")
             }
+
             let ballot: @VoteBoothST.Ballot <- token as! @VoteBoothST.Ballot
             let randomResource: @AnyResource? <- self.ownedNFTs[ballot.id] <- ballot
 
@@ -413,8 +410,9 @@ access(all) contract VoteBoothST: NonFungibleToken {
             NOTE: This function is for TEST and DEBUG purposes only.
             This function returns the current option in a Ballot stored internally, or nil if there are none.
             I've set the protections to prevent people other than the owner in the Ballot resource itself. If someone else tries to fetch the current vote other than the Ballot owner (which is also the VoteBox owner by obvious reasons), it fails a pre condition and panics. If there are no Ballots yet in the VoteBox, a nil is returned instead.
+            TODO: Delete or protect this function with a proper entitlement before moving this to PROD
         */
-        access(all) fun getCurrentVote(): Int? {
+        access(BoothAdmin) fun getCurrentVote(): Int? {
             // Grab the id for the Ballot in storage, if any
             let ballotIDs: [UInt64] = self.getIDs()
 
