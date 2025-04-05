@@ -9,7 +9,7 @@ import "NonFungibleToken"
 
 transaction(voteBoxAccounts: [Address]) {
     let ballotPrinterRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin
-    var voteBoxRefs: [&{NonFungibleToken.Receiver}]
+    var voteBoxRefs: [&VoteBoothST.VoteBox]
     var recipientAddresses: [Address]
 
     prepare(signer: auth(Storage) &Account) {
@@ -31,47 +31,16 @@ transaction(voteBoxAccounts: [Address]) {
             // Try to catch a temporary reference and validate it
             let tempAccount: &Account = getAccount(voteBoxAccount)
 
-            let tempReference: &{NonFungibleToken.Receiver}? = tempAccount.capabilities.borrow<&{NonFungibleToken.Collection}>(VoteBoothST.voteBoxPublicPath)
+            let tempVoteBoxRef: &VoteBoothST.VoteBox = tempAccount.capabilities.borrow<&VoteBoothST.VoteBox>(VoteBoothST.voteBoxPublicPath) ??
+            panic(
+                "Unable to retrieve a valid &VoteBoothST.VoteBox at "
+                .concat(VoteBoothST.voteBoxPublicPath.toString())
+                .concat(" for account ")
+                .concat(voteBoxAccount.toString())
+            )
 
-            // If the previous operation failed, emit the proper event and continue
-            if (tempReference == nil) {
-                // Unable to obtain a valid reference (reason 1). Emit the respective event
-                VoteBoothST.emitBallotNotDelivered(voterAddress: voteBoxAccount, reason: 1)
-
-                // Nothing more to do with this one. Continue to the next address. Log a simple message for testing purposes
-                log(
-                    "Unable to retrieve a valid &VoteBoothST.VoteBox at "
-                    .concat(VoteBoothST.voteBoxPublicPath.toString())
-                    .concat(" for account ")
-                    .concat(voteBoxAccount.toString())
-                )
-                continue
-            }
-            else {
-                // The reference is valid. Check if the VoteBox collection is empty or not
-                let voteBoxRef: &VoteBoothST.VoteBox = tempReference as! &VoteBoothST.VoteBox
-
-                if (voteBoxRef.getLength() > 0) {
-                    // The VoteBox in question is full (reason 2). Emit the event and continue
-                    VoteBoothST.emitBallotNotDelivered(voterAddress: voteBoxAccount, reason: 2)
-
-                    log(
-                        "The VoteBoothST.VoteBox retrieved at "
-                        .concat(VoteBoothST.voteBoxPublicPath.toString())
-                        .concat(" for account ")
-                        .concat(voteBoxAccount.toString())
-                        .concat(" is full! Cannot deposit any more ballots!")
-                    )
-
-                    continue
-                }
-                else {
-                    // All validations OK. Put the valid reference in the reference array and add the address to the valid users array
-                    self.voteBoxRefs.append(voteBoxRef)
-                    self.recipientAddresses.append(voteBoxAccount)
-
-                }
-            }
+            self.voteBoxRefs.append(tempVoteBoxRef)
+            self.recipientAddresses.append(voteBoxAccount)
         }
     }
 
@@ -83,7 +52,7 @@ transaction(voteBoxAccounts: [Address]) {
 
             let newBallotId: UInt64 = newBallot.id
 
-            self.voteBoxRefs[index].deposit(token: <- newBallot)
+            self.voteBoxRefs[index].depositBallot(ballot: <- newBallot)
 
             if (VoteBoothST.printLogs) {
                 log(

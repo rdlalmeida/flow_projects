@@ -46,7 +46,7 @@ transaction() {
             )
         }
 
-        let newVoteBox: @VoteBoothST.VoteBox <- VoteBoothST.createEmptyVoteBox()
+        let newVoteBox: @VoteBoothST.VoteBox <- VoteBoothST.createEmptyVoteBox(owner: signer.address)
 
         signer.storage.save<@VoteBoothST.VoteBox>(<- newVoteBox, to: VoteBoothST.voteBoxStoragePath)
 

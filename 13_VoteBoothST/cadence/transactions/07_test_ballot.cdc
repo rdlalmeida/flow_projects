@@ -80,26 +80,26 @@ transaction(testAddress: Address) {
             )
         }
 
-        let emptyVoteBox: @{NonFungibleToken.Collection} <- ballot.createEmptyCollection()
+        let emptyDummyCollection: @{NonFungibleToken.Collection} <- ballot.createEmptyCollection()
 
         if (VoteBoothST.printLogs) {
             log(
-                "Got a VoteBox with type: "
-                .concat(emptyVoteBox.getType().identifier)
+                "Got a DummyCollection with type: "
+                .concat(emptyDummyCollection.getType().identifier)
             )
         }
         
         // Check that the Collection was created empty
-        if(emptyVoteBox.getLength() != 0) {
+        if(emptyDummyCollection.getLength() != 0) {
             panic(
-                "ERROR: The VoteBox created is not empty! It was created with "
-                .concat(emptyVoteBox.getLength().toString())
+                "ERROR: The DummyCollection created is not empty! It was created with "
+                .concat(emptyDummyCollection.getLength().toString())
                 .concat(" elements in it! It should be empty!")
             )
         }
 
-        // Done. Destroy the emptyVoteBox
-        Burner.burn(<- emptyVoteBox)
+        // Done. Destroy the DummyCollection
+        destroy emptyDummyCollection
 
         // Time to test the function that return the election parameters
         let contractElectionName: String = VoteBoothST.getElectionName()

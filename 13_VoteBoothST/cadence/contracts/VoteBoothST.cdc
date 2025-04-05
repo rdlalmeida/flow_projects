@@ -49,6 +49,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
     // CUSTOM ENTITLEMENTS
     access(all) entitlement BoothAdmin
+    access(all) entitlement VoteBoxWithdraw
 
     // CUSTOM VARIABLES
     access(all) let _name: String
@@ -215,14 +216,10 @@ access(all) contract VoteBoothST: NonFungibleToken {
         access(all) view fun saySomething(): String {
             return "Hello from the VoteBoothST.Ballot Resource!"
         }
-
+        
+        // This is just another mandatory function from the NonFungibleToken standard. Return the DummyCollection in this case
         access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
-            let voteBox: @VoteBoothST.VoteBox <- create VoteBoothST.VoteBox()
-
-            // Add the @VoteBoothST.Ballot type to the list of allowed types to deposit in this collection
-            voteBox.supportedTypes[self.getType()] = true
-
-            return <- voteBox
+            return <- create VoteBoothST.DummyCollection()
         }
         
         access(all) view fun getElectionName(): String {
@@ -259,7 +256,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
         // NOTE: This function is for TEST and DEBUG purposes only. I mean, is not that serious given that I'm also going to encrypt the option value at a later stage, and this knowledge does violates voter privacy, but no one is going to die for it in a policy oriented democratic scenario. But just in case, this needs to be deleted/protected with an BoothAdmin entitlement before moving to a PROD environment. Worst case scenario, someone can calculate the tally before the "official" reveal. Bah, who cares really?
         // TODO: Delete or protect this function with BoothAdmin entitlement before moving to PROD.
-        access(contract) fun getVote(): Int {
+        access(account) fun getVote(): Int {
             pre {
                 self.owner != nil: "This function can only be invoked through a reference!"
                 self.owner!.address == self.ballotOwner: "Only the owner can invoke this function"
@@ -279,25 +276,26 @@ access(all) contract VoteBoothST: NonFungibleToken {
 // ----------------------------- BALLOT END --------------------------------------------------------
 
 // ----------------------------- VOTE BOX BEGIN ----------------------------------------------------
-    access(all) resource VoteBox: NonFungibleToken.Collection, Burner.Burnable {
-        access(all) var ownedNFTs: @{UInt64: {NonFungibleToken.NFT}}
+    access(all) resource VoteBox: Burner.Burnable {
+        /*
+            I'm only allowing one Ballot at a time in this VoteBox resource. The easier way is to define it as a single variable, with access(self) for maximum protection. But unfortunately, Flow/Cadence does like at all to mess around with nested resources unless they are set in some sort of storing structure. I can do this with an array, but a dictionary is better because it has a bunch of really useful base function
+        */
+        access(self) var storedBallots: @{UInt64: VoteBoothST.Ballot}
         
-        access(all) view fun getIDs(): [UInt64] {
-            return self.ownedNFTs.keys
-        }
+        // I'm going to use these variables to ease the access to the stored Ballot without having to load it or get a reference to it all the time. Since I'm only going to have one at a time, this works
+        access(self) var storedBallotOwner: Address?
+        access(self) var storedBallotId: UInt64?
 
-        access(contract) var supportedTypes: {Type: Bool}
-
-        access(all) view fun getSupportedNFTTypes(): {Type: Bool} {
-            return self.supportedTypes
-        }
-
-        access(all) view fun isSupportedNFTType(type: Type): Bool {
-            if (self.supportedTypes[type]!) {
-                return true
+        // Set the owner of this VoteBox at the constructor level to ensure that only this address can withdraw Ballots from it
+        access(self) let voteBoxOwner: Address
+        
+        // Simple function to determine if this VoteBox already has a Ballot in it or not
+        access(all) view fun hasBallot(): Bool {
+            if (self.storedBallots.length == 0) {
+                return false
             }
 
-            return false
+            return true
         }
 
         // A simple function to return the address of the account where this resource is currently stored. This only works if this function is executed through a reference.
@@ -312,62 +310,75 @@ access(all) contract VoteBoothST: NonFungibleToken {
             }
         }
 
-        access(all) fun deposit(token: @{NonFungibleToken.NFT}) {
+        access(all) fun depositBallot(ballot: @VoteBoothST.Ballot) {
             // Each one of these boxes can only hold one vote of one type at a time. Validate this
             pre {
-                self.ownedNFTs.length == 0: "Account ".concat(self.owner!.address.toString()).concat(" already has a Ballot in storage. Submit it or burn it to continue.")
+                // This pre-condition is everything really. It only allows the deposit of a Ballot if there are none stored yet. After storing one Ballot, it is impossible to deposit another one: this pre-condition stop this function for every self.storedBallots >= 1
+                self.storedBallots.length == 0: "Account ".concat(self.owner!.address.toString()).concat(" already has a Ballot in storage. Submit it or burn it to continue.")
             }
 
-            let ballot: @VoteBoothST.Ballot <- token as! @VoteBoothST.Ballot
-            let randomResource: @AnyResource? <- self.ownedNFTs[ballot.id] <- ballot
+            // Set the other internal properties first before losing access to the Ballot resource
+            self.storedBallotOwner = ballot.ballotOwner
+            self.storedBallotId = ballot.id
 
-            if (randomResource != nil) {
-                emit NonNilTokenReturned(_tokenType: randomResource.getType())
+            // Deposit the Ballot
+            let randomResource: @AnyResource? <- self.storedBallots[ballot.id] <- ballot
+
+            // This is a theoretically impossible scenario, but deal with it just in case.
+            if (randomResource.getType() == Type<@VoteBoothST.Ballot>()) {
+                panic(
+                    "ERROR: There was a @VoteBoothST.Ballot already stored in a VoteBox for address "
+                    .concat(self.owner!.address.toString())
+                    .concat(". This cannot happen!")
+                )
+            }
+            // The expectation is that, at all times, a type Never? is returned if the internal dictionary is empty. If that is not the case, emit the NonNilTokenReturned event, but proceed with the destruction of the randomResource
+            else if (randomResource.getType() != Type<Never?>()) {
+                emit VoteBoothST.NonNilTokenReturned(_tokenType: randomResource.getType())
             }
 
+            // Done with all of that. Destroy the random resource
             destroy randomResource
         }
 
-        access(all) view fun borrowNFT(_ id: UInt64): &{NonFungibleToken.NFT}? {
-            // I don't want people to be able to "borrow" the Ballot for obvious reasons
-            return nil
+        /*        
+            If the VoteBox has a Ballot, it returns its owner. If not, returns a nil instead, as usual. Getting the Ballot owner is pretty innocuous, but I'm protecting it with access(account) so that only the owner of the account can access it. This restricts this to transactions, which is OK. I don't want this kind of information out there to protect the voter privacy for as much as I can.
+            TODO: Delete/Protect this functions before moving to PROD. It's not a big deal, but it does sacrifices a tiny bit of voter privacy
+        */
+        access(all) fun getBallotOwner(): Address? {
+            // This one becomes super easy with the structure I'm using
+            return self.storedBallotOwner
         }
 
-        // If the VoteBox has a Ballot, it returns its owner. If not, returns a nil instead, as usual. Getting the Ballot owner is pretty innocuous, so keep this with access(all)
-        access(all) view fun getBallotOwner(): Address? {
-            if (self.ownedNFTs.length == 0) {
-                return nil
+        // TODO: This one needs to be deleted or protected before moving to PROD.
+        access(all) view fun getBallotId(): UInt64? {
+            // And this one too
+            return self.storedBallotId
+        }
+
+        // TODO: Test this one EXTENSIVELY! I need to be 100% sure that only the owner of the VoteBox can withdraw the stored Ballot! I'm setting this one as access(account) to achieve this but I really need to be sure 
+        access(VoteBoxWithdraw) fun withdrawBallot(): @VoteBoothST.Ballot {
+            pre {
+                self.owner != nil: "Withdraw Ballot function is only available through a reference."
+                self.storedBallots.length == 1: "No Ballots stored under the VoteBox for account ".concat(self.owner!.address.toString()).concat(". Cannot continue!")
+                self.voteBoxOwner == self.owner!.address : "Only the VoteBox owner can withdraw ballots! Operation not authorized!"
             }
 
-            // If I got here, there's a Ballot in storage. Get a reference to it
-            let ballotIds: [UInt64] = self.getIDs()
-
-            let ballotRef: &{NonFungibleToken.NFT}? = &self.ownedNFTs[ballotIds[ballotIds.length - 1]]
-
-            return (ballotRef as! &VoteBoothST.Ballot).ballotOwner
-        }
-
-        access(NonFungibleToken.Withdraw) fun withdraw(withdrawID: UInt64): @{NonFungibleToken.NFT} {
-            let ballot: @{NonFungibleToken.NFT} <- self.ownedNFTs.remove(key: withdrawID) ??
+            // If the precondition was not triggered, the assumption was that there's a self.storedBallotId properly set
+            let ballot: @VoteBoothST.Ballot <- self.storedBallots.remove(key: self.storedBallotId!) ??
             panic(
                 "No Ballots with id "
-                .concat(withdrawID.toString())
+                .concat(self.storedBallotId!.toString())
                 .concat(" found in storage for account ")
                 .concat(self.owner!.address.toString())
             )
 
+            // The Ballot is out and about to be returned. Set the internal storedBallotOwner and storedBallotId to nil first, to signal that there's nothing stored after this point
+            self.storedBallotOwner = nil
+            self.storedBallotId = nil
+
+            // Done. Return the Ballot finally
             return <- ballot
-        }
-
-        access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
-            // Create the VoteBox first
-            let voteBox: @VoteBoothST.VoteBox <- create VoteBoothST.VoteBox()
-
-            // Register the Ballot type to the supported types to allow this collection to receive VoteBoothST.Ballots
-            self.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
-
-            // Return the resource
-            return <- voteBox
         }
 
         access(all) fun saySomething(): String {
@@ -377,13 +388,15 @@ access(all) contract VoteBoothST: NonFungibleToken {
         // Set this function to be called whenever I destroy one of these VoteBoxes. IMPORTANT: For this to work, I need to use the Burner contract to destroy any VoteBoxes. If I simply use the 'destroy' function, this function is not called!
         access(contract) fun burnCallback() {
             // Prepare this to emit the VoteBoxDestroyed event, namely, check if there's any Ballot stored, and if it is, grab its Id first
-            let ballotIds: [UInt64] = self.getIDs()
-
-            let ballotId: UInt64? = (ballotIds.length == 0) ? nil : ballotIds[ballotIds.length - 1]
+            let ballotId: UInt64? = self.storedBallotId
 
             // If the ballotId is not nil, do this properly and burn the Ballot before finishing
             if (ballotId != nil) {
-                let ballotToBurn: @VoteBoothST.Ballot <- self.ownedNFTs.remove(key: ballotId!) as! @VoteBoothST.Ballot
+                let ballotToBurn: @VoteBoothST.Ballot <- self.storedBallots.remove(key: ballotId!)!
+
+                // Even though this resource is about to be destroyed, I'm super prickly with everything. Just to be consistent with the awesome programmer that I am, set the internal storedBallotOwner and storedBallotId to nil. It's pointless, but that how I roll
+                self.storedBallotId = nil
+                self.storedBallotOwner = nil
 
                 let voteBoothDeployer: Address = ballotToBurn.voteBoothDeployer
 
@@ -403,7 +416,8 @@ access(all) contract VoteBoothST: NonFungibleToken {
             }
 
             // Emit the respective event. NOTE: any ballotId emitted with this event refers to a Ballot set to burn in a BurnBox and not a Ballot that was destroyed
-            emit VoteBoothST.VoteBoxDestroyed(_ballotsInBox: ballotIds.length, _ballotId: ballotId)
+            // Just a reminder: I'm using a ternary operator to define the number of Ballots in the box that was destroyed. It reads as: is ballotId a nil ? if true, no Ballots in storage, thus set a 0. If not, there was one Ballot in storage, thus set a 1 instead.
+            emit VoteBoothST.VoteBoxDestroyed(_ballotsInBox: ballotId == nil ? 0 : 1, _ballotId: ballotId)
         }
 
         /*
@@ -414,58 +428,49 @@ access(all) contract VoteBoothST: NonFungibleToken {
         */
         access(BoothAdmin) fun getCurrentVote(): Int? {
             // Grab the id for the Ballot in storage, if any
-            let ballotIDs: [UInt64] = self.getIDs()
-
-            if (ballotIDs.length == 0) {
+            if (self.storedBallots.length == 0) {
                 // If there are no Ballots stored yet, return a nil
                 return nil
             }
-            else if (ballotIDs.length > 1) {
+            else if (self.storedBallots.length > 1) {
                 // If by some reason there are more than 1 Ballot stored, panic. I've made all sort of checks up to this point in this sense, but one more doesn't hurt. The contract is gigantic, but its worth it
                 panic(
                     "ERROR: VoteBox for account "
                     .concat(self.owner!.address.toString())
                     .concat(" has ")
-                    .concat(ballotIDs.length.toString())
+                    .concat(self.storedBallots.length.toString())
                     .concat(" Ballots in it. Only one is allowed, max!")
                 )
             }
             
-            // Grab a reference to the ballot stored, but initially retrieve it as the higher &{NonFungibleToken.NFT}
-            let nftRef: &{NonFungibleToken.NFT}? = &self.ownedNFTs[ballotIDs[0]]
+            // Grab a reference to the ballot stored
+            let storedBallotRef: &VoteBoothST.Ballot? = &self.storedBallots[self.storedBallotId!]
 
             // Just to be sure, check if the reference obtained is not nil. Panic if, by some reason, it is
-            if (nftRef == nil) {
+            if (storedBallotRef == nil) {
                 panic(
                     "Unable to get a valid &{NonFungibleToken.NFT} for ballotId "
-                    .concat(ballotIDs[0].toString())
+                    .concat(self.storedBallotId!.toString())
                 )
             }
 
-            // Downcast the higher ref to the specific one the we need
-            let ballotRef: &VoteBoothST.Ballot = nftRef! as! &VoteBoothST.Ballot
-
-            // And invoke the function from the ballot reference itself.
-            return ballotRef.getVote()
+            // Invoke the function from the ballot reference itself.
+            return storedBallotRef!.getVote()
         }
 
-        init() {
-            self.ownedNFTs <- {}
-            self.supportedTypes = {}
+        init(ownerAddress: Address) {
+            self.storedBallots <- {}
+            self.storedBallotOwner = nil
+            self.storedBallotId = nil
+            self.voteBoxOwner = ownerAddress
         }
     }
 // ----------------------------- VOTE BOX END ------------------------------------------------------
 
 // Contract-level Collection creation function
-access(all) fun createEmptyVoteBox(): @VoteBoothST.VoteBox {
-    // Create a new VoteBox
-    let voteBox: @VoteBoothST.VoteBox <- create VoteBoothST.VoteBox()
-
-    // Set it to be able to store @VoteBoothST.Ballots
-    voteBox.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
-
-    // Return it
-    return <- voteBox
+access(all) fun createEmptyVoteBox(owner: Address): @VoteBoothST.VoteBox {
+    // This one is simple
+    return <- create VoteBoothST.VoteBox(ownerAddress: owner)
 }
 
 // ----------------------------- BALLOT BOX BEGIN --------------------------------------------------
@@ -641,7 +646,7 @@ access(all) resource BurnBox{
     }
 
     // Simple function to determine how many ballots are set to be burn
-    access(BoothAdmin) fun howManyBallotsToBurn(): Int {
+    access(all) fun howManyBallotsToBurn(): Int {
         return self.ballotsToBurn.length
     }
 
@@ -878,7 +883,55 @@ access(all) resource BurnBox{
 // ----------------------------- BALLOT PRINTER END ------------------------------------------------
 
 // ----------------------------- CONTRACT LOGIC BEGIN ----------------------------------------------
-    
+    // Dummy Collection just to have this contract to conform to the NonFungibleToken standard
+    access(all) resource DummyCollection: NonFungibleToken.Collection {
+        access(all) var ownedNFTs: @{UInt64: {NonFungibleToken.NFT}}
+
+        access(all) fun deposit(token: @{NonFungibleToken.NFT}) {
+            // Check if a @VoteBoothST.Ballot is being deposited and panic if that's the case. I don't want these NFTs to be able to be deposited in this DummyCollection
+            // Try to force cast this token to a @VoteBoothST.Ballot. If successful, panic because I don't want this token to be deposited. Otherwise, force-casting a non-Ballot to a Ballot resource is going to panic by itself. Either way, this function becomes unusable, which is exactly what I want
+            let dummyBallot: @VoteBoothST.Ballot <- token as! @VoteBoothST.Ballot
+
+            // Destroy this token in any case. I just need to create a function with this name but I don't actually need to deposit it into the internal dictionary.
+            destroy dummyBallot
+        }
+
+        access(all) view fun getLength(): Int {
+            return self.ownedNFTs.length
+        }
+
+        access(all) view fun getSupportedNFTTypes(): {Type: Bool} {
+            // Return an empty dictionary in this case. This is just a dummy function
+            return {}
+        }
+
+        access(all) view fun isSupportedNFTType(type: Type): Bool {
+            // This one always returns true. All types are supported. This is irrelevant because I'm doing my own Collections.
+            return true
+        }
+
+        access(all) view fun borrowNFT(_ id: UInt64): &{NonFungibleToken.NFT}? {
+            // Don't even bother with this one. It returns an option, so return nil and get on with it
+            return nil
+        }
+
+        access(NonFungibleToken.Withdraw) fun withdraw(withdrawID: UInt64): @{NonFungibleToken.NFT} {
+            // For this case, create a dummy, empty NFT and return it
+            let dummyNFT: @{NonFungibleToken.NFT}? <- self.ownedNFTs.remove(key: withdrawID)
+
+            // This is going to break this function because the dummyNFT is going to be a nil 100% of the time. I don't care really
+            return <- dummyNFT!
+        }
+
+        access(all) fun createEmptyCollection(): @{NonFungibleToken.Collection} {
+            return <- create DummyCollection()
+        }
+
+        init() {
+            self.ownedNFTs <- {}
+        }
+    }
+
     // Just a bunch of getters for the main internal parameters
     access(all) view fun getElectionName(): String {
         return self._name
@@ -896,13 +949,9 @@ access(all) resource BurnBox{
         return self._options
     }
 
+    // This is another mandatory NonFungibleToken standard function. Return the DummyCollection
     access(all) fun createEmptyCollection(nftType: Type): @{NonFungibleToken.Collection} {
-        let voteBox: @VoteBoothST.VoteBox <- create VoteBoothST.VoteBox()
-
-        // Add the @VoteBoothST.Ballot type to the allowed deposit types for this collection
-        voteBox.supportedTypes[Type<@VoteBoothST.Ballot>()] = true
-
-        return <- voteBox
+        return <- create DummyCollection()
     }
 
     access(all) view fun saySomething(): String {
@@ -1042,10 +1091,6 @@ access(all) resource BurnBox{
         }
 
         self._options = elements
-
-        log(
-            electionOptions
-        )
 
         self.totalBallotsMinted = 0
         self.totalBallotsSubmitted = 0

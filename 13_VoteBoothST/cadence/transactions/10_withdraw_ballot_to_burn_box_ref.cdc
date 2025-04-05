@@ -4,11 +4,11 @@ import "NonFungibleToken"
 // This transaction tests the deposit/withdraw mechanics for a referenced VoteBox. It expects a Ballot in the user's VoteBox and deposits it to the contract deployer's BurnBox for future processing
 
 transaction(deployerAddress: Address) {
-    let voteBoxRef: auth(NonFungibleToken.Withdraw) &VoteBoothST.VoteBox
+    let voteBoxRef: auth(VoteBoothST.VoteBoxWithdraw) &VoteBoothST.VoteBox
     let burnBoxRef: &VoteBoothST.BurnBox
     let signerAddress: Address
 
-    prepare(signer: auth(Storage) &Account) {
+    prepare(signer: auth(VoteBoothST.VoteBoxWithdraw, Storage) &Account) {
         // Grab the reference for the BurnBox in the contract deployer account
         let deployerAccount: &Account = getAccount(deployerAddress)
         self.burnBoxRef = deployerAccount.capabilities.borrow<&VoteBoothST.BurnBox>(VoteBoothST.burnBoxPublicPath) ??
@@ -19,7 +19,7 @@ transaction(deployerAddress: Address) {
             .concat(deployerAddress.toString())
         )
 
-        self.voteBoxRef = signer.storage.borrow<auth(NonFungibleToken.Withdraw) &VoteBoothST.VoteBox>(from: VoteBoothST.voteBoxStoragePath) ??
+        self.voteBoxRef = signer.storage.borrow<auth(VoteBoothST.VoteBoxWithdraw) &VoteBoothST.VoteBox>(from: VoteBoothST.voteBoxStoragePath) ??
         panic(
             "Unable to retrieve a valid &VoteBoothST.VoteBox at "
             .concat(VoteBoothST.voteBoxStoragePath.toString())
@@ -31,26 +31,15 @@ transaction(deployerAddress: Address) {
     }
 
     execute {
-        let ballotIDs: [UInt64] = self.voteBoxRef.getIDs()
-
-        if (ballotIDs.length == 0) {
+        if (!self.voteBoxRef.hasBallot()) {
             panic(
                 "VoteBox retrieved from account "
                 .concat(self.signerAddress.toString())
                 .concat(" has 0 Ballots!")
             )
         }
-        else if (ballotIDs.length > 1) {
-            panic(
-                "VoteBox retrieved from account "
-                .concat(self.signerAddress.toString())
-                .concat(" has ")
-                .concat(ballotIDs.length.toString())
-                .concat(" ballots in it! Only one Ballot is allowed per VoteBox!")
-            )
-        }
 
-        let ballot: @VoteBoothST.Ballot <- self.voteBoxRef.withdraw(withdrawID: ballotIDs[ballotIDs.length - 1]) as! @VoteBoothST.Ballot
+        let ballot: @VoteBoothST.Ballot <- self.voteBoxRef.withdrawBallot()
 
         let ballotToBurnId: UInt64 = ballot.id
         let ballotToBurnOwner: Address = ballot.ballotOwner

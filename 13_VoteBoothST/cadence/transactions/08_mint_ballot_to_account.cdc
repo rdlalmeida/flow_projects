@@ -3,7 +3,7 @@ import "NonFungibleToken"
 
 transaction(recipient: Address) {
     let ballotPrinterRef: auth(VoteBoothST.BoothAdmin) &VoteBoothST.BallotPrinterAdmin
-    let voteBoxRef: &{NonFungibleToken.Receiver}
+    let voteBoxRef: &VoteBoothST.VoteBox
     let recipientAddress: Address
     let ownerControlRef: &VoteBoothST.OwnerControl
 
@@ -21,11 +21,11 @@ transaction(recipient: Address) {
             )
         }
 
-        self.voteBoxRef = recipientAccount.capabilities.borrow<&{NonFungibleToken.Collection}>(VoteBoothST.voteBoxPublicPath) ??
+        self.voteBoxRef = recipientAccount.capabilities.borrow<&VoteBoothST.VoteBox>(VoteBoothST.voteBoxPublicPath) ??
         panic(
             "Account "
             .concat(recipient.toString())
-            .concat(" does not have a NonFungibleToken.Collection Receiver at ")
+            .concat(" does not have a VoteBoothST.VoteBox at ")
             .concat(VoteBoothST.voteBoxPublicPath.toString())
             .concat(". The account must initialize their account with this collection first!")
         )
@@ -104,7 +104,7 @@ transaction(recipient: Address) {
             )
         }
 
-        self.voteBoxRef.deposit(token: <- testBallot)
+        self.voteBoxRef.depositBallot(ballot: <- testBallot)
 
         if (VoteBoothST.printLogs) {
             log(
