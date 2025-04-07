@@ -35,11 +35,11 @@ transaction(someAddress: Address, anotherAddress: Address) {
 
     execute {
         /*
-            Use the OwnerControl reference to check that both the ballotOwner and owners internal dictionaries were created empty. Safe to say that this function should only be called right after the contract is deployed. After that, the expectation is that these structures are going to be filled
+            Use the OwnerControl reference to check that both the ballotIds and owners internal dictionaries were created empty. Safe to say that this function should only be called right after the contract is deployed. After that, the expectation is that these structures are going to be filled
         */
-        var ballotOwners: {UInt64: Address} = self.ownerControlRef.getBallotOwners()
+        var ballotIds: {UInt64: Address} = self.ownerControlRef.getBallotIds()
         
-        if (ballotOwners != {}) {
+        if (ballotIds != {}) {
             panic(
                 "ERROR: The OwnerControl resource at "
                 .concat(VoteBoothST.ownerControlStoragePath.toString())
@@ -93,7 +93,7 @@ transaction(someAddress: Address, anotherAddress: Address) {
                 "ERROR: Contract Data inconsistency detected! The OwnerControl.ballotOwners has "
                 .concat(self.ownerControlRef.getOwnersCount().toString())
                 .concat(" entries, while the owners dictionary has ")
-                .concat(self.ownerControlRef.getBallotCount().toString())
+                .concat(self.ownerControlRef.getBallotIdsCount().toString())
                 .concat(" entries! These need to match!")
             )
         }
@@ -106,10 +106,10 @@ transaction(someAddress: Address, anotherAddress: Address) {
                 .concat(" entries, while 2 where expected!")
             )
         }
-        else if (self.ownerControlRef.getBallotCount() != 2) {
+        else if (self.ownerControlRef.getBallotIdsCount() != 2) {
             panic(
                 "ERROR: The OwnerControl.owners has "
-                .concat(self.ownerControlRef.getBallotCount().toString())
+                .concat(self.ownerControlRef.getBallotIdsCount().toString())
                 .concat(" entries, while 2 where expected!")
             )
         }
@@ -118,8 +118,8 @@ transaction(someAddress: Address, anotherAddress: Address) {
         let storedBallot01Id: UInt64? = self.ownerControlRef.getBallotId(owner: testBallot01Owner)
         let storedBallot02Id: UInt64? = self.ownerControlRef.getBallotId(owner: testBallot02Owner)
 
-        let storedBallot01Owner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testBallot01Id)
-        let storedBallot02Owner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testBallot02Id)
+        let storedBallot01Owner: Address? = self.ownerControlRef.getOwner(ballotId: testBallot01Id)
+        let storedBallot02Owner: Address? = self.ownerControlRef.getOwner(ballotId: testBallot02Id)
 
         // Check if all this data matches. Contract data consistency is fundamental
         if (storedBallot01Id == nil) {
@@ -201,13 +201,13 @@ transaction(someAddress: Address, anotherAddress: Address) {
         self.ballotPrinterRef.burnBallot(ballotToBurn: <- testBallot01)
         self.ballotPrinterRef.burnBallot(ballotToBurn: <- testBallot02)
 
-        ballotOwners = self.ownerControlRef.getBallotOwners()
+        ballotIds = self.ownerControlRef.getBallotIds()
         owners = self.ownerControlRef.getOwners()
 
-        if (ballotOwners != {}) {
+        if (ballotIds != {}) {
             panic(
                 "ERROR: Contract Data inconsistency detected! The OwnerControl.ballotOwners should be empty but currently has "
-                .concat(ballotOwners.length.toString())
+                .concat(ballotIds.length.toString())
                 .concat(" entries still!")
             )
         }

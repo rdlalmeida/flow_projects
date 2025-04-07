@@ -2,7 +2,7 @@ import "VoteBoothST"
 import "NonFungibleToken"
 
 
-access(all) fun main(userAddress: Address, ballotId: UInt64): UInt64? {
+access(all) fun main(userAddress: Address, ballotId: UInt64): Int? {
     let userAccount: &Account = getAccount(userAddress)
 
     let voteBoxRef: &VoteBoothST.VoteBox = userAccount.capabilities.borrow<&VoteBoothST.VoteBox>(VoteBoothST.voteBoxPublicPath) ??
@@ -13,15 +13,5 @@ access(all) fun main(userAddress: Address, ballotId: UInt64): UInt64? {
         .concat(userAddress.toString())
     )
 
-    let nftRef: &{NonFungibleToken.NFT}? = voteBoxRef.borrowNFT(ballotId)
-
-    if (nftRef == nil) {
-        panic(
-            "Unable to borrow a reference to a valid Ballot for account ".concat(userAddress.toString())
-        )
-    }
-
-    let ballotRef: &VoteBoothST.Ballot = nftRef as! &VoteBoothST.Ballot
-
-    return ballotRef.getVote()
+    return voteBoxRef.getCurrentVote()
 }

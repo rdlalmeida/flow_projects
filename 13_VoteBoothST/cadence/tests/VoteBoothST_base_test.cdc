@@ -1599,3 +1599,6 @@ access(all) fun testDestroyVoteBoxes() {
 
     Test.assertEqual(initialTotalBallotsMinted - UInt64(burnableVoteBoxesAccounts.length), finalTotalBallotsMinted)
 }
+
+// TODO: Fix this because I've changed the names in the OwnerControl resource
+// TODO: Continue with the advanced tests

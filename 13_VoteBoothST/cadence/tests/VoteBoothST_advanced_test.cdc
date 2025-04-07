@@ -10,7 +10,7 @@ access(all) let electionBallot: String = "Who was the best dog this summer? Opti
 // access(all) let electionOptions: String = "1;2;3;4"
 access(all) let electionOptions: Int = 4
 
-access(all) let printLogs: Bool = false
+access(all) let printLogs: Bool = true
 
 access(all) let deployer: Test.TestAccount = Test.getAccount(0x0000000000000008)
 access(all) let account01: Test.TestAccount = Test.createAccount()
@@ -131,10 +131,6 @@ access(all) fun setup() {
         // Increment the event counter to keep things consistent
         eventNumberCount[voteBoxCreatedEventType] = eventNumberCount[voteBoxCreatedEventType]! + 1
     }
-
-    if (printLogs) {
-        log(ballots)
-    }
 }
 
 // Try to get the vote for each account at this stage. I should receive a nil in each case because there aren't any Ballots in these yet.
@@ -172,6 +168,8 @@ access(all) fun testMintEmptyBallotsToAccounts() {
             deployer
         )
 
+        Test.expect(txResult, Test.beSucceeded())
+
         // Increment the event counter
         eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + 1
 
@@ -200,12 +198,29 @@ access(all) fun testMintEmptyBallotsToAccounts() {
         Test.assertEqual(currentOption!, 0)
     }
 
+    if (printLogs) {
+        log(
+            ballots
+        )
+    }
 }
 
 /*
     This one is one of the big ones. Let's see
 */
 access(all) fun testVote() {
+
+}
+
+access(all) fun testReVote() {
+    
+}
+
+access(all) fun testSubmitBallot() {
+
+}
+
+access(all) fun testReSubmitBallot() {
 
 }
 

@@ -2,8 +2,6 @@
     This contract is just a cleaner, more efficient (and hopefully functional) version of the VoteBooth contract. As usual, I've wrote 98% of the last attempt at this contract in one sitting, hoping that by taking care of all the issues revealed by VS code would be enough. After wasting weeks writing a smart contract with almost 1000 lines (a lot of those are these very long comments I'm so prone to write), I found out that my stupid v.12 contract does everything... except storing Ballots in VoteBoxes!!! Which is, like, one of the most import steps of this process!
 
     I did try to debug this thing for a while, but it is just too much... My best approach is to re-write this thing from scratch and test it thoroughly as much as possible, just to make sure that this contract continues working as supposed.
-
-    TODO: Complete the ballotOwners and owners mechanics
 */
 
 import "NonFungibleToken"
@@ -28,7 +26,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) event BallotSubmitted(_ballotId: UInt64, _voterAddress: Address)
     access(all) event BallotModified(_oldBallotId: UInt64, _newBallotId: UInt64, _voterAddress: Address)
     access(all) event BallotBurned(_ballotId: UInt64?, _voterAddress: Address?)
-    access(all) event ContractDataInconsistent(_ballotId: UInt64?, _ballotOwner: Address?)
+    access(all) event ContractDataInconsistent(_ballotId: UInt64?, _owner: Address?)
     access(all) event VoteBoxCreated(_voterAddress: Address)
     access(all) event VoteBoxDestroyed(_ballotsInBox: Int, _ballotId: UInt64?)
     access(all) event BallotBoxCreated(_accountAddress: Address)
@@ -43,13 +41,18 @@ access(all) contract VoteBoothST: NonFungibleToken {
         1 - Unable to retrieve a valid VoteBox
         2 - VoteBox already has a Ballot in it
         3 - The VoteBox is empty but the 'owners' dictionary has an entry for the current address
-        4 - The VoteBox is empty but the 'ballotOwners' dictionary has an entry for the current Ballot id
+        4 - The VoteBox is empty but the 'ballotIds' dictionary has an entry for the current ballotId
     */
     access(all) event BallotNotDelivered(_voterAddress: Address, _reason: Int)
 
     // CUSTOM ENTITLEMENTS
     access(all) entitlement BoothAdmin
     access(all) entitlement VoteBoxWithdraw
+
+    /*
+        This entitlement serves to restrict the function 'vote' from the VoteBox resource to be available only through an authorized reference. This means that even if someone, somehow, is able to withdraw the Ballot and its now 'dangling', i.e., not in any storage, this function is not available, as well as through an unauthorized reference to the VoteBox. In order to be able to vote, an authorized reference needs to be obtained, and that means access to the user storage, and that means a signed transaction by the owner of the said storage. In other words, this entitlement prevents anyone other than the owner (and even he/she can only vote through an authorized reference to his/her own VoteBox reference) to vote
+    */
+    access(all) entitlement VoteEnable
 
     // CUSTOM VARIABLES
     access(all) let _name: String
@@ -62,109 +65,11 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(account) var totalBallotsMinted: UInt64
     access(account) var totalBallotsSubmitted: UInt64
 
+    // I'm setting the default Ballot option as a variable for easier comparison
+    access(all) let defaultBallotOption: Int
+
     // Use this variable set (the contract constructor receives an argument to set it) to enable or disable the printing of logs in this project
     access(all) let printLogs: Bool
-
-// ----------------------------- OWNER CONTROL BEGIN -------------------------------------------------
-    /* 
-        This resource is used to keep track of the ownership of ballots. This turns out to be the simplest approach. This resource is created and immediately stored and capability reference published, as usual. I need to keep this resource as open (with access(all)) as possible because I want to operate on it from other contract functions themselves
-    */
-    access(all) resource OwnerControl {
-        access(self) var ballotOwners: {UInt64: Address}
-        access(self) var owners: {Address: UInt64}
-
-        // Retrieve the ballotOwners dictionary
-        access(BoothAdmin) fun getBallotOwners(): {UInt64: Address} {
-            return self.ballotOwners
-        }
-
-        // And this one returns just the size of the ballotOwners, i.e., it calculates how many owners exists for the ballots
-        access(all) fun getOwnersCount(): Int {
-            return self.ballotOwners.length
-        }
-
-        // Retrieve the owners dictionary
-        access(BoothAdmin) fun getOwners(): {Address: UInt64} {
-            return self.owners
-        }
-
-        // And this one returns the number of ballots associated to owners in the system, i.e., the number of ballots minted/active so far
-        access(all) fun getBallotCount(): Int {
-            return self.owners.length
-        }
-
-        // Get the owner address for a given ballotId
-        access(all) fun getBallotOwner(ballotId: UInt64): Address? {
-            return self.ballotOwners[ballotId]
-        }
-
-        // Get the ballotId for the given owner
-        access(all) fun getBallotId(owner: Address): UInt64? {
-            return self.owners[owner]
-        }
-
-        // Set function to create a new entry in the ballotOwners dictionary
-        access(account) fun setBallotOwner(ballotId: UInt64, ballotOwner: Address) {
-            /* 
-                Check first that there are no ContractDataInconsistencies around. If there are, emit the ContractDataInconsistent event, but carry on. Replace the existing parameters.
-                There's a chance that this might be the wrong approach, that I should just panic this and wait for it to be fixed. I need to keep an eye on this thing any way...
-            */
-
-            let storedBallotOwner: Address? = self.ballotOwners[ballotId]
-
-            if (storedBallotOwner != nil) {
-                // The ideal scenario is that I get a nil from this one, meaning that no owner is still registered under this ballotId. If this is not the case, emit the ContractDataInconsistent event with the address returned from the last step, but carry on with the rest of the process, i.e., replace the old owner for the one provided
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotId, _ballotOwner: storedBallotOwner!)
-            }
-            
-            self.ballotOwners[ballotId] = ballotOwner
-        }
-
-        // Set function to create a new entry in the owners dictionary
-        access(account) fun setOwner(ballotOwner: Address, ballotId: UInt64) {
-            // Same process as before for this one as well
-
-            let storedBallotId: UInt64? = self.owners[ballotOwner]
-
-            if (storedBallotId != nil) {
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId!, _ballotOwner: ballotOwner)
-            }
-            self.owners[ballotOwner] = ballotId
-        }
-
-        // Remove function to delete the entry from the ballotOwners dictionary for the ballotId key provided
-        access(account) fun removeBallotOwner(ballotId: UInt64, ballotOwner: Address) {
-            let storedBallotOwner: Address? = self.ballotOwners.remove(key: ballotId)
-
-            // Check if the ballotOwner returned matches the one provided in the arguments. Emit the ContractDataInconsistency event
-            if (storedBallotOwner == nil || storedBallotOwner! != ballotOwner) {
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotId, _ballotOwner: storedBallotOwner)
-            }
-        }
-
-        // Remove function to delete the entry from the owners dictionary for the ballotOwner key provided
-        access(account) fun removeOwner(ballotOwner: Address, ballotId: UInt64) {
-            let storedBallotId: UInt64? = self.owners.remove(key: ballotOwner)
-
-            // Same as before, check for data inconsistencies and emit the usual event if that's the case
-            if (storedBallotId == nil || storedBallotId! != ballotId) {
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId, _ballotOwner: ballotOwner)
-            }
-        }
-
-        // This function validates if this structure is still consistent or not. If all works well, the owners and ballotOwners dictionaries should ALWAYS have the same number of entries
-        // given that they are always modified at the same time.
-        access(all) fun isConsistent(): Bool {
-            return (self.ballotOwners.length == self.owners.length)
-        }
-
-        // Resource constructor. It simply sets the internal dictionaries to empty ones
-        init() {
-            self.ballotOwners = {}
-            self.owners = {}
-        }
-    }
-// ----------------------------- OWNER CONTROL END ---------------------------------------------------
 
 // ----------------------------- BALLOT BEGIN ------------------------------------------------------
     /*
@@ -243,15 +148,14 @@ access(all) contract VoteBoothST: NonFungibleToken {
         */
         access(all) fun vote(newOption: Int) {
             pre {
-                self.owner != nil: "Need a valid owner to vote"
+                self.owner != nil: "Need a valid owner to vote. Use a an authorized reference to this Ballot to vote please."
                 self.owner!.address == self.ballotOwner: "Only the Ballot owner is allowed to vote!"
-                self.getElectionOptions().contains(newOption): "The option '".concat(newOption.toString()).concat("' is not a valid one")
+                self.ballotOwner != self.voteBoothDeployer: "The Administrator(".concat(self.voteBoothDeployer.toString()).concat(") is not allowed to vote!")
+                self.getElectionOptions().contains(newOption): "The option '".concat(newOption.toString()).concat("' is not a valid on")
             }
 
             // All validations are OK. Proceed with the vote
             self.option = newOption
-
-            // TODO: Add the logic to deposit the Ballot into the deployer's BallotBox after a successful vote
         }
 
         // NOTE: This function is for TEST and DEBUG purposes only. I mean, is not that serious given that I'm also going to encrypt the option value at a later stage, and this knowledge does violates voter privacy, but no one is going to die for it in a policy oriented democratic scenario. But just in case, this needs to be deleted/protected with an BoothAdmin entitlement before moving to a PROD environment. Worst case scenario, someone can calculate the tally before the "official" reveal. Bah, who cares really?
@@ -267,8 +171,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
         init(_ballotOwner: Address, _voteBoothDeployer: Address) {
             self.id = self.uuid
-            // Set the default option to an empty string as default
-            self.option = 0
+            self.option = VoteBoothST.defaultBallotOption
             self.ballotOwner = _ballotOwner
             self.voteBoothDeployer = _voteBoothDeployer
         }
@@ -310,11 +213,20 @@ access(all) contract VoteBoothST: NonFungibleToken {
             }
         }
 
+        // Function to deposit a Ballot into this VoteBox. Though this Collection (of sorts. Its not a standard one) can theoretically receive multiple Ballots, I'm sticking it to a single Ballot at all times through a clever use of pre and post conditions, as well as with an exhaustive (perhaps too much even) set of internal validations, both in this function and others related.
         access(all) fun depositBallot(ballot: @VoteBoothST.Ballot) {
             // Each one of these boxes can only hold one vote of one type at a time. Validate this
             pre {
                 // This pre-condition is everything really. It only allows the deposit of a Ballot if there are none stored yet. After storing one Ballot, it is impossible to deposit another one: this pre-condition stop this function for every self.storedBallots >= 1
+                self.owner != nil: "Deposit is only allowed through a reference."
                 self.storedBallots.length == 0: "Account ".concat(self.owner!.address.toString()).concat(" already has a Ballot in storage. Submit it or burn it to continue.")
+                // Ensure also that a Ballot with a different owner does not gets deposited. It should be impossible, given all the validations up to this point, but just in case
+                self.owner!.address == ballot.ballotOwner: "Unable to deposit a Ballot with a different owner than the one in this VoteBox (".concat(self.owner!.address.toString()).concat(")")
+            }
+
+            post {
+                // Nevertheless, I'm going to be extremely paranoid with this one, therefore I'm also setting a post condition to guarantee that this whole thing blows up if, at any point, this VoteBox has more than one Ballot in storage
+                self.storedBallots.length <= 1: "Account ".concat(self.owner!.address.toString()).concat(" contains multiple Ballots (> 1) in storage! VoteBoxes are limited to 1, maximum!")
             }
 
             // Set the other internal properties first before losing access to the Ballot resource
@@ -343,7 +255,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
         /*        
             If the VoteBox has a Ballot, it returns its owner. If not, returns a nil instead, as usual. Getting the Ballot owner is pretty innocuous, but I'm protecting it with access(account) so that only the owner of the account can access it. This restricts this to transactions, which is OK. I don't want this kind of information out there to protect the voter privacy for as much as I can.
-            TODO: Delete/Protect this functions before moving to PROD. It's not a big deal, but it does sacrifices a tiny bit of voter privacy
+            TODO: Delete/Protect this functions before moving to PROD. It's not a big deal, but it does sacrifices a tiny bit of voter privacy. Or maybe encrypt this in the future?
         */
         access(all) fun getBallotOwner(): Address? {
             // This one becomes super easy with the structure I'm using
@@ -426,7 +338,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
             I've set the protections to prevent people other than the owner in the Ballot resource itself. If someone else tries to fetch the current vote other than the Ballot owner (which is also the VoteBox owner by obvious reasons), it fails a pre condition and panics. If there are no Ballots yet in the VoteBox, a nil is returned instead.
             TODO: Delete or protect this function with a proper entitlement before moving this to PROD
         */
-        access(BoothAdmin) fun getCurrentVote(): Int? {
+        access(all) fun getCurrentVote(): Int? {
             // Grab the id for the Ballot in storage, if any
             if (self.storedBallots.length == 0) {
                 // If there are no Ballots stored yet, return a nil
@@ -454,8 +366,109 @@ access(all) contract VoteBoothST: NonFungibleToken {
                 )
             }
 
+            // Check also that the VoteBox owner and the Ballot owner match. I mean, it is impossible for a VoteBox to store a Ballot from a different owner, given all the checks and balances that I've placed so far, but check it just in case
+            if(self.voteBoxOwner != storedBallotRef!.ballotOwner) {
+                panic(
+                    "ERROR: Somehow the Ballot stored has owner "
+                    .concat(storedBallotRef!.ballotOwner.toString())
+                    .concat(" while this VoteBox has owner ")
+                    .concat(self.voteBoxOwner.toString())
+                    .concat(". These two need to match!")
+                )
+            }
+
             // Invoke the function from the ballot reference itself.
             return storedBallotRef!.getVote()
+        }
+
+        /*
+            This is the function used to cast a Vote. It verifies an insane number of pre and post conditions, but if successful, it changes the option field in a stored Ballot, which equates to a valid vote
+        */
+        access(VoteEnable) fun castVote(option: Int) {
+            pre {
+                self.owner != nil: "Voting is only allowed through an authorized reference!"
+                self.storedBallots.length > 0: "Account ".concat(self.owner!.address.toString()).concat(" does not have a Ballot in storage to vote!")
+                self.storedBallots.length <= 1: "Account ".concat(self.owner!.address.toString()).concat(" has multiple Ballots in storage! This cannot happen!")
+                self.storedBallotOwner != nil: "VoteBox for account ".concat(self.owner!.address.toString()).concat(" has a Ballot in storage but the internal owner is not set. Unable to continue.")
+                self.storedBallotId != nil: "VoteBox for account ".concat(self.owner!.address.toString()).concat(" has a Ballot in storage but the internal id is not set. Unable to continue.")
+                self.storedBallotOwner! == self.owner!.address: "The VoteBox owner(".concat(self.owner!.address.toString()).concat(") is different from the Ballot owner(").concat(self.storedBallotOwner!.toString()).concat("). Cannot continue!")
+            }
+
+            post {
+                before(self.storedBallots.length) == self.storedBallots.length: "This function should not change the number of Ballots in storage!"
+            }
+
+            // Get a reference to the stored Ballot
+            let storedBallotRef: &VoteBoothST.Ballot? = &self.storedBallots[self.storedBallotId!]
+
+            if (storedBallotRef == nil) {
+                panic(
+                    "ERROR: Unable to get a valid &VoteBoothST.Ballot with stored id "
+                    .concat(self.storedBallotId!.toString())
+                    .concat(" for VoteBox in account ")
+                    .concat(self.owner!.address.toString())
+                )
+            }
+
+            // All is OK so far. Do it.
+            storedBallotRef!.vote(newOption: option)
+        }
+
+        /*
+            I'm going to split the casting of a vote and the submission of said vote in different function. Maybe I'll regret this in the future, but for now it seems the best approach. The cast vote above changes the vote in a stored Ballot. The following submit vote sends it to the VotingBooth's contract BallotBox to be tallied at a future point.
+        */
+        access(VoteEnable) fun submitBallot() {
+            // Make sure that everything is correct for submit the Ballot
+            pre {
+                self.owner != nil: "Ballots can only be submitted from an authorized reference!"
+                self.storedBallots.length > 0: "No Ballots stored in the VoteBox for account ".concat(self.owner!.address.toString())
+                self.storedBallots.length <= 1: "Multiple Ballots detected for the VoteBox for account ".concat(self.owner!.address.toString())
+                self.storedBallotOwner != nil: "The VoteBox for account ".concat(self.owner!.address.toString()).concat(" doesn't have a valid owner set for the Ballot in storage. Cannot continue!")
+                self.storedBallotId != nil: "The VoteBox for account ".concat(self.owner!.address.toString()).concat(" doesn't have a valid id set for the Ballot in storage. Cannot continue!")
+                self.storedBallotOwner! == self.owner!.address: "Only the owner can submit a Ballot."
+            }
+
+            post {
+                // Check that the VoteBox was reset after submission
+                self.storedBallots.length == 0: "The Ballot was not properly submitted!"
+                self.storedBallotId == nil: "The stored Ballot id was not reset!"
+                self.storedBallotOwner == nil: "The stored Ballot owner was not reset!"
+            }
+
+            /*
+                If I got here, all the pre-conditions are met. I need one more verification though, namely, if a option different than the default one was set. The idea is to prevent invalid votes. In this context (when one vote for policies rather than politicians), an invalid vote as a "protest" vote is kinda dumb and pointless, especially in a Yes/No situation. If a voter does not want to vote, that don't do it. There's also an argument of allowing a voter to submit the default vote option as a strategy to signal a coerced vote, i.e., if a right winger loser is threatening the voter to vote in a certain direction. But this is stupid because:
+                1. If a voter knows about this feature, so does the coercer and he/she can make sure that the voter does select the desired choice instead of allowing this kinda of dumb sleigh of hand.
+                2. Its precisely to make coercion unfeasible that I'm setting this system to allow multiple vote casting. If a voter gets coerced to vote in a certain direction, he/she can then re-submit a new vote that replaces the coerced vote, at a later stage. Also, having this system blockchain based with a backend composed of smart contracts, enables voters from voting from multiple platforms. This makes vote coercion technically possible, but a logistical nightmare, at least to allow for enough coerced voters to be able to influence an election.
+
+                As such, it is far more probable that, if a voter tries to submit a Ballot with the default option still set, it's a honest mistake and its far worse to let that Ballot be counted than to throw an error and allow the voter to correct it. So that's what I'm doing
+            */
+            if (self.getCurrentVote() == VoteBoothST.defaultBallotOption) {
+                panic(
+                    "ERROR: The Ballot in account "
+                    .concat(self.owner!.address.toString())
+                    .concat(" still has the default option set!")
+                )
+            }
+
+            // All good. Grab the Ballot in storage
+            let ballotToSubmit: @VoteBoothST.Ballot <- self.storedBallots.remove(key: self.storedBallotId!) ??
+            panic(
+                "Unable to load a @VoteBoothST.Ballot for a VoteBox in account "
+                .concat(self.owner!.address.toString())
+            )
+
+            // Use the voteBoothDeployer address to retrieve a reference to the BallotBox to where the Ballot is to be submitted
+            let voteBoothDeployerAccount: Address = ballotToSubmit.voteBoothDeployer
+            let ballotBoxRef: &VoteBoothST.BallotBox = getAccount(voteBoothDeployerAccount).capabilities.borrow<&VoteBoothST.BallotBox>(VoteBoothST.ballotBoxPublicPath) ??
+            panic(
+                "Unable to get a valid &VoteBoothST.BallotBox in "
+                .concat(VoteBoothST.ballotBoxPublicPath.toString())
+                .concat(" for account ")
+                .concat(voteBoothDeployerAccount.toString())
+            )
+
+            // Done. Submit the ballot to the BallotBox and get done with this one.
+            ballotBoxRef.submitBallot(ballot: <- ballotToSubmit)
         }
 
         init(ownerAddress: Address) {
@@ -489,56 +502,115 @@ access(all) resource BallotBox {
     access(all) fun submitBallot(ballot: @VoteBoothST.Ballot) {
         // Grab a reference to the value currently at the position self.submittedBallots[ballot.ballotOwner]
         let randomResourceRef: &AnyResource? = &self.submittedBallots[ballot.ballotOwner]
+        
+        // And save the ballotId and ballotOwner to clear out the OwnerControl strut at the end of this function
+        let newBallotId: UInt64 = ballot.id
+        let newOwner: Address = ballot.ballotOwner
 
         // Test first if its a nil (which would be the most common case). Proceed with standard NonFungibleToken.Collection behaviour
         if (randomResourceRef == nil) {
-            // Save the ballot data for the event emission first
-            let newBallotId: UInt64 = ballot.id
-            let newBallotOwner: Address = ballot.ballotOwner
-
             let randomResource: @AnyResource? <- self.submittedBallots[ballot.ballotOwner] <- ballot
 
             // The randomResource is a nil, but I need to destroy it anyways
             destroy randomResource
 
             // Emit the BallotSubmitted event to finish this
-            emit VoteBoothST.BallotSubmitted(_ballotId: newBallotId, _voterAddress: newBallotOwner)
+            emit VoteBoothST.BallotSubmitted(_ballotId: newBallotId, _voterAddress: newOwner)
 
         }
         // If the type got was not nil, test if there's an old Ballot there instead. If so, replace it but emit a BallotModified event to warn that a Ballot was re-submitted
         else if (randomResourceRef.getType() == Type<&VoteBoothST.Ballot>()) {
-            // Replace the old Ballot for the new one
-            let newBallotId: UInt64 = ballot.id
-            let newBallotOwner: Address = ballot.ballotOwner
-
             // The process of replacing a type specific resource is a bit tricky and verbose, but still far easier than in any centralised approach. First, I need to retrieve a proper @VoteBooth.Ballot to get its id and ballotOwner
             let oldBallot: @VoteBoothST.Ballot <- self.submittedBallots.remove(key: ballot.ballotOwner) as! @VoteBoothST.Ballot
 
             let oldBallotId: UInt64 = oldBallot.id
 
-            // Destroy the oldBallot and store the new one in its place
-            destroy oldBallot
-            let nilResource: @AnyResource? <- self.submittedBallots[newBallotOwner] <- ballot
+            // Destroy the oldBallot and store the new one in its place. Do it using the Burner so that the proper callback gets invoked
+            Burner.burn(<- oldBallot)
+
+            // Anytime a Ballot gets burned, it's one less in the total counter of minted Ballots. Decrement this counter as well
+            VoteBoothST.decrementTotalBallotsMinted(ballots: 1)
+
+            let nilResource: @AnyResource? <- self.submittedBallots[newOwner] <- ballot
+
+            // This nilResource is indeed a nil. But Cadence is super picky (like me!) and requires me to do all this again. But this time I can destroy this thing without any regrets because I'm 100% at this point that I have a nil there.
             destroy nilResource
 
             // Emit the relevant event to finish this. The BallotModified even has 3 arguments: the id of the old Ballot, the id of the new Ballot, and the voterAddress, which is the same for both for obvious reason
-            emit VoteBoothST.BallotModified(_oldBallotId: oldBallotId, _newBallotId: newBallotId, _voterAddress: newBallotOwner)
-
-
+            emit VoteBoothST.BallotModified(_oldBallotId: oldBallotId, _newBallotId: newBallotId, _voterAddress: newOwner)
         }
         // The last possible case is that something else was there instead, which should not happen in any circumstance. Store he Ballot anyways but emit a NonNilTokenReturned event in the process.
         else {
             // Replace the Ballot by whatever non-nil resource was in that Ballot owner slot
-            let newBallotId: UInt64 = ballot.id
-            let newBallotOwner: Address = ballot.ballotOwner
-
             let nonNilResource: @AnyResource <- self.submittedBallots[ballot.ballotOwner] <- ballot
 
             // Emit the event and destroy the non nil resource
             emit VoteBoothST.NonNilTokenReturned(_tokenType: nonNilResource.getType())
 
+            // But the ballot was successfully submitted anyway, so emit the proper event also
+            emit VoteBoothST.BallotSubmitted(_ballotId: newBallotId, _voterAddress: newOwner)
+
             destroy nonNilResource
         }
+
+        // In any of the previous situations, a valid Ballot was submitted. Increase the contract internal counter. I can do this from this and only this resource because the totalBallotsSubmitted is protected with access(account) but a valid BallotBox needs to be stored in the same account, so it's all OK.
+        VoteBoothST.incrementTotalBallotsSubmitted(ballots: 1)
+
+        // When a Ballot is sent to this BallotBox, it's effectively gone. From here, either it gets withdrawn to get tallied, or it gets burned if the voter submits another one to replace the old one. But in order to allow voters to get a new Ballot, if they wish to do so, I need to clear out the proper records from the OwnerControl, or I will have all sorts of errors and contract data inconsistencies.
+        // Start by grabbing a reference to the OwnerControl resource. The functions that I need to operate on have access(account) but I'm doing so from a BallotBox that is in the same account, so all should be doable
+        let ownerControlRef: &VoteBoothST.OwnerControl = self.owner!.capabilities.borrow<&VoteBoothST.OwnerControl>(VoteBoothST.ownerControlPublicPath) ??
+        panic(
+            "Unable to get a valid &VoteBoothST.OwnerControl at "
+            .concat(VoteBoothST.ownerControlPublicPath.toString())
+            .concat(" from account ")
+            .concat(self.owner!.address.toString())
+        )
+
+        // Validate that the data currently stored in the OwnerControl is still consistent
+        let ownerControlBallotId: UInt64? = ownerControlRef.getBallotId(owner: newOwner)
+        let ownerControlOwner: Address? = ownerControlRef.getOwner(ballotId: newBallotId)
+
+        if (ownerControlBallotId == nil) {
+            // Emit the ContractDataInconsistent event and panic
+            emit VoteBoothST.ContractDataInconsistent(_ballotId: ownerControlBallotId, _owner: newOwner)
+            panic(
+                "ERROR: Unable to find a valid BallotId in the OwnerControl for owner "
+                .concat(newOwner.toString())
+            )
+        }
+        else if (ownerControlOwner == nil) {
+            emit VoteBoothST.ContractDataInconsistent(_ballotId: newBallotId, _owner: ownerControlOwner)
+            panic(
+                "ERROR: Unable to find a valid BallotOwner in the Owner control for ballotId "
+                .concat(newBallotId.toString())
+            )
+        }
+        else if (ownerControlBallotId! != newBallotId) {
+            emit VoteBoothST.ContractDataInconsistent(_ballotId: ownerControlBallotId!, _owner: newOwner)
+            panic(
+                "ERROR: Mismatch between the ballotId provided ("
+                .concat(newBallotId.toString())
+                .concat(") and the ballotId retrieved from the OwnerControl (")
+                .concat(ownerControlBallotId!.toString())
+                .concat(") for owner ")
+                .concat(newOwner.toString())
+            )
+        }
+        else if (ownerControlOwner! != newOwner) {
+            emit VoteBoothST.ContractDataInconsistent(_ballotId: newBallotId, _owner: ownerControlOwner)
+            panic(
+                "ERROR: Mismatch between the owner provided ("
+                .concat(newOwner.toString())
+                .concat(") and the owner retrieved from the OwnerControl (")
+                .concat(ownerControlOwner!.toString())
+                .concat(") for ballotId ")
+                .concat(newBallotId.toString())
+            )
+        }
+
+        // If this gets to this point, all data is still consistent. Remove the entries from the OwnerControl
+        ownerControlRef.removeBallotId(ballotId: newBallotId, owner: newOwner)
+        ownerControlRef.removeOwner(owner: newOwner, ballotId: newBallotId)
     }
 
     /*
@@ -552,6 +624,9 @@ access(all) resource BallotBox {
             "Unable to retrieve a vote from owner "
             .concat(ballotOwner.toString())
         )
+
+        // Just to make sure everything checks out, decrease the totalBallotsSubmitted since this should reflect the same number of Ballots stored in a BallotBox at all times
+        VoteBoothST.decrementTotalBallotsSubmitted(ballots: 1)
 
         return <- vote
     }
@@ -678,21 +753,21 @@ access(all) resource BurnBox{
 
             if (storedBallotId == nil) {
                 // Data inconsistency detected! There is no ballotId associated to the owner in the ballot to burn in the OwnerControl.owners dictionary. Emit the ContractDataInconsistent but don't panic yet. This is recoverable. Ensure the other dictionary is consistent, burn the Ballot and move on
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId, _ballotOwner: ballotToBurn.ballotOwner)
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId, _owner: ballotToBurn.ballotOwner)
 
-                // This Ballot should not exist. In this case, check the ballotOwners dictionary and correct it before burning the Ballot
-                let storedBallotOwner: Address? = ownerControlRef.getBallotOwner(ballotId: ballotToBurn.id)
+                // This Ballot should not exist. In this case, check the ballotIds dictionary and correct it before burning the Ballot
+                let storedBallotOwner: Address? = ownerControlRef.getOwner(ballotId: ballotToBurn.id)
 
                 if (storedBallotOwner != nil) {
-                    // Looks like there's an entry in ballotOwners dictionary for this ballot. Solve the inconsistency and move on
-                    ownerControlRef.removeBallotOwner(ballotId: ballotToBurn.id, ballotOwner: storedBallotOwner!)
+                    // Looks like there's an entry in ballotIds dictionary for this ballot. Solve the inconsistency and move on
+                    ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: storedBallotOwner!)
                 }
             }
             else if (storedBallotId! != ballotToBurn.id) {
                 // In this case, the owner of the ballot to burn has a different ballotId associated to it, which means that, theoretically, the owner has two ballots... somehow. In this case, emit two events with the two ballotIds and the same address and then panic... This situation is critical and needs to be taken care before moving on. Ideally this branch should nevern be called
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId!, _ballotOwner: ballotToBurn.ballotOwner)
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId!, _owner: ballotToBurn.ballotOwner)
 
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotToBurn.id, _ballotOwner: ballotToBurn.ballotOwner)
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotToBurn.id, _owner: ballotToBurn.ballotOwner)
 
                 panic(
                     "ERROR: Major data inconsistency found: Address "
@@ -705,10 +780,10 @@ access(all) resource BurnBox{
                 )
             }
 
-            // All data is still consistent. Remove the related entries from both ballotOwners and owners dictionaries from the OwnerControl resource and finally burn the damn Ballot. Ish...
-            ownerControlRef.removeBallotOwner(ballotId: ballotToBurn.id, ballotOwner: ballotToBurn.ballotOwner)
+            // All data is still consistent. Remove the related entries from both ballotIds and owners dictionaries from the OwnerControl resource and finally burn the damn Ballot. Ish...
+            ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: ballotToBurn.ballotOwner)
 
-            ownerControlRef.removeOwner(ballotOwner: ballotToBurn.ballotOwner, ballotId: ballotToBurn.id)
+            ownerControlRef.removeOwner(owner: ballotToBurn.ballotOwner, ballotId: ballotToBurn.id)
 
             // Destroy (burn) the Ballot. This should emit a BallotBurned event
             Burner.burn(<- ballotToBurn)
@@ -748,7 +823,7 @@ access(all) resource BurnBox{
     access(all) resource BallotPrinterAdmin {
         // Use this parameter to store the contract owner, given that this resource is only (can only) be created in the contract constructor, and use it to prevent the contract owner from voting. It's a simple but probably necessary precaution.
 
-        access(BoothAdmin) fun printBallot(voterAddress: Address): @Ballot {
+        access(BoothAdmin) fun printBallot(voterAddress: Address): @VoteBoothST.Ballot {
             pre {
                 // First, ensure that the contract owner (obtainable via self.owner!.address) does not match the address provided.
                 self.owner!.address != voterAddress: "The contract owner is not allowed to vote!"
@@ -771,7 +846,7 @@ access(all) resource BurnBox{
 
             if (ballotId != nil) {
                 // Data inconsistency detected. Emit the respective event and panic
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotId, _ballotOwner: voterAddress)
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotId, _owner: voterAddress)
 
                 panic(
                     "ERROR: The address provided ("
@@ -783,11 +858,11 @@ access(all) resource BurnBox{
             }
 
             // This one is a bit "rare", but there's a small possibility of a Ballot with the current Id was already issued, i.e., there's an address already associated to it
-            let ballotOwner: Address? = ownerControlRef.getBallotOwner(ballotId: newBallot.id)
+            let ballotOwner: Address? = ownerControlRef.getOwner(ballotId: newBallot.id)
 
             if (ballotOwner != nil) {
                 // Same as before: emit the event and panic
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotId!, _ballotOwner: voterAddress)
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotId!, _owner: voterAddress)
                 
                 panic(
                     "ERROR: The Ballot Id generated ("
@@ -799,8 +874,8 @@ access(all) resource BurnBox{
             }
 
             // Seems that all went OK so far. Add the required elements to the ownerControl resource
-            ownerControlRef.setBallotOwner(ballotId: newBallot.id, ballotOwner: voterAddress)
-            ownerControlRef.setOwner(ballotOwner: voterAddress, ballotId: newBallot.id)
+            ownerControlRef.setBallotId(ballotId: newBallot.id, owner: voterAddress)
+            ownerControlRef.setOwner(owner: voterAddress, ballotId: newBallot.id)
 
             emit BallotMinted(_ballotId: newBallot.id, _voterAddress: voterAddress)
 
@@ -835,21 +910,21 @@ access(all) resource BurnBox{
 
             if (storedBallotId == nil) {
                 // Data inconsistency detected! There is no ballotId associated to the owner in the ballot to burn in the 'owners' dictionary. Emit the event but don't panic: make sure both dictionaries are consistent, burn the token and get out
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId, _ballotOwner: ballotToBurn.ballotOwner)
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId, _owner: ballotToBurn.ballotOwner)
 
                 // This ballot should not exist. In this case, check the other internal dictionary and correct it and burn the ballot before panicking
-                let storedBallotOwner: Address? = ownerControlRef.getBallotOwner(ballotId: ballotToBurn.id)
+                let storedBallotOwner: Address? = ownerControlRef.getOwner(ballotId: ballotToBurn.id)
 
                 if (storedBallotOwner != nil) {
                     // It appears that there's a record for this ballot in the owners dictionary. Clean it to keep data consistency
-                    ownerControlRef.removeBallotOwner(ballotId: ballotToBurn.id, ballotOwner: storedBallotOwner!)
+                    ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: storedBallotOwner!)
                 }
             }
             else if (storedBallotId! != ballotToBurn.id) {
                 // The owner of the ballot to burn has a different ballotId associated to it, which means that, theoretically, the owner has two ballots... somehow. In this case, emit two events with the two ballotIds and the same address and then panic... This situation is critical and needs to be taken care before moving on. Ideally this branch should never be called
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId!, _ballotOwner: ballotToBurn.ballotOwner)
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId!, _owner: ballotToBurn.ballotOwner)
 
-                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotToBurn.id, _ballotOwner: ballotToBurn.ballotOwner)
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotToBurn.id, _owner: ballotToBurn.ballotOwner)
 
                 panic(
                     "ERROR: Major data inconsistency found: Address "
@@ -864,9 +939,9 @@ access(all) resource BurnBox{
             }
             else {
                 // All is consistent, it seems. Remove related entries from both OwnerControl internal dictionaries. The last step of this function is to burn the ballot provided
-                ownerControlRef.removeBallotOwner(ballotId: ballotToBurn.id, ballotOwner: ballotToBurn.ballotOwner)
+                ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: ballotToBurn.ballotOwner)
 
-                ownerControlRef.removeOwner(ballotOwner: ballotToBurn.ballotOwner, ballotId: ballotToBurn.id)
+                ownerControlRef.removeOwner(owner: ballotToBurn.ballotOwner, ballotId: ballotToBurn.id)
 
             }
 
@@ -881,6 +956,107 @@ access(all) resource BurnBox{
         }
     }
 // ----------------------------- BALLOT PRINTER END ------------------------------------------------
+
+// ----------------------------- OWNER CONTROL BEGIN -------------------------------------------------
+    /* 
+        This resource is used to keep track of the ownership of ballots. This turns out to be the simplest approach. This resource is created and immediately stored and capability reference published, as usual. I need to keep this resource as open (with access(all)) as possible because I want to operate on it from other contract functions themselves
+    */
+    access(all) resource OwnerControl {
+        access(self) var ballotIds: {UInt64: Address}
+        access(self) var owners: {Address: UInt64}
+
+        // Retrieve the ballotIds dictionary
+        access(BoothAdmin) fun getBallotIds(): {UInt64: Address} {
+            return self.ballotIds
+        }
+
+        // And this one returns just the size of the ballotIds, i.e., it calculates how many owners exists for the ballots
+        access(all) fun getBallotIdsCount(): Int {
+            return self.ballotIds.length
+        }
+
+        // Retrieve the owners dictionary
+        access(BoothAdmin) fun getOwners(): {Address: UInt64} {
+            return self.owners
+        }
+
+        // And this one returns the number of ballots associated to owners in the system, i.e., the number of ballots minted/active so far
+        access(all) fun getOwnersCount(): Int {
+            return self.owners.length
+        }
+
+        // Get the owner address for a given ballotId
+        access(all) fun getOwner(ballotId: UInt64): Address? {
+            return self.ballotIds[ballotId]
+        }
+
+        // Get the ballotId for the given owner
+        access(all) fun getBallotId(owner: Address): UInt64? {
+            return self.owners[owner]
+        }
+
+        // Set function to create a new entry in the ballotIds dictionary
+        access(account) fun setBallotId(ballotId: UInt64, owner: Address) {
+            /* 
+                Check first that there are no ContractDataInconsistencies around. If there are, emit the ContractDataInconsistent event, but carry on. Replace the existing parameters.
+                There's a chance that this might be the wrong approach, that I should just panic this and wait for it to be fixed. I need to keep an eye on this thing any way...
+            */
+
+            let storedOwner: Address? = self.ballotIds[ballotId]
+
+            if (storedOwner != nil) {
+                // The ideal scenario is that I get a nil from this one, meaning that no owner is still registered under this ballotId. If this is not the case, emit the ContractDataInconsistent event with the address returned from the last step, but carry on with the rest of the process, i.e., replace the old owner for the one provided
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotId, _owner: storedOwner!)
+            }
+            
+            self.ballotIds[ballotId] = owner
+        }
+
+        // Set function to create a new entry in the owners dictionary
+        access(account) fun setOwner(owner: Address, ballotId: UInt64) {
+            // Same process as before for this one as well
+
+            let storedBallotId: UInt64? = self.owners[owner]
+
+            if (storedBallotId != nil) {
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId!, _owner: owner)
+            }
+            self.owners[owner] = ballotId
+        }
+
+        // Remove function to delete the entry from the ballotIds dictionary for the ballotId key provided
+        access(account) fun removeBallotId(ballotId: UInt64, owner: Address) {
+            let storedOwner: Address? = self.ballotIds.remove(key: ballotId)
+
+            // Check if the ballotOwner returned matches the one provided in the arguments. Emit the ContractDataInconsistency event
+            if (storedOwner == nil || storedOwner! != owner) {
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotId, _owner: storedOwner)
+            }
+        }
+
+        // Remove function to delete the entry from the owners dictionary for the owner key provided
+        access(account) fun removeOwner(owner: Address, ballotId: UInt64) {
+            let storedBallotId: UInt64? = self.owners.remove(key: owner)
+
+            // Same as before, check for data inconsistencies and emit the usual event if that's the case
+            if (storedBallotId == nil || storedBallotId! != ballotId) {
+                emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId, _owner: owner)
+            }
+        }
+
+        // This function validates if this structure is still consistent or not. If all works well, the owners and ballotIds dictionaries should ALWAYS have the same number of entries
+        // given that they are always modified at the same time.
+        access(all) fun isConsistent(): Bool {
+            return (self.ballotIds.length == self.owners.length)
+        }
+
+        // Resource constructor. It simply sets the internal dictionaries to empty ones
+        init() {
+            self.ballotIds = {}
+            self.owners = {}
+        }
+    }
+// ----------------------------- OWNER CONTROL END ---------------------------------------------------
 
 // ----------------------------- CONTRACT LOGIC BEGIN ----------------------------------------------
     // Dummy Collection just to have this contract to conform to the NonFungibleToken standard
@@ -1091,6 +1267,8 @@ access(all) resource BurnBox{
         }
 
         self._options = elements
+
+        self.defaultBallotOption = 0
 
         self.totalBallotsMinted = 0
         self.totalBallotsSubmitted = 0

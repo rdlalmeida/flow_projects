@@ -56,7 +56,7 @@ transaction(testAddress: Address) {
             .concat(signer.address.toString())
         )
 
-        var storedBallotOwner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testBallotId)
+        var storedBallotOwner: Address? = self.ownerControlRef.getOwner(ballotId: testBallotId)
 
         if (storedBallotOwner == nil) {
             panic(
@@ -102,7 +102,7 @@ transaction(testAddress: Address) {
                 "ERROR: Contract Data inconsistency detected! The OwnerControl.ballotOwners has "
                 .concat(self.ownerControlRef.getOwnersCount().toString())
                 .concat(" entries, while the OwnerControl.owners has ")
-                .concat(self.ownerControlRef.getBallotCount().toString())
+                .concat(self.ownerControlRef.getBallotIdsCount().toString())
                 .concat(" entries! These should have the same length!")
             )
         }
@@ -178,7 +178,7 @@ transaction(testAddress: Address) {
         self.ballotPrinterRef.burnBallot(ballotToBurn: <-depositedBallot)
 
         // Check the consistency of the OwnerControl structure
-        storedBallotOwner = self.ownerControlRef.getBallotOwner(ballotId: testBallotId)
+        storedBallotOwner = self.ownerControlRef.getOwner(ballotId: testBallotId)
 
         if (storedBallotOwner != nil) {
             panic(
@@ -206,7 +206,7 @@ transaction(testAddress: Address) {
                 "ERROR: Contract Data inconsistency detected! The OwnerControl.owners has "
                 .concat(self.ownerControlRef.getOwnersCount().toString())
                 .concat(" entries, while the OwnerControl.owners has ")
-                .concat(self.ownerControlRef.getBallotCount().toString())
+                .concat(self.ownerControlRef.getBallotIdsCount().toString())
                 .concat(" entries! These should have the same length!")
             )
         }

@@ -38,13 +38,13 @@ transaction(testAddress: Address) {
                 "ERROR: Contract Data inconsistency detected! The OwnerControl.ballotOwners has "
                 .concat(self.ownerControlRef.getOwnersCount().toString())
                 .concat(" entries, while the OwnerControl.owners has ")
-                .concat(self.ownerControlRef.getBallotCount().toString())
+                .concat(self.ownerControlRef.getBallotIdsCount().toString())
                 .concat(" entries! These should have the same length!")
             )
         }
 
         // Take note of the length of one of the internal dictionaries (doesn't matter which one) so that I can compare that, after burning this test Ballot, these decrease by one
-        let initialOwnerControlSize: Int = self.ownerControlRef.getBallotCount()
+        let initialOwnerControlSize: Int = self.ownerControlRef.getBallotIdsCount()
 
         // Use this opportunity to test a bunch of Ballot only functions
         let views: [Type] = ballot.getViews()
@@ -169,7 +169,7 @@ transaction(testAddress: Address) {
         // Burn the test Ballot using the function from the ballotPrinterAdminRef so that the OwnerControl dictionaries keep their consistency. This is because I've set this function to remove the entries from the internal dictionaries from the OwnerControl before actually destroying the resource. Otherwise I'm going to provoke a ContractDataInconsistency
         self.ballotPrinterRef.burnBallot(ballotToBurn: <- ballot)
 
-        let currentOwnerControlSize: Int = self.ownerControlRef.getBallotCount()
+        let currentOwnerControlSize: Int = self.ownerControlRef.getBallotIdsCount()
 
         // Check the consistency as usual before exiting
         if (!self.ownerControlRef.isConsistent()) {
@@ -178,7 +178,7 @@ transaction(testAddress: Address) {
                 "ERROR: Contract Data inconsistency detected! The OwnerControl.ballotOwners has "
                 .concat(self.ownerControlRef.getOwnersCount().toString())
                 .concat(" entries, while the OwnerControl.owners has ")
-                .concat(self.ownerControlRef.getBallotCount().toString())
+                .concat(self.ownerControlRef.getBallotIdsCount().toString())
                 .concat(" entries! These should have the same length!")
             )
         }
