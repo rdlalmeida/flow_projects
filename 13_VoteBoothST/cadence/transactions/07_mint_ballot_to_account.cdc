@@ -60,13 +60,13 @@ transaction(recipient: Address) {
                 "ERROR: Contract Data inconsistency detected! The OwnerControl.ballotOwners has "
                 .concat(self.ownerControlRef.getOwnersCount().toString())
                 .concat(" entries, while the OwnerControl.owners has ")
-                .concat(self.ownerControlRef.getBallotCount().toString())
+                .concat(self.ownerControlRef.getBallotIdsCount().toString())
                 .concat(" entries! These should have the same length!")
             )
         }
 
         var storedBallotId: UInt64? = self.ownerControlRef.getBallotId(owner: testBallotOwner)
-        var storedBallotOwner: Address? = self.ownerControlRef.getBallotOwner(ballotId: testBallotId)
+        var storedBallotOwner: Address? = self.ownerControlRef.getOwner(ballotId: testBallotId)
 
         if (storedBallotOwner == nil) {
             panic(

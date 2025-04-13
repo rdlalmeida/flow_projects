@@ -108,22 +108,22 @@ transaction(testAddress: Address) {
             )
         }
 
-        // Deposit the ballot into the collection
+        // Deposit the ballot into the collection. This ballot has only the default option set because I'm unable to vote at this point. Voting can only happen through an authorized reference to a VoteBox in an account storage other than the contract deployer. As such, this ballot is going to be marked as a revoke Ballot and burned upon submission
         self.ballotBoxRef.submitBallot(ballot: <- testBallot)
 
-        // Check that the function that verifies if the ballotOwner has a valid submitted Ballot returns true
+        // The ballotSubmitted flag should be false 
         var ballotSubmitted: Bool = self.ballotBoxRef.getIfOwnerVoted(ballotOwner: testBallotOwner)
 
-        if (!ballotSubmitted) {
-            // If I got a false in this one
+        if (ballotSubmitted) {
+            // If I got a true in this one
             panic(
-                "ERROR: Ballot owner "
+                "ERROR: Ballot with owner "
                 .concat(testBallotOwner.toString())
-                .concat(" does not have a valid Ballot submitted yet!")
+                .concat(" was successfully submitted when it should have been revoked instead!")
             )
         }
 
-        // Conversely, there should be no Ballots submitted by the contract deployer. Test this as well
+        // There should be no Ballots submitted by the contract deployer. Test this as well
         ballotSubmitted = self.ballotBoxRef.getIfOwnerVoted(ballotOwner: self.signerAddress)
 
         if (ballotSubmitted) {
@@ -137,7 +137,8 @@ transaction(testAddress: Address) {
 
         let newBallotBoxSize: Int = self.ballotBoxRef.getSubmittedBallotCount()
 
-        if (currentBallotBoxSize + 1 != newBallotBoxSize) {
+        // The BallotBox size should remain unchanged
+        if (currentBallotBoxSize != newBallotBoxSize) {
             panic(
                 "Collection size mismatch detected: Initial collection size: "
                 .concat(currentBallotBoxSize.toString())
@@ -146,24 +147,6 @@ transaction(testAddress: Address) {
                 .concat(" Ballots!")
             )
         }
-
-        let depositedBallot: @VoteBoothST.Ballot <- self.ballotBoxRef.withdrawBallot(ballotOwner: testBallotOwner)
-
-        let depositedBallotId: UInt64 = depositedBallot.id
-
-        if (testBallotId != depositedBallotId) {
-            panic(
-                "ERROR: The Ballot id changed! Before deposit, the Ballot had id "
-                .concat(testBallotId.toString())
-                .concat(". After withdraw from account ")
-                .concat(self.signerAddress.toString())
-                .concat(", the Ballot has now id ")
-                .concat(depositedBallotId.toString())
-            )
-        }
-
-        // Done with this one. Burn the ballot
-        self.ballotPrinterRef.burnBallot(ballotToBurn: <-depositedBallot)
 
         // Finish this by checking the consistency of the OwnerControl structure once again
         storedBallotOwner = self.ownerControlRef.getOwner(ballotId: testBallotId)
@@ -195,15 +178,6 @@ transaction(testAddress: Address) {
                 .concat(" entries, while the OwnerControl.owners has ")
                 .concat(self.ownerControlRef.getBallotIdsCount().toString())
                 .concat(" entries! These should have the same length!")
-            )
-        }
-
-        if (VoteBoothST.printLogs) {
-            log(
-                "Successfully withdrawn and burned ballot #"
-                .concat(depositedBallotId.toString())
-                .concat(" from account ")
-                .concat(self.signerAddress.toString())
             )
         }
     }
