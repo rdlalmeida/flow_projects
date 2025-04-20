@@ -182,8 +182,25 @@
                             "value": "Campinho, Portugal"
                         },
                         {
-                            "type": "Int",
-                            "value": "4"
+                            "type": "Array",
+                            "value": [
+                                {
+                                    "type": "UInt8",
+                                    "value": "1"
+                                },
+                                {
+                                    "type": "UInt8",
+                                    "value": "2"
+                                },
+                                {
+                                    "type": "UInt8",
+                                    "value": "3"
+                                },
+                                {
+                                    "type": "UInt8",
+                                    "value": "4"
+                                }
+                            ]
                         },
                         {
                             "type": "Bool",

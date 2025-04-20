@@ -7,7 +7,7 @@ access(all) let electionName: String = "World's best dog ever!"
 access(all) let electionSymbol: String = "WBDE"
 access(all) let electionLocation: String = "Campinho"
 access(all) let electionBallot: String = "Who was the best dog this summer? Options: \n1 - Eddie, \n2 - Argus, \n3 - Both, \n4 - None"
-access(all) let electionOptions: Int = 4
+access(all) let electionOptions: [UInt8] = [1, 2, 3, 5] 
 
 // Use this flag to turn log printing on or off
 access(all) let printLogs: Bool = false
@@ -40,7 +40,7 @@ access(all) let accounts: [Test.TestAccount] = [account01, account02, account03,
             "ballotID": <BALLOT_ID>
             }
 */
-access(all) let ballots: {String: {String: String}} = {}
+access(all) let ballots: {Address: UInt64} = {}
 
 access(all) let addresses: [Address] = [account01.address, account02.address, account03.address, account04.address, account05.address]
 
@@ -53,10 +53,9 @@ access(all) let voteBoxCreationTx: String = "../transactions/05_create_vote_box.
 access(all) let testBallotTx: String = "../transactions/06_test_ballot.cdc"
 access(all) let mintBallotToAccountTx: String = "../transactions/07_mint_ballot_to_account.cdc"
 access(all) let mintBallotsToAccountsTx: String = "../transactions/08_mint_ballots_to_accounts.cdc"
-access(all) let submitValidBallotToBallotBoxTx: String = "../transactions/09_submit_valid_ballot_to_ballot_box.cdc"
-access(all) let revokeBallotFromBallotBoxTx: String = "../transactions/10_revoke_ballot_from_ballot_box.cdc"
-access(all) let burnBallotFromBurnBoxTx: String = "../transactions/11_burn_ballots_from_burn_box.cdc"
-access(all) let destroyVoteBoxTx: String = "../transactions/12_destroy_vote_box.cdc"
+access(all) let submitBallotToBallotBoxTx: String = "../transactions/09_submit_ballot_to_ballot_box.cdc"
+access(all) let burnBallotFromBurnBoxTx: String = "../transactions/10_burn_ballots_from_burn_box.cdc"
+access(all) let destroyVoteBoxTx: String = "../transactions/11_destroy_vote_box.cdc"
 
 // SCRIPTS
 access(all) let testVoteBoxSc: String = "../scripts/01_test_vote_box.cdc"
@@ -66,6 +65,8 @@ access(all) let getBallotOwnerSc: String = "../scripts/04_get_ballot_owner.cdc"
 access(all) let getTotalBallotsMintedSc: String = "../scripts/05_get_total_ballots_minted.cdc"
 access(all) let getTotalBallotsSubmittedSc: String = "../scripts/06_get_total_ballots_submitted.cdc"
 access(all) let getHowManyBallotsToBurnSc: String = "../scripts/08_get_how_many_ballots_to_burn.cdc"
+access(all) let getOwnerControlBallotIdSc: String = "../scripts/09_get_owner_control_ballot_id.cdc"
+access(all) let getOwnerControlOwnerSc: String = "../scripts/10_get_owner_control_owner.cdc"
 
 // EVENTS
 // NonFungibleToken events
@@ -80,6 +81,7 @@ access(all) let ballotMintedEventType: Type = Type<VoteBoothST.BallotMinted>()
 access(all) let ballotSubmittedEventType: Type = Type<VoteBoothST.BallotSubmitted>()
 access(all) let ballotModifiedEventType: Type = Type<VoteBoothST.BallotModified>()
 access(all) let ballotBurnedEventType: Type = Type<VoteBoothST.BallotBurned>()
+access(all) let ballotRevokedEventType: Type = Type<VoteBoothST.BallotRevoked>()
 access(all) let contractDataInconsistentEventType: Type = Type<VoteBoothST.ContractDataInconsistent>()
 access(all) let voteBoxCreatedEventType: Type = Type<VoteBoothST.VoteBoxCreated>()
 access(all) let voteBoxDestroyedEventType: Type = Type<VoteBoothST.VoteBoxDestroyed>()
@@ -97,6 +99,7 @@ access(all) var eventNumberCount: {Type: Int} = {
     ballotSubmittedEventType: 0,
     ballotModifiedEventType: 0,
     ballotBurnedEventType: 0,
+    ballotRevokedEventType: 0,
     contractDataInconsistentEventType: 0,
     voteBoxCreatedEventType: 0,
     voteBoxDestroyedEventType: 0,
@@ -105,10 +108,6 @@ access(all) var eventNumberCount: {Type: Int} = {
 }
 
 access(all) fun setup() {
-    /*
-        NOTE: The deployContract bellow respects the one where I can set a [UInt64] as contract constructor argument. I can do this with no problems in this test file, but I cannot deploy a contract with the emulator as such. I'm unable to use the flow.json file to define this argument (all the other ones are OK, but by some reason, [UInt64] is a no, no!). Check a comment at the contract constructor for more details.
-        As such, just to keep moving forward with this, I've opened a ticket with Flow itself and I'm hardcoding the election options in the contract so that I can remove this argument from the constructor list. The electionOptions argument was set as a Int so that I can move forward and the contract creates a [Int] internally between 1 and the electionOptions value provided
-    */
     let err: Test.Error? = Test.deployContract(
         name: "VoteBoothST",
         path: "../contracts/VoteBoothST.cdc",
@@ -160,7 +159,7 @@ access(all) fun testGetElectionLocation() {
     Test.assertEqual(electionLocation, VoteBoothST.getElectionLocation())
 }
 access(all) fun testGetElectionOptions() {
-    let contractOptions: [Int] = VoteBoothST.getElectionOptions()
+    let contractOptions: [UInt8] = VoteBoothST.getElectionOptions()
 
     if (printLogs) {
         log(
@@ -171,14 +170,7 @@ access(all) fun testGetElectionOptions() {
         )
     }
 
-    let range: InclusiveRange<Int> = InclusiveRange(1, electionOptions, step: 1)
-    var expectedElectionOptions: [Int] = []
-
-    for element in range {
-        expectedElectionOptions.append(element)
-    }
-
-    for option in expectedElectionOptions {
+    for option in electionOptions {
         Test.assertEqual(contractOptions.contains(option), true)
     }
 }
@@ -387,6 +379,8 @@ access(all) fun testBallotBox() {
     // Check the usual events
     var ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
     var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
+    // The Ballot submitted with the test ends up being revoked, as a way to not having it hanging around in any account. As such, take this into account as well
+    var ballotRevokedEvents: [AnyStruct] = Test.eventsOfType(ballotRevokedEventType)
     var resourceDestroyedEvents: [AnyStruct] = Test.eventsOfType(resourceDestroyedEventType)
     var contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
 
@@ -395,8 +389,12 @@ access(all) fun testBallotBox() {
     eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + 1
     eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + 1
 
+    // I should have one BallotRevoked event as well
+    eventNumberCount[ballotRevokedEventType] = eventNumberCount[ballotRevokedEventType]! + 1
+
     Test.assertEqual(ballotMintedEvents.length, eventNumberCount[ballotMintedEventType]!)
     Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+    Test.assertEqual(ballotRevokedEvents.length, eventNumberCount[ballotRevokedEventType]!)
     Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
     Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
 
@@ -625,6 +623,9 @@ access(all) fun testBallotMintingToVoteBox() {
     // Extract and compare the two ballot ids
     Test.assertEqual(eventBallotId01, storedBallotId!)
 
+    // Populate the ballots struct
+    ballots[account01.address] = storedBallotId
+
     // Repeat the process for account02
     let txResult02: Test.TransactionResult = executeTransaction(
         mintBallotToAccountTx,
@@ -661,6 +662,8 @@ access(all) fun testBallotMintingToVoteBox() {
 
     Test.assert(storedBallotId != nil, message: "There are no Ballots in account ".concat(account02.address.toString()))
     Test.assertEqual(eventBallotId02, storedBallotId!)
+
+    ballots[account02.address] = storedBallotId
 
     /* 
         Repeat the minting process one more time. I need 3 ballots in 3 different accounts to properly test the next 3 functions. One withdraws the ballot to a BurnBox by loading the VoteBox, the other by using a reference to the VoteBox instead and I want to leave a VoteBox with a valid Ballot to test the burning of all 3 VoteBoxes uses so far.
@@ -702,6 +705,8 @@ access(all) fun testBallotMintingToVoteBox() {
     Test.assert(storedBallotId != nil, message: "There are no Ballots stored in account ".concat(account03.address.toString()))
     Test.assertEqual(eventBallotId03, storedBallotId!)
 
+    ballots[account03.address] = storedBallotId
+
     // Finally, trying this transaction with a signer different than the deployer should fail due to the lack of the Admin entitlement. Test this as well. Use account01 to sign the transaction instead
     let txResult04: Test.TransactionResult = executeTransaction(
         mintBallotToAccountTx,
@@ -722,15 +727,443 @@ access(all) fun testBallotMintingToVoteBox() {
     Test.assertEqual(initialTotalBallotsMinted + 3, finalTotalBallotsMinted)
 }
 
-/*
-    This transaction is a bit of a repetition of the above one, but applied to account02 and using a reference rather than loading the resource
-*/
-access(all) fun testBallotSubmission() {
-    // TODO: Submit Ballot from account01 normally here
+access(all) fun testInvalidBallotSubmission() {
+    // Capture the contract's totalMintedBallots and totalSubmittedBallots to make sure that none of these parameters change during this function
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalMintedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    scResult = executeScript(
+        getTotalBallotsSubmittedSc,
+        []
+    )
+
+    let initialTotalSubmittedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    // Start by trying to submit a Ballot from an account without one yet (account04) at this point
+    var txResult: Test.TransactionResult = executeTransaction(
+        submitBallotToBallotBoxTx,
+        [1 as UInt8],
+        account04
+    )
+
+    // This one should fail because account04 has a VoteBox but it is still empty at this point
+    Test.expect(txResult, Test.beFailed())
+
+    txResult = executeTransaction(
+        submitBallotToBallotBoxTx,
+        [123 as UInt8],
+        account01
+    )
+
+    // This one fails as well because I'm providing it with an invalid option
+    Test.expect(txResult, Test.beFailed())
+
+    // Grab the totals again and make sure they haven't changed
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalMintedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    scResult = executeScript(
+        getTotalBallotsSubmittedSc,
+        []
+    )
+
+    let finalTotalSubmittedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalMintedBallots, finalTotalMintedBallots)
+    Test.assertEqual(initialTotalSubmittedBallots, finalTotalSubmittedBallots)
 }
 
-access(all) fun testBallotRevoke() {
-    // TODO: Submit a revoke ballot for account01 and account 02
+access(all) fun testValidBallotSubmission() {
+    // As usual, start by grabbing the total ballots of each kind at this time
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalMintedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    scResult = executeScript(
+        getTotalBallotsSubmittedSc,
+        []
+    )
+
+    let initialTotalSubmittedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    // Grab account01's Ballot parameters to validate the events later on
+    scResult = executeScript(
+        getBallotIdSc,
+        [account01.address]
+    )
+
+    let storedBallotId: UInt64? = scResult.returnValue as! UInt64?
+
+    if (storedBallotId == nil) {
+        panic(
+            "The VoteBox for account "
+            .concat(account01.address.toString())
+            .concat(" has no valid Ballots in it yet!")
+        )
+    }
+    scResult = executeScript(
+        getBallotOwnerSc,
+        [account01.address]
+    )
+
+    let storedBallotOwner: Address? = scResult.returnValue as! Address?
+
+    // Get the Ballot data from the owner control and check that it is consistent with the data retrieved from the VoteBox
+    scResult = executeScript(
+        getOwnerControlBallotIdSc,
+        [deployer.address, account01.address]
+    )
+
+    var ownerControlBallotId: UInt64? = scResult.returnValue as! UInt64?
+
+    // Check first that a valid ballotId was returned (and not a nil)
+    Test.assert(ownerControlBallotId != nil)
+
+    // And then check that it matches the expected one
+    Test.assertEqual(ownerControlBallotId!, storedBallotId!)
+
+    // Repeat for the Ballot owner
+    scResult = executeScript(
+        getOwnerControlOwnerSc,
+        [deployer.address, storedBallotId!]
+    )
+
+    var ownerControlOwner: Address? = scResult.returnValue as! Address?
+
+    Test.assert(ownerControlOwner != nil)
+    Test.assertEqual(ownerControlOwner!, storedBallotOwner!)
+
+    // All good. Submit the Ballot in account01 with a valid option
+    var txResult: Test.TransactionResult = executeTransaction(
+        submitBallotToBallotBoxTx,
+        [1 as UInt8],
+        account01
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    // The number of minted ballots should have been decreased by the same number of incremented submitted ballots
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalMintedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    scResult = executeScript(
+        getTotalBallotsSubmittedSc,
+        []
+    )
+
+    let finalTotalSubmittedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    // A valid Ballot submission only increases the total ballots submitted. The minted number remains the same
+    Test.assertEqual(initialTotalMintedBallots, finalTotalMintedBallots)
+    Test.assertEqual(initialTotalSubmittedBallots + 1, finalTotalSubmittedBallots)
+
+    // Grab the ballotId and owner from the OwnerControl resource again. Now I expect that both should be nil after the submission
+    scResult = executeScript(
+        getOwnerControlBallotIdSc,
+        [deployer.address, account01.address]
+    )
+
+    ownerControlBallotId = scResult.returnValue as! UInt64?
+
+    Test.assertEqual(ownerControlBallotId, nil)
+
+    scResult = executeScript(
+        getOwnerControlOwnerSc,
+        [deployer.address, storedBallotId]
+    )
+
+    ownerControlOwner = scResult.returnValue as! Address?
+
+    Test.assertEqual(ownerControlOwner, nil)
+
+    // After a successful submission, there should be one more event in the ballot submitted events. The contract data inconsistent ones should remain unchanged
+    eventNumberCount[ballotSubmittedEventType] = eventNumberCount[ballotSubmittedEventType]! + 1
+
+    // Validate the rest
+    // Grab the events for the events that should be emitted and the ones that should not
+    var ballotSubmittedEvents: [AnyStruct] = Test.eventsOfType(ballotSubmittedEventType)
+    var contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
+
+    Test.assertEqual(eventNumberCount[ballotSubmittedEventType]!, ballotSubmittedEvents.length)
+    Test.assertEqual(eventNumberCount[contractDataInconsistentEventType]!, contractDataInconsistentEvents.length)
+
+    // Grab the last event from the BallotSubmitted set and validate the arguments against the ones grabbed from the VoteBox
+    let ballotSubmittedEvent: VoteBoothST.BallotSubmitted = ballotSubmittedEvents[ballotSubmittedEvents.length - 1] as! VoteBoothST.BallotSubmitted
+
+    Test.assertEqual(ballotSubmittedEvent._ballotId, storedBallotId!)
+    Test.assertEqual(ballotSubmittedEvent._voterAddress, storedBallotOwner!)
+}
+
+access(all) fun testBallotRevokeAccount01() {
+    // In order to be able to revoke the ballot previously submitted by account01, I need to submit another one with the default option. But I still need a new ballot in account01 VoteBox
+    // Get the initial number of minted and submitted ballots
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    scResult = executeScript(
+        getTotalBallotsSubmittedSc,
+        []
+    )
+
+    let initialTotalBallotsSubmitted: UInt64 = scResult.returnValue as! UInt64
+
+    // Capture the parameters for the Ballot in account02, which is still in account02's VoteBox, and the one already submitted for account01. This one is irrecoverable because it was submitted to the deployer's BallotBox, but I can revoke it by submitting another one with the default option, and validate its parameters from the event emitted. I can't get its parameters from its VoteBox at this point, but that's why I saved all the Ballot data into the ballots struts.
+    let storedBallotId01: UInt64 = ballots[account01.address]!
+
+    // The data for the Ballot in account01 should be out of the OwnerControl but the one for account02 should still be there. Check it
+    scResult = executeScript(
+        getOwnerControlBallotIdSc,
+        [deployer.address, account01.address]
+    )
+
+    var ownerControlBallotId01: UInt64? = scResult.returnValue as! UInt64?
+
+    // This one should be nil
+    Test.assertEqual(ownerControlBallotId01, nil)
+
+    scResult = executeScript(
+        getOwnerControlOwnerSc,
+        [deployer.address, storedBallotId01]
+    )
+
+    var ownerControlOwner01: Address? = scResult.returnValue as! Address?
+
+    // No owner should be set in the OwnerControl struct for account01
+    Test.assertEqual(ownerControlOwner01, nil)
+
+    // All is consistent, it seems. Proceed with getting a new Ballot to account01
+    var txResult: Test.TransactionResult = executeTransaction(
+        mintBallotToAccountTx,
+        [account01.address],
+        deployer
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    // Adjust the event counter for Ballots Minted
+    eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + 1
+
+    // And extract the new Ballot parameters
+    let ballotMintedEvents: [AnyStruct] = Test.eventsOfType(ballotMintedEventType)
+
+    let ballotMintedEvent: VoteBoothST.BallotMinted = ballotMintedEvents[ballotMintedEvents.length - 1] as! VoteBoothST.BallotMinted
+
+    let newBallotId: UInt64 = ballotMintedEvent._ballotId
+    let newBallotOwner: Address = ballotMintedEvent._voterAddress
+
+    // Validate that these two parameters are in the OwnerControl resource
+    scResult = executeScript(
+        getOwnerControlBallotIdSc,
+        [deployer.address, account01.address]
+    )
+
+    ownerControlBallotId01 = scResult.returnValue as! UInt64?
+
+    Test.assertEqual(ownerControlBallotId01!, newBallotId)
+
+    scResult = executeScript(
+        getOwnerControlOwnerSc,
+        [deployer.address, ownerControlBallotId01!]
+    )
+
+    ownerControlOwner01 = scResult.returnValue as! Address?
+
+    Test.assertEqual(ownerControlOwner01!, newBallotOwner)
+
+    // Submit both account01 and account02 Ballots with the default option to revoke them both
+    txResult = executeTransaction(
+        submitBallotToBallotBoxTx,
+        [0 as UInt8],
+        account01
+        )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    // The revoking from account01 should reduce the total ballots minted by 2: the old submitted ballot was burned, as well as the new one use to do the revoking. But no ballots should have been added to the submitted total
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalMintedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    // So, since the beginning of this test, I've minted one more Ballot (to account01) but burned 2 at this exact point (the new Ballot used to revoke the one from account01 and the old Ballot as well), so, I should have + 1 - 2 = -1 total minted Ballots from the initial value
+    Test.assertEqual(initialTotalBallotsMinted - 1, finalTotalMintedBallots)
+
+    scResult = executeScript(
+        getTotalBallotsSubmittedSc,
+        []
+    )
+
+    let finalTotalSubmittedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsSubmitted, finalTotalSubmittedBallots)
+
+    // There should be one BallotRevoked event in storage
+    // Also, increment the event counter for ballots minted to account with the new one minted to account01
+    eventNumberCount[ballotRevokedEventType] = eventNumberCount[ballotRevokedEventType]! + 1
+    // The previous revoking should have set 2 ballots to be burned as well
+    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + 2
+
+    // Grab the event list
+    var ballotRevokedEvents: [AnyStruct] = Test.eventsOfType(ballotRevokedEventType)
+    var contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
+    var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
+
+    Test.assertEqual(eventNumberCount[ballotRevokedEventType]!, ballotRevokedEvents.length)
+    Test.assertEqual(eventNumberCount[contractDataInconsistentEventType]!, contractDataInconsistentEvents.length)
+    Test.assertEqual(eventNumberCount[ballotBurnedEventType]!, ballotBurnedEvents.length)
+    
+    // Capture the BallotRevoked event and check that the arguments match the expected ones
+    var ballotRevokedEvent: VoteBoothST.BallotRevoked = ballotRevokedEvents[ballotRevokedEvents.length - 1] as! VoteBoothST.BallotRevoked
+
+    Test.assertEqual(ballotRevokedEvent._ballotId!, ballots[account01.address]!)
+    Test.assertEqual(ballotRevokedEvent._voterAddress, account01.address)
+
+    // After revoking, make sure the OwnerControl has removed the entries related to the new Ballot issued to account01
+    scResult = executeScript(
+        getOwnerControlBallotIdSc,
+        [deployer.address, newBallotOwner]
+    )
+
+    ownerControlBallotId01 = scResult.returnValue as! UInt64?
+
+    Test.assertEqual(ownerControlBallotId01, nil)
+
+    scResult = executeScript(
+        getOwnerControlOwnerSc,
+        [deployer.address, newBallotId]
+    )
+
+    ownerControlOwner01 = scResult.returnValue as! Address?
+
+    Test.assertEqual(ownerControlOwner01, nil)
+}
+
+// TODO: Finish this one
+// TODO: Remove extra logs
+access(all) fun testBallotRevokeAccount02() {
+    let storedBallotId02: UInt64 = ballots[account02.address]!
+
+    var scResult: Test.ScriptResult = executeScript(
+        getOwnerControlBallotIdSc,
+        [deployer.address, account02.address]
+    )
+
+    var ownerControlBallotId02: UInt64? = scResult.returnValue as! UInt64?
+
+    scResult = executeScript(
+        getOwnerControlOwnerSc,
+        [deployer.address, storedBallotId02]
+    )
+
+    var ownerControlOwner02: Address? = scResult.returnValue as! Address?
+
+    // But the one for account02 should match this account address
+    Test.assertEqual(ownerControlOwner02!, account02.address)
+    Test.assertEqual(ownerControlBallotId02!, storedBallotId02)
+
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let initialTotalBallotsMinted: UInt64 = scResult.returnValue as! UInt64
+
+    scResult = executeScript(
+        getTotalBallotsSubmittedSc,
+        []
+    )
+
+    let initialTotalBallotsSubmitted: UInt64 = scResult.returnValue as! UInt64
+
+    // Done with the Ballot in account01. Revoke the one in account02. This one has not been cast so far, but the behavior should resemble the one thus far
+    var txResult: Test.TransactionResult = executeTransaction(
+        submitBallotToBallotBoxTx,
+        [VoteBoothST.defaultBallotOption],
+        account02
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    // It is expected that one BallotRevoked event has been emitted but nothing more
+    eventNumberCount[ballotRevokedEventType] = eventNumberCount[ballotRevokedEventType]! + 1
+
+    // And one more BallotBurned should have been added as well
+    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + 1
+
+    var ballotRevokedEvents: [AnyStruct] = Test.eventsOfType(ballotRevokedEventType)
+    var ballotBurnedEvents: [AnyStruct] = Test.eventsOfType(ballotBurnedEventType)
+    var contractDataInconsistentEvents: [AnyStruct] = Test.eventsOfType(contractDataInconsistentEventType)
+
+    // Validate the event counter
+    Test.assertEqual(eventNumberCount[ballotRevokedEventType]!, ballotRevokedEvents.length)
+    Test.assertEqual(eventNumberCount[ballotBurnedEventType]!,
+    ballotBurnedEvents.length)
+    Test.assertEqual(eventNumberCount[contractDataInconsistentEventType]!, contractDataInconsistentEvents.length)
+
+    // Check that the data in the BallotRevoked event matches the one for the Ballot in account02
+    let ballotRevokedEvent: VoteBoothST.BallotRevoked = ballotRevokedEvents[ballotRevokedEvents.length - 1] as! VoteBoothST.BallotRevoked
+
+    Test.assertEqual(storedBallotId02, ballotRevokedEvent._ballotId)
+    Test.assertEqual(account02.address, ballotRevokedEvent._voterAddress)
+
+    // Validate that both parameters were removed from the OwnerControl
+    scResult = executeScript(
+        getOwnerControlBallotIdSc,
+        [deployer.address, account02.address]
+    )
+
+    ownerControlBallotId02 = scResult.returnValue as! UInt64?
+
+    Test.assertEqual(ownerControlBallotId02, nil)
+
+    scResult = executeScript(
+        getOwnerControlOwnerSc,
+        [deployer.address, storedBallotId02]
+    )
+
+    ownerControlOwner02 = scResult.returnValue as! Address?
+
+    Test.assertEqual(ownerControlOwner02, nil)
+
+    // Finally, the total minted ballots should have been decremented by one but the submitted ones should have remained the same. That's one less than the current minted Ballots value and minus 3 regarding the initial minted Ballots
+    scResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    let finalTotalMintedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsMinted - 1, finalTotalMintedBallots)
+
+    scResult = executeScript(
+        getTotalBallotsSubmittedSc,
+        []
+    )
+
+    let finalTotalSubmittedBallots: UInt64 = scResult.returnValue as! UInt64
+
+    Test.assertEqual(initialTotalBallotsSubmitted, finalTotalSubmittedBallots)
 }
 
 /*
@@ -1159,10 +1592,7 @@ access(all) fun _testBallotMintingToVoteBoxes() {
         Test.assert(addresses.contains(eventBallotOwner), message: "The Ballot Owner ".concat(eventBallotOwner.toString()).concat(" from the BallotMinted does not exists in the sent of ballot addresses! "))
 
         // If none of the asserts before blew up, all is good. Proceed with building the ballot dictionary
-        ballots["account0".concat((index + 1).toString())] = {
-            "address": ballotMintedEvent!._voterAddress.toString(),
-            "ballotID": ballotMintedEvent!._ballotId.toString()
-        }
+        ballots[account.address] = ballotMintedEvent!._ballotId
     }
 
     // This test should have increase the total of ballots minted by the size of the addresses array
@@ -1207,7 +1637,7 @@ access(all) fun _testWithdrawBallotsToBurnBox() {
     // for the deployer account since the deployer does not have a VoteBox nor a Ballot anywhere
 
     txResult = executeTransaction(
-        submitValidBallotToBallotBoxTx,
+        submitBallotToBallotBoxTx,
         [deployer.address],
         deployer
     )
@@ -1217,7 +1647,7 @@ access(all) fun _testWithdrawBallotsToBurnBox() {
     for account in burnableBallotAccounts {
         // The fist attempt is made to fail on purpose. None of the accounts in the array has a BurnBox in their accounts, only the deployer has those.
         txResult = executeTransaction(
-            submitValidBallotToBallotBoxTx,
+            submitBallotToBallotBoxTx,
             [account.address],
             account
         )
@@ -1241,7 +1671,7 @@ access(all) fun _testWithdrawBallotsToBurnBox() {
 
         // Now for the real one
         txResult = executeTransaction(
-            submitValidBallotToBallotBoxTx,
+            submitBallotToBallotBoxTx,
             [deployer.address],
             account
         )

@@ -154,8 +154,8 @@ transaction(testAddress: Address) {
             )
         }
 
-        let contractElectionOptions: [Int] = VoteBoothST.getElectionOptions()
-        let ballotElectionOptions: [Int] = ballot.getElectionOptions()
+        let contractElectionOptions: [UInt8] = VoteBoothST.getElectionOptions()
+        let ballotElectionOptions: [UInt8] = ballot.getElectionOptions()
 
         if (contractElectionOptions != ballotElectionOptions) {
             panic(

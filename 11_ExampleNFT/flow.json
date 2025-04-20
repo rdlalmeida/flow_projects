@@ -297,8 +297,21 @@
                     "name": "ExampleNFTContract",
                     "args": [
                         {
-                            "type": "String",
-                            "value": "Ricardo"
+                            "type": "Array",
+                            "value": [
+                                {
+                                    "type": "Int",
+                                    "value": "1"
+                                },
+                                {
+                                    "type": "Int",
+                                    "value": "3"
+                                },
+                                {
+                                    "type": "Int",
+                                    "value": "7"
+                                }
+                            ]
                         }
                     ]
                 }

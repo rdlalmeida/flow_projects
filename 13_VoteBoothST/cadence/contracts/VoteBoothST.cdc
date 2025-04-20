@@ -62,14 +62,14 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(all) let _symbol: String
     access(all) let _ballot: String
     access(all) let _location: String
-    access(all) let _options: [Int]
+    access(all) let _options: [UInt8]
 
     // I'm using these to do an internal tracking mechanism to protect this against double voting and the like
     access(account) var totalBallotsMinted: UInt64
     access(account) var totalBallotsSubmitted: UInt64
 
     // I'm setting the default Ballot option as a variable for easier comparison
-    access(all) let defaultBallotOption: Int
+    access(all) let defaultBallotOption: UInt8
 
     // Use this variable set (the contract constructor receives an argument to set it) to enable or disable the printing of logs in this project
     access(all) let printLogs: Bool
@@ -83,7 +83,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         access(all) let id: UInt64
 
         // The main option to represent the choice. A '0' indicates none selected yet
-        access(self) var option: Int
+        access(self) var option: UInt8
 
         /*
             I'm going to use this flag to allow ballots to be revoked without having to actually check what the option in the Ballot really is (I'm trying to avoid this one as much as possible.) The idea is that voters can submit Ballots with the default option set. If that is indeed the case, when the Ballot Box receives a Ballot with this flag unset (false) sends it, as well as any Ballots in storage under the owner that is submitting it, to the BurnBox. This essentially allows a voter that regrets his/her vote but does not wants to replace it for another one. It may be a rare situation, but nevertheless.
@@ -148,7 +148,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         access(all) view fun getElectionLocation(): String {
             return VoteBoothST._location
         }
-        access(all) view fun getElectionOptions(): [Int] {
+        access(all) view fun getElectionOptions(): [UInt8] {
             return VoteBoothST._options
         }
 
@@ -160,16 +160,17 @@ access(all) contract VoteBoothST: NonFungibleToken {
         /*
             Because I have all my Ballot ownership structures neatly wrapped into a single and highly protected resource which can only be accessed by the contract owner, I need to trust that all the processes up to this point have validated that the current Ballot owner (this function runs from the Ballot resource), namely, if one and only one Ballot was minted to this account, that the contract owner has no ballots, etc.
         */
-        access(all) fun vote(newOption: Int?) {
+        access(all) fun vote(newOption: UInt8?) {
             pre {
                 self.owner != nil: "Need a valid owner to vote. Use a an authorized reference to this Ballot to vote please."
                 self.owner!.address == self.ballotOwner: "Only the Ballot owner is allowed to vote!"
                 self.ballotOwner != self.voteBoothDeployer: "The Administrator(".concat(self.voteBoothDeployer.toString()).concat(") is not allowed to vote!")
-                newOption != nil && self.getElectionOptions().contains(newOption!): "The option '".concat(newOption!.toString()).concat("' is not a valid on")
+                newOption != nil: "Nil option provided. Cannot continue."
+                self.getElectionOptions().contains(newOption!) || newOption! == VoteBoothST.defaultBallotOption: "The option '".concat(newOption!.toString()).concat("' is not among the valid for this election!")
             }
 
             // All validations are OK. Proceed with the vote but only if the option passed is not nil. Otherwise it is a Ballot revoke, which in this case I don't need to do anything else
-            if (newOption != nil) {
+            if (newOption! != VoteBoothST.defaultBallotOption) {
                 self.option = newOption!
                 self.hasVoted = true
             }
@@ -177,7 +178,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
         // NOTE: This function is for TEST and DEBUG purposes only. I mean, is not that serious given that I'm also going to encrypt the option value at a later stage, and this knowledge does violates voter privacy, but no one is going to die for it in a policy oriented democratic scenario. But just in case, this needs to be deleted/protected with an BoothAdmin entitlement before moving to a PROD environment. Worst case scenario, someone can calculate the tally before the "official" reveal. Bah, who cares really?
         // TODO: Delete or protect this function with BoothAdmin entitlement before moving to PROD.
-        access(account) fun getVote(): Int? {
+        access(account) fun getVote(): UInt8? {
             pre {
                 self.owner != nil: "This function can only be invoked through a reference!"
                 self.owner!.address == self.ballotOwner: "Only the owner can invoke this function"
@@ -345,7 +346,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
             I've set the protections to prevent people other than the owner in the Ballot resource itself. If someone else tries to fetch the current vote other than the Ballot owner (which is also the VoteBox owner by obvious reasons), it fails a pre condition and panics. If there are no Ballots yet in the VoteBox, a nil is returned instead.
             TODO: Delete or protect this function with a proper entitlement before moving this to PROD
         */
-        access(all) fun getCurrentVote(): Int? {
+        access(all) fun getCurrentVote(): UInt8? {
             // Grab the id for the Ballot in storage, if any
             if (self.storedBallot.length == 0) {
                 // If there are no Ballots stored yet, return a nil
@@ -391,7 +392,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
         /*
             This is the function used to cast a Vote. It verifies an insane number of pre and post conditions, but if successful, it changes the option field in a stored Ballot, which equates to a valid vote
         */
-        access(VoteEnable) fun castVote(option: Int?) {
+        access(VoteEnable) fun castVote(option: UInt8?) {
             pre {
                 self.owner != nil: "Voting is only allowed through an authorized reference!"
                 self.storedBallot.length > 0: "Account ".concat(self.owner!.address.toString()).concat(" does not have a Ballot in storage to vote!")
@@ -418,7 +419,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
             }
 
             // All is OK so far. Do it.
-            storedBallotRef!.vote(newOption: option)
+            storedBallotRef!.vote(newOption: option!)            
         }
 
         /*
@@ -503,6 +504,8 @@ access(all) resource BallotBox {
         let newBallotId: UInt64 = ballot.id
         let newOwner: Address = ballot.ballotOwner
 
+        log("0. Entering BallotBox submitBallot with a Ballot from account ".concat(newOwner.toString()))
+
         // Test first if its a nil (which would be the most common case). Proceed with standard NonFungibleToken.Collection behaviour
         if (randomResourceRef == nil) {
             // Is this a Ballot revoke?
@@ -512,6 +515,8 @@ access(all) resource BallotBox {
 
                 // Decrement the total number of ballots minted because of this last burn
                 VoteBoothST.decrementTotalBallotsMinted(ballots: 1)
+
+                log("1. Ballot Revoked emitted for account ".concat(newOwner.toString()))
 
                 emit BallotRevoked(_ballotId: nil, _voterAddress: newOwner)
             }
@@ -530,7 +535,7 @@ access(all) resource BallotBox {
             }
         }
         // If the type got was not nil, test if there's an old Ballot there instead. If so, replace it but emit a BallotModified event to warn that a Ballot was re-submitted
-        else if (randomResourceRef.getType() == Type<&VoteBoothST.Ballot>()) {
+        else if (randomResourceRef.getType() == Type<&VoteBoothST.Ballot?>()) {
             // The process of replacing a type specific resource is a bit tricky and verbose, but still far easier than in any centralised approach. First, I need to retrieve a proper @VoteBooth.Ballot to get its id and ballotOwner
             let oldBallot: @VoteBoothST.Ballot <- self.submittedBallots.remove(key: ballot.ballotOwner) as! @VoteBoothST.Ballot
 
@@ -540,6 +545,7 @@ access(all) resource BallotBox {
             // Destroy the oldBallot and store the new one in its place. Do it using the Burner so that the proper callback gets invoked
             Burner.burn(<- oldBallot)
 
+
             // Anytime a Ballot gets burned, it's one less in the total counter of minted Ballots. Decrement this counter as well
             VoteBoothST.decrementTotalBallotsMinted(ballots: 1)
 
@@ -547,6 +553,8 @@ access(all) resource BallotBox {
             if (ballot.isRevoked()) {
                 // If so, just burn the received Ballot as well, emit the BallotRevoke event with the old ballot owner and ballotId and decrement the total Ballots minted.
                 Burner.burn(<- ballot)
+
+                log("2. Ballot Revoked emitted for account ".concat(newOwner.toString()))
 
                 emit BallotRevoked(_ballotId: oldBallotId, _voterAddress: oldBallotOwner)
                 
@@ -575,6 +583,8 @@ access(all) resource BallotBox {
                 destroy nonNilResource
 
                 Burner.burn(<- ballot)
+
+                log("3. Ballot Revoked emitted for account ".concat(newOwner.toString()))
 
                 emit VoteBoothST.BallotRevoked(_ballotId: nil, _voterAddress: newOwner)
 
@@ -955,10 +965,6 @@ access(all) resource BurnBox{
                 // Data inconsistency detected! There is no ballotId associated to the owner in the ballot to burn in the 'owners' dictionary. Emit the event but don't panic: make sure both dictionaries are consistent, burn the token and get out
                 emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId, _owner: ballotToBurn.ballotOwner)
 
-                log(
-                    "ERROR: ContractDataInconsistent: 1"
-                )
-
                 // This ballot should not exist. In this case, check the other internal dictionary and correct it and burn the ballot before panicking
                 let storedBallotOwner: Address? = ownerControlRef.getOwner(ballotId: ballotToBurn.id)
 
@@ -1054,9 +1060,6 @@ access(all) resource BurnBox{
             if (storedOwner != nil) {
                 // The ideal scenario is that I get a nil from this one, meaning that no owner is still registered under this ballotId. If this is not the case, emit the ContractDataInconsistent event with the address returned from the last step, but carry on with the rest of the process, i.e., replace the old owner for the one provided
                 emit VoteBoothST.ContractDataInconsistent(_ballotId: ballotId, _owner: storedOwner!)
-                log(
-                    "ERROR: ContractDataInconsistent: 2"
-                )
             }
             
             self.ballotIds[ballotId] = owner
@@ -1070,10 +1073,6 @@ access(all) resource BurnBox{
 
             if (storedBallotId != nil) {
                 emit VoteBoothST.ContractDataInconsistent(_ballotId: storedBallotId!, _owner: owner)
-
-                log(
-                    "ERROR: ContractDataInconsistent: 3"
-                )
             }
             self.owners[owner] = ballotId
         }
@@ -1175,7 +1174,7 @@ access(all) resource BurnBox{
     access(all) view fun getElectionBallot(): String {
         return self._ballot
     }
-    access(all) view fun getElectionOptions(): [Int] {
+    access(all) view fun getElectionOptions(): [UInt8] {
         return self._options
     }
 
@@ -1288,8 +1287,12 @@ access(all) resource BurnBox{
     }
     the trick is to find <something> that flow-cli accepts. I've tried all combinations and then some and the thing just doesn't want any of that. It always complains of "expected JSON array, got..." and then a litany of things other than the ones I'm trying to do.
     This is clearly an issue with the JSON-Cadence parser and I would not be surprised if I was the first one to get it. Anyway, if this gets resolved sometime, I need to redo this constructor at some point.
+
+    NOTE: Turns out the Flow developer dudes took my ticket seriously and did fixed the damn thing! I shouldn't be surprised, but I am. And it didn't took a whole year! Actually, it was surprisingly quick. Anyways, flow-cli released a new version (v2.2.10 @ 18/04/2025) and contract constructors accept arrays as arguments now! I've tested with an ExampleNFTContract and it works like a charm! I'm keeping this note here just to remind me that, sometimes, things do work out!
+
+    TODO: Fix the contract to get an array of options as the electionOptions!
 */
-    init(name: String, symbol: String, ballot: String, location: String, electionOptions: Int, printLogs: Bool) {
+    init(name: String, symbol: String, ballot: String, location: String, electionOptions: [UInt8], printLogs: Bool) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
         self.ballotPrinterAdminPublicPath = /public/BallotPrinterAdmin
         self.ballotBoxStoragePath = /storage/BallotBox
@@ -1305,24 +1308,20 @@ access(all) resource BurnBox{
         self._symbol = symbol
         self._ballot = ballot
         self._location = location
-        // This argument is being hardcoded on purpose. Check the note above for explanation
-        if (electionOptions <= 1) {
-            panic(
-                "ERROR: Invalid electionOptions range provided: "
-                .concat(electionOptions.toString())
-                .concat(". Please provide a value > 1")
-            )
-        }
-        let range: InclusiveRange<Int> = InclusiveRange(1, electionOptions, step: 1)
-        var elements: [Int] = []
 
-        for element in range {
-            elements.append(element)
-        }
 
-        self._options = elements
+        self._options = electionOptions
 
         self.defaultBallotOption = 0
+
+        // I want to use the default option (0) to signal Ballots to be revoked. It's a bit of a pointless feature, but important nonetheless. As such, I need to make sure that 0 is not among the election options provided
+        if (electionOptions.contains(self.defaultBallotOption)) {
+            panic(
+                "ERROR: The default Ballot option ("
+                .concat(self.defaultBallotOption.toString())
+                .concat(") is among the election options provided! Please remove this option from the valid ones to continue!")
+            )
+        }
 
         self.totalBallotsMinted = 0
         self.totalBallotsSubmitted = 0
