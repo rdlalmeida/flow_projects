@@ -504,8 +504,6 @@ access(all) resource BallotBox {
         let newBallotId: UInt64 = ballot.id
         let newOwner: Address = ballot.ballotOwner
 
-        log("0. Entering BallotBox submitBallot with a Ballot from account ".concat(newOwner.toString()))
-
         // Test first if its a nil (which would be the most common case). Proceed with standard NonFungibleToken.Collection behaviour
         if (randomResourceRef == nil) {
             // Is this a Ballot revoke?
@@ -516,9 +514,8 @@ access(all) resource BallotBox {
                 // Decrement the total number of ballots minted because of this last burn
                 VoteBoothST.decrementTotalBallotsMinted(ballots: 1)
 
-                log("1. Ballot Revoked emitted for account ".concat(newOwner.toString()))
-
-                emit BallotRevoked(_ballotId: nil, _voterAddress: newOwner)
+                // The Ballot revoked in this case is the one received in this function
+                emit BallotRevoked(_ballotId: newBallotId, _voterAddress: newOwner)
             }
             else {
                 // Otherwise proceed with the normal submission
@@ -554,11 +551,12 @@ access(all) resource BallotBox {
                 // If so, just burn the received Ballot as well, emit the BallotRevoke event with the old ballot owner and ballotId and decrement the total Ballots minted.
                 Burner.burn(<- ballot)
 
-                log("2. Ballot Revoked emitted for account ".concat(newOwner.toString()))
-
                 emit BallotRevoked(_ballotId: oldBallotId, _voterAddress: oldBallotOwner)
                 
                 VoteBoothST.decrementTotalBallotsMinted(ballots: 1)
+
+                // The number of Ballots submitted needs to be decremented because, in this case, I'm short on one of them
+                VoteBoothST.decrementTotalBallotsSubmitted(ballots: 1)
             }
             else {
                 let nilResource: @AnyResource? <- self.submittedBallots[newOwner] <- ballot
@@ -583,8 +581,6 @@ access(all) resource BallotBox {
                 destroy nonNilResource
 
                 Burner.burn(<- ballot)
-
-                log("3. Ballot Revoked emitted for account ".concat(newOwner.toString()))
 
                 emit VoteBoothST.BallotRevoked(_ballotId: nil, _voterAddress: newOwner)
 
