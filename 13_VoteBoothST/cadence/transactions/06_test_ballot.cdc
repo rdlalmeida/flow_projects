@@ -164,7 +164,7 @@ transaction(testAddress: Address) {
         }
 
         let testBallotId: UInt64 = ballot.id
-        let testBallotOwner: Address = ballot.ballotOwner
+        let testBallotOwner: Address = ballot.ballotOwner!
 
         // Burn the test Ballot using the function from the ballotPrinterAdminRef so that the OwnerControl dictionaries keep their consistency. This is because I've set this function to remove the entries from the internal dictionaries from the OwnerControl before actually destroying the resource. Otherwise I'm going to provoke a ContractDataInconsistency
         self.ballotPrinterRef.burnBallot(ballotToBurn: <- ballot)

@@ -84,8 +84,8 @@ transaction(someAddress: Address, anotherAddress: Address) {
         let testBallot01Id: UInt64 = testBallot01.id
         let testBallot02Id: UInt64 = testBallot02.id
 
-        let testBallot01Owner: Address = testBallot01.ballotOwner
-        let testBallot02Owner: Address = testBallot02.ballotOwner
+        let testBallot01Owner: Address = testBallot01.ballotOwner!
+        let testBallot02Owner: Address = testBallot02.ballotOwner!
 
         // I've added a simple consistency checking function that checks if the lengths of both internal dictionaries match. A mismatch indicated a problem and this function returns false.
         if (!self.ownerControlRef.isConsistent()) {

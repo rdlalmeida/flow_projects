@@ -44,6 +44,8 @@ access(all) let getBallotOwnersSc: String = "../scripts/04_get_ballot_owner.cdc"
 access(all) let getTotalBallotsMintedSc: String = "../scripts/05_get_total_ballots_minted.cdc"
 access(all) let getTotalBallotsSubmittedSc: String = "../scripts/06_get_total_ballots_submitted.cdc"
 access(all) let getCurrentVoteOptionSc: String = "../scripts/07_get_current_vote_option.cdc"
+access(all) let getOwnerControlBallotIdSc: String = "../scripts/09_get_owner_control_ballot_id.cdc"
+access(all) let getOwnerControlOwnerSc: String = "../scripts/10_get_owner_control_owner.cdc"
 
 // EVENTS
 // NonFungibleToken events
@@ -55,14 +57,15 @@ access(all) let resourceDestroyedEventType: Type = Type<NonFungibleToken.NFT.Res
 // VoteBoothST events
 access(all) let nonNilTokenReturnedEventType: Type = Type<VoteBoothST.NonNilTokenReturned>()
 access(all) let ballotMintedEventType: Type = Type<VoteBoothST.BallotMinted>()
-access(all) let ballotBurnedEventType: Type = Type<VoteBoothST.BallotBurned>()
-access(all) let ballotModifiedEventType: Type = Type<VoteBoothST.BallotModified>()
 access(all) let ballotSubmittedEventType: Type = Type<VoteBoothST.BallotSubmitted>()
-access(all) let ballotSetToBurnEventType: Type = Type<VoteBoothST.BallotSetToBurn>()
-access(all) let ballotBoxCreatedEventType: Type = Type<VoteBoothST.BallotBoxCreated>()
+access(all) let ballotModifiedEventType: Type = Type<VoteBoothST.BallotModified>()
+access(all) let ballotBurnedEventType: Type = Type<VoteBoothST.BallotBurned>()
+access(all) let ballotRevokedEventType: Type = Type<VoteBoothST.BallotRevoked>()
+access(all) let contractDataInconsistentEventType: Type = Type<VoteBoothST.ContractDataInconsistent>()
 access(all) let voteBoxCreatedEventType: Type = Type<VoteBoothST.VoteBoxCreated>()
 access(all) let voteBoxDestroyedEventType: Type = Type<VoteBoothST.VoteBoxDestroyed>()
-access(all) let contractDataInconsistentEventType: Type = Type<VoteBoothST.ContractDataInconsistent>()
+access(all) let ballotBoxCreatedEventType: Type = Type<VoteBoothST.BallotBoxCreated>()
+access(all) let ballotSetToBurnEventType: Type = Type<VoteBoothST.BallotSetToBurn>()
 
 access(all) var eventNumberCount: {Type: Int} = {
     updatedEventType: 0,
@@ -71,16 +74,113 @@ access(all) var eventNumberCount: {Type: Int} = {
     resourceDestroyedEventType: 0,
     nonNilTokenReturnedEventType: 0,
     ballotMintedEventType: 0,
-    ballotBurnedEventType: 0,
-    ballotModifiedEventType: 0,
     ballotSubmittedEventType: 0,
-    ballotSetToBurnEventType: 0,
-    ballotBoxCreatedEventType: 0,
+    ballotModifiedEventType: 0,
+    ballotBurnedEventType: 0,
+    ballotRevokedEventType: 0,
+    contractDataInconsistentEventType: 0,
     voteBoxCreatedEventType: 0,
     voteBoxDestroyedEventType: 0,
-    contractDataInconsistentEventType: 0
+    ballotBoxCreatedEventType: 0,
+    ballotSetToBurnEventType: 0
 }
 
+access(all) var updatedEvents: [AnyStruct] = []
+access(all) var withdrawnEvents: [AnyStruct] = []
+access(all) var depositedEvents: [AnyStruct] = []
+access(all) var resourceDestroyedEvents: [AnyStruct] = []
+access(all) var nonNilTokenReturnedEvents: [AnyStruct] = []
+access(all) var ballotMintedEvents: [AnyStruct] = []
+access(all) var ballotSubmittedEvents: [AnyStruct] = []
+access(all) var ballotModifiedEvents: [AnyStruct] = []
+access(all) var ballotBurnedEvents: [AnyStruct] = []
+access(all) var ballotRevokedEvents: [AnyStruct] = []
+access(all) var contractDataInconsistentEvents: [AnyStruct] = []
+access(all) var voteBoxCreatedEvents: [AnyStruct] = []
+access(all) var voteBoxDestroyedEvents: [AnyStruct] = []
+access(all) var ballotBoxCreatedEvents: [AnyStruct] = []
+access(all) var ballotSetToBurnEvents: [AnyStruct] = []
+
+access(all) fun validateEvents() {
+    updatedEvents = Test.eventsOfType(updatedEventType)
+    withdrawnEvents = Test.eventsOfType(withdrawnEventType)
+    depositedEvents = Test.eventsOfType(depositedEventType)
+    resourceDestroyedEvents = Test.eventsOfType(resourceDestroyedEventType)
+    nonNilTokenReturnedEvents = Test.eventsOfType(nonNilTokenReturnedEventType)
+    ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
+    ballotSubmittedEvents = Test.eventsOfType(ballotSubmittedEventType)
+    ballotModifiedEvents = Test.eventsOfType(ballotModifiedEventType)
+    ballotBurnedEvents = Test.eventsOfType(ballotBurnedEventType)
+    ballotRevokedEvents = Test.eventsOfType(ballotRevokedEventType)
+    contractDataInconsistentEvents = Test.eventsOfType(contractDataInconsistentEventType)
+    voteBoxCreatedEvents = Test.eventsOfType(voteBoxCreatedEventType)
+    voteBoxDestroyedEvents = Test.eventsOfType(voteBoxDestroyedEventType)
+    ballotBoxCreatedEvents = Test.eventsOfType(ballotBoxCreatedEventType)
+    ballotSetToBurnEvents = Test.eventsOfType(ballotSetToBurnEventType)
+
+    Test.assertEqual(updatedEvents.length, eventNumberCount[updatedEventType]!)
+    Test.assertEqual(withdrawnEvents.length, eventNumberCount[withdrawnEventType]!)
+    Test.assertEqual(resourceDestroyedEvents.length, eventNumberCount[resourceDestroyedEventType]!)
+    Test.assertEqual(nonNilTokenReturnedEvents.length, eventNumberCount[nonNilTokenReturnedEventType]!)
+    Test.assertEqual(ballotSubmittedEvents.length, eventNumberCount[ballotSubmittedEventType]!)
+    Test.assertEqual(ballotMintedEvents.length, eventNumberCount[ballotMintedEventType]!)
+    Test.assertEqual(ballotModifiedEvents.length, eventNumberCount[ballotModifiedEventType]!)
+    Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
+    Test.assertEqual(ballotRevokedEvents.length, eventNumberCount[ballotRevokedEventType]!)
+    Test.assertEqual(contractDataInconsistentEvents.length, eventNumberCount[contractDataInconsistentEventType]!)
+    Test.assertEqual(voteBoxCreatedEvents.length, eventNumberCount[voteBoxCreatedEventType]!)
+    Test.assertEqual(voteBoxDestroyedEvents.length, eventNumberCount[voteBoxDestroyedEventType]!)
+    Test.assertEqual(ballotBoxCreatedEvents.length, eventNumberCount[ballotBoxCreatedEventType]!)
+    Test.assertEqual(ballotSetToBurnEvents.length, eventNumberCount[ballotSetToBurnEventType]!)
+}
+
+access(all) struct ownerControlEntry {
+    access(all) let ballotId: UInt64?
+    access(all) let owner: Address?
+
+    init(_ballotId: UInt64?, _owner: Address?) {
+        self.ballotId = _ballotId
+        self.owner = _owner
+    }
+}
+
+access(all) fun getBallotTotals(): {String: UInt64} {
+    var scResult: Test.ScriptResult = executeScript(
+        getTotalBallotsMintedSc,
+        []
+    )
+
+    var ballotsTotal: {String: UInt64} = {}
+
+    ballotsTotal["minted"] = scResult.returnValue as! UInt64
+
+    scResult = executeScript(
+        getTotalBallotsSubmittedSc,
+        []
+    )
+
+    ballotsTotal["submitted"] = scResult.returnValue as! UInt64
+
+    return ballotsTotal
+}
+
+access(all) fun getOwnerControlEntry(ballotId: UInt64, owner: Address): ownerControlEntry {
+    var scResult: Test.ScriptResult = executeScript(
+        getOwnerControlBallotIdSc,
+        [deployer.address, owner]
+    )
+
+    let ownerControlBallotId: UInt64? = scResult.returnValue as! UInt64?
+
+    scResult = executeScript(
+        getOwnerControlOwnerSc,
+        [deployer.address, ballotId]
+    )
+
+    let ownerControlOwner: Address? = scResult.returnValue as! Address?
+
+    return ownerControlEntry(_ballotId: ownerControlBallotId, _owner: ownerControlOwner)
+}
 /* 
     IMPORTANT: This whole test suit is very, very based one VoteBox.getCurrentVote() and Ballot.getVote() functions, which should only be available for TEST and DEBUG purposed. At some point these functions should be deleted, or protected with an access(self) control access to maintain voter privacy. This means that, if this test is tried in a PROD version of the contract, most of these tests should FAIL because of that. Either take this into consideration, or revert these functions to access(all) to carry out the tests.
 */
@@ -222,6 +322,10 @@ access(all) fun testSubmitBallot() {
 
 access(all) fun testReSubmitBallot() {
 
+}
+
+access(all) fun testRevokeBallot() {
+    
 }
 
 

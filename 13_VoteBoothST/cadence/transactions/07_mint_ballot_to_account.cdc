@@ -52,7 +52,7 @@ transaction(recipient: Address) {
         let testBallot: @VoteBoothST.Ballot <- self.ballotPrinterRef.printBallot(voterAddress: self.recipientAddress)
 
         let testBallotId: UInt64 = testBallot.id
-        let testBallotOwner: Address = testBallot.ballotOwner
+        let testBallotOwner: Address = testBallot.ballotOwner!
 
         // Check that the records added to the internal structures of the OwnerControl resource are consistent
         if (!self.ownerControlRef.isConsistent()) {

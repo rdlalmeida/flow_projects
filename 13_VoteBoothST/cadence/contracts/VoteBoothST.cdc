@@ -97,12 +97,12 @@ access(all) contract VoteBoothST: NonFungibleToken {
             I'm using this variable for the few cases where I don't have this resource in storage but I still need to know who owns it. In these situations (after loading the token from storage for instance), the 'self.owner!.address' parameter returns 'nil' because, at that particular instance where the token is "dangling", i.e., not stored anywhere, there is no way to access the native storage and therefore 'self' is nil.
             Can this affect voter privacy? Hard to tell at this point, because if someone is able to accesses this field other than the owner, than everything else is also available, which means something very wrong happened and all voter privacy was lost.
         */
-        access(all) let ballotOwner: Address
+        access(all) var ballotOwner: Address?
 
         /*
             I need the address of the VoteBoothST contract deployer to be able to process this Ballot properly in the event of its, or a VoteBox containing it, destruction. This is mainly to be able to retrieve a valid reference to the BurnBox to where this Ballot should be sent to if the VoteBox containing it is set to be destroyed
         */
-        access(all) let voteBoothDeployer: Address
+        access(all) var voteBoothDeployer: Address?
 
         access(all) view fun getViews(): [Type] {
             return []
@@ -121,7 +121,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
                     "burnCallback called for Ballot with id"
                     .concat(self.id.toString())
                     .concat(" for owner ")
-                    .concat(self.ballotOwner.toString())
+                    .concat(self.ballotOwner!.toString())
                 )
             }
             emit VoteBoothST.BallotBurned(_ballotId: self.id, _voterAddress: self.ballotOwner)
@@ -164,7 +164,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
             pre {
                 self.owner != nil: "Need a valid owner to vote. Use a an authorized reference to this Ballot to vote please."
                 self.owner!.address == self.ballotOwner: "Only the Ballot owner is allowed to vote!"
-                self.ballotOwner != self.voteBoothDeployer: "The Administrator(".concat(self.voteBoothDeployer.toString()).concat(") is not allowed to vote!")
+                self.ballotOwner != self.voteBoothDeployer: "The Administrator(".concat(self.voteBoothDeployer!.toString()).concat(") is not allowed to vote!")
                 newOption != nil: "Nil option provided. Cannot continue."
                 self.getElectionOptions().contains(newOption!) || newOption! == VoteBoothST.defaultBallotOption: "The option '".concat(newOption!.toString()).concat("' is not among the valid for this election!")
             }
@@ -174,6 +174,12 @@ access(all) contract VoteBoothST: NonFungibleToken {
                 self.option = newOption!
                 self.hasVoted = true
             }
+        }
+
+        // Simple "getter" function to anonymize the ballot by setting the ballotOwner and voteBoothDeployer addresses to nil. This function has VoteEnable access to limit its usage to the submitBallot function from the BallotBox resource
+        access(VoteEnable) fun anonymizeBallot() {
+            self.ballotOwner = nil
+            self.voteBoothDeployer = nil
         }
 
         // NOTE: This function is for TEST and DEBUG purposes only. I mean, is not that serious given that I'm also going to encrypt the option value at a later stage, and this knowledge does violates voter privacy, but no one is going to die for it in a policy oriented democratic scenario. But just in case, this needs to be deleted/protected with an BoothAdmin entitlement before moving to a PROD environment. Worst case scenario, someone can calculate the tally before the "official" reveal. Bah, who cares really?
@@ -318,7 +324,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
                 self.storedBallotId = nil
                 self.storedBallotOwner = nil
 
-                let voteBoothDeployer: Address = ballotToBurn.voteBoothDeployer
+                let voteBoothDeployer: Address = ballotToBurn.voteBoothDeployer!
 
                 /*
                     In order to properly destroy (burn) any Ballot still in storage, send it to the VoteBooth deployer's BurnBox instead. At this level, this resource is unable to access the OwnerControl resource (only this deployer can do that) to maintain contract data consistency, i.e., to remove the respective entries from the internal dictionaries and such. Sending this Ballot to the BurnBox, which I can get from this resource because the reference to it is publicly accessible, solves all these problems. As such, I've set the contract deployer address, as in the address associated with the ballotPrinterAdmin resource required to mint the Ballot in the first place, as a access(all) parameter in the Ballot resource. Do it
@@ -378,7 +384,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
             if(self.voteBoxOwner != storedBallotRef!.ballotOwner) {
                 panic(
                     "ERROR: Somehow the Ballot stored has owner "
-                    .concat(storedBallotRef!.ballotOwner.toString())
+                    .concat(storedBallotRef!.ballotOwner!.toString())
                     .concat(" while this VoteBox has owner ")
                     .concat(self.voteBoxOwner.toString())
                     .concat(". These two need to match!")
@@ -451,7 +457,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
             )
 
             // Use the voteBoothDeployer address to retrieve a reference to the BallotBox to where the Ballot is to be submitted
-            let voteBoothDeployerAccount: Address = ballotToSubmit.voteBoothDeployer
+            let voteBoothDeployerAccount: Address = ballotToSubmit.voteBoothDeployer!
             let ballotBoxRef: &VoteBoothST.BallotBox = getAccount(voteBoothDeployerAccount).capabilities.borrow<&VoteBoothST.BallotBox>(VoteBoothST.ballotBoxPublicPath) ??
             panic(
                 "Unable to get a valid &VoteBoothST.BallotBox in "
@@ -498,11 +504,14 @@ access(all) resource BallotBox {
     */
     access(all) fun submitBallot(ballot: @VoteBoothST.Ballot) {
         // Grab a reference to the value currently at the position self.submittedBallots[ballot.ballotOwner]
-        let randomResourceRef: &AnyResource? = &self.submittedBallots[ballot.ballotOwner]
+        let randomResourceRef: &AnyResource? = &self.submittedBallots[ballot.ballotOwner!]
         
         // And save the ballotId and ballotOwner to clear out the OwnerControl strut at the end of this function
         let newBallotId: UInt64 = ballot.id
-        let newOwner: Address = ballot.ballotOwner
+        let newOwner: Address = ballot.ballotOwner!
+
+        // Anonymize the ballot. From this point onward this Ballot is either going to be tallied or burned. Either way, the only tenuous connection to its owner is going to be being stored in an address based dictionary. The ballot itself has no information related to who has cast it
+        ballot.anonymizeBallot()
 
         // Test first if its a nil (which would be the most common case). Proceed with standard NonFungibleToken.Collection behaviour
         if (randomResourceRef == nil) {
@@ -519,7 +528,7 @@ access(all) resource BallotBox {
             }
             else {
                 // Otherwise proceed with the normal submission
-                let randomResource: @AnyResource? <- self.submittedBallots[ballot.ballotOwner] <- ballot
+                let randomResource: @AnyResource? <- self.submittedBallots[newOwner] <- ballot
 
                 // The randomResource is a nil, but I need to destroy it anyways
                 destroy randomResource
@@ -534,10 +543,10 @@ access(all) resource BallotBox {
         // If the type got was not nil, test if there's an old Ballot there instead. If so, replace it but emit a BallotModified event to warn that a Ballot was re-submitted
         else if (randomResourceRef.getType() == Type<&VoteBoothST.Ballot?>()) {
             // The process of replacing a type specific resource is a bit tricky and verbose, but still far easier than in any centralised approach. First, I need to retrieve a proper @VoteBooth.Ballot to get its id and ballotOwner
-            let oldBallot: @VoteBoothST.Ballot <- self.submittedBallots.remove(key: ballot.ballotOwner) as! @VoteBoothST.Ballot
+            let oldBallot: @VoteBoothST.Ballot <- self.submittedBallots.remove(key: newOwner) as! @VoteBoothST.Ballot
 
             let oldBallotId: UInt64 = oldBallot.id
-            let oldBallotOwner: Address = oldBallot.ballotOwner
+            let oldBallotOwner: Address = newOwner
 
             // Destroy the oldBallot and store the new one in its place. Do it using the Burner so that the proper callback gets invoked
             Burner.burn(<- oldBallot)
@@ -574,7 +583,7 @@ access(all) resource BallotBox {
         else {
             // Check if it is a revoke first. If that's the case, proceed as usual but burn the new Ballot instead
             if (ballot.isRevoked()) {
-                let nonNilResource: @AnyResource <- self.submittedBallots.remove(key: ballot.ballotOwner)
+                let nonNilResource: @AnyResource <- self.submittedBallots.remove(key: newOwner)
 
                 emit VoteBoothST.NonNilTokenReturned(_tokenType: nonNilResource.getType())
 
@@ -589,7 +598,7 @@ access(all) resource BallotBox {
             }
             else {
                 // Replace the Ballot by whatever non-nil resource was in that Ballot owner slot
-                let nonNilResource: @AnyResource <- self.submittedBallots[ballot.ballotOwner] <- ballot
+                let nonNilResource: @AnyResource <- self.submittedBallots[newOwner] <- ballot
                 
                 // Emit the event and destroy the non nil resource
                 emit VoteBoothST.NonNilTokenReturned(_tokenType: nonNilResource.getType())
@@ -732,7 +741,7 @@ access(all) resource BurnBox{
     access(all) fun depositBallotToBurn(ballotToBurn: @VoteBoothST.Ballot) {
         // As usual, "clean up" the dictionary entry, while checking if whatever was in the dictionary position IS NOT a valid @VoteBoothST.Ballot
         let ballotToBurnId: UInt64 = ballotToBurn.id
-        let ballotToBurnOwner: Address = ballotToBurn.ballotOwner
+        let ballotToBurnOwner: Address = ballotToBurn.ballotOwner!
 
         // Set the ballot in the dictionary
         let randomResource: @AnyResource? <- self.ballotsToBurn[ballotToBurn.id] <- ballotToBurn
@@ -798,7 +807,7 @@ access(all) resource BurnBox{
             )
 
             // The Ballot set to burn should have valid entries in the OwnerControl resource. Check it
-            let storedBallotId: UInt64? = ownerControlRef.getBallotId(owner: ballotToBurn.ballotOwner)
+            let storedBallotId: UInt64? = ownerControlRef.getBallotId(owner: ballotToBurn.ballotOwner!)
 
             if (storedBallotId == nil) {
                 // Data inconsistency detected! There is no ballotId associated to the owner in the ballot to burn in the OwnerControl.owners dictionary. Emit the ContractDataInconsistent but don't panic yet. This is recoverable. Ensure the other dictionary is consistent, burn the Ballot and move on
@@ -820,7 +829,7 @@ access(all) resource BurnBox{
 
                 panic(
                     "ERROR: Major data inconsistency found: Address "
-                    .concat(ballotToBurn.ballotOwner.toString())
+                    .concat(ballotToBurn.ballotOwner!.toString())
                     .concat(" has two Ballots associated to it: the ballot to burn has id ")
                     .concat(ballotToBurn.id.toString())
                     .concat(" but the OwnerControl.owners has this address associated to ballotId ")
@@ -830,9 +839,9 @@ access(all) resource BurnBox{
             }
 
             // All data is still consistent. Remove the related entries from both ballotIds and owners dictionaries from the OwnerControl resource and finally burn the damn Ballot. Ish...
-            ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: ballotToBurn.ballotOwner)
+            ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: ballotToBurn.ballotOwner!)
 
-            ownerControlRef.removeOwner(owner: ballotToBurn.ballotOwner, ballotId: ballotToBurn.id)
+            ownerControlRef.removeOwner(owner: ballotToBurn.ballotOwner!, ballotId: ballotToBurn.id)
 
             // Destroy (burn) the Ballot. This should emit a BallotBurned event
             Burner.burn(<- ballotToBurn)
@@ -955,7 +964,7 @@ access(all) resource BurnBox{
             )
 
             // Validate that the Ballot provided is correctly inserted into the OwnerControl structures. Panic if any inconsistencies are detected
-            let storedBallotId: UInt64? = ownerControlRef.getBallotId(owner: ballotToBurn.ballotOwner)
+            let storedBallotId: UInt64? = ownerControlRef.getBallotId(owner: ballotToBurn.ballotOwner!)
 
             if (storedBallotId == nil) {
                 // Data inconsistency detected! There is no ballotId associated to the owner in the ballot to burn in the 'owners' dictionary. Emit the event but don't panic: make sure both dictionaries are consistent, burn the token and get out
@@ -977,7 +986,7 @@ access(all) resource BurnBox{
 
                 panic(
                     "ERROR: Major data inconsistency found: Address "
-                    .concat(ballotToBurn.ballotOwner.toString())
+                    .concat(ballotToBurn.ballotOwner!.toString())
                     .concat(" has two Ballots associated to it: the ballot to burn has id ")
                     .concat(ballotToBurn.id.toString())
                     .concat(" but the OwnerControl.owners has this address associated to ballotId ")
@@ -988,9 +997,9 @@ access(all) resource BurnBox{
             }
             else {
                 // All is consistent, it seems. Remove related entries from both OwnerControl internal dictionaries. The last step of this function is to burn the ballot provided
-                ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: ballotToBurn.ballotOwner)
+                ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: ballotToBurn.ballotOwner!)
 
-                ownerControlRef.removeOwner(owner: ballotToBurn.ballotOwner, ballotId: ballotToBurn.id)
+                ownerControlRef.removeOwner(owner: ballotToBurn.ballotOwner!, ballotId: ballotToBurn.id)
 
             }
 

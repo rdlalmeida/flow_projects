@@ -20,7 +20,7 @@ transaction(newVoter: Address) {
         let newBallot: @VoteBoothST.Ballot <- self.printerReference.printBallot(voterAddress: newVoter)
 
         let ballotId: UInt64 = newBallot.id
-        let ballotOwner: Address = newBallot.ballotOwner
+        let ballotOwner: Address = newBallot.ballotOwner!
 
         if (VoteBoothST.printLogs) {
             log(
