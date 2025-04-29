@@ -5,7 +5,7 @@ import "NonFungibleToken"
     This transaction casts a vote, i.e., it sets the provided option as argument to a Ballot that should be present in the VoteBox associated to the transaction signer. This script can be used to submit a valid vote, a revoke vote (option = 0) and an invalid vote for testing purposes.
 */
 
-transaction(voteOption: UInt8) {
+transaction(voteOption: UInt8?) {
     let voteBoxRef: auth(VoteBoothST.VoteEnable) &VoteBoothST.VoteBox
     let signerAddress: Address
     let ballotBoxRef: &VoteBoothST.BallotBox

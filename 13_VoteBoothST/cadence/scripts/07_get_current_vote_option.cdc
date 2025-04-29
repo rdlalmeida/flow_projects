@@ -1,6 +1,6 @@
 import "VoteBoothST"
 
-access(all) fun main(voterAddress: Address): Int? {
+access(all) fun main(voterAddress: Address): UInt8? {
     // Get the account from the address provided
     let voterAccount: &Account = getAccount(voterAddress)
     
@@ -12,7 +12,7 @@ access(all) fun main(voterAddress: Address): Int? {
         .concat(voterAddress.toString())
     )
 
-    let currentVote: Int? = voteBoxRef.getCurrentVote()
+    let currentVote: UInt8? = voteBoxRef.getCurrentVote()
 
     return currentVote
 }

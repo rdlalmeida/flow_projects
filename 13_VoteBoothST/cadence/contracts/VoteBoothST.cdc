@@ -69,7 +69,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
     access(account) var totalBallotsSubmitted: UInt64
 
     // I'm setting the default Ballot option as a variable for easier comparison
-    access(all) let defaultBallotOption: UInt8
+    access(all) let defaultBallotOption: UInt8?
 
     // Use this variable set (the contract constructor receives an argument to set it) to enable or disable the printing of logs in this project
     access(all) let printLogs: Bool
@@ -82,14 +82,8 @@ access(all) contract VoteBoothST: NonFungibleToken {
         // The main token id, issued by Flow's internal uuid function
         access(all) let id: UInt64
 
-        // The main option to represent the choice. A '0' indicates none selected yet
-        access(self) var option: UInt8
-
-        /*
-            I'm going to use this flag to allow ballots to be revoked without having to actually check what the option in the Ballot really is (I'm trying to avoid this one as much as possible.) The idea is that voters can submit Ballots with the default option set. If that is indeed the case, when the Ballot Box receives a Ballot with this flag unset (false) sends it, as well as any Ballots in storage under the owner that is submitting it, to the BurnBox. This essentially allows a voter that regrets his/her vote but does not wants to replace it for another one. It may be a rare situation, but nevertheless.
-            In the frontend, revoking a cast Ballot amounts to submit another Ballot with the default option set.
-        */
-        access(self) var hasVoted: Bool
+        // The main option to represent the choice. A nil indicates none selected yet
+        access(self) var option: UInt8?
 
         /*
             TODO: To review in a later stage
@@ -154,7 +148,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
 
         // Simple function to return if this Ballot is to revoke a previous one (true) or is a normal valid vote (false)
         access(all) view fun isRevoked(): Bool {
-            return !self.hasVoted
+            return (self.option == nil)
         }
 
         /*
@@ -165,15 +159,11 @@ access(all) contract VoteBoothST: NonFungibleToken {
                 self.owner != nil: "Need a valid owner to vote. Use a an authorized reference to this Ballot to vote please."
                 self.owner!.address == self.ballotOwner: "Only the Ballot owner is allowed to vote!"
                 self.ballotOwner != self.voteBoothDeployer: "The Administrator(".concat(self.voteBoothDeployer!.toString()).concat(") is not allowed to vote!")
-                newOption != nil: "Nil option provided. Cannot continue."
-                self.getElectionOptions().contains(newOption!) || newOption! == VoteBoothST.defaultBallotOption: "The option '".concat(newOption!.toString()).concat("' is not among the valid for this election!")
+                newOption == VoteBoothST.defaultBallotOption || self.getElectionOptions().contains(newOption!): "The option '".concat(newOption!.toString()).concat("' is not among the valid for this election!")
             }
 
-            // All validations are OK. Proceed with the vote but only if the option passed is not nil. Otherwise it is a Ballot revoke, which in this case I don't need to do anything else
-            if (newOption! != VoteBoothST.defaultBallotOption) {
-                self.option = newOption!
-                self.hasVoted = true
-            }
+            // All validations are OK. Proceed with the vote
+            self.option = newOption
         }
 
         // Simple "getter" function to anonymize the ballot by setting the ballotOwner and voteBoothDeployer addresses to nil. This function has VoteEnable access to limit its usage to the submitBallot function from the BallotBox resource
@@ -198,7 +188,8 @@ access(all) contract VoteBoothST: NonFungibleToken {
             self.option = VoteBoothST.defaultBallotOption
             self.ballotOwner = _ballotOwner
             self.voteBoothDeployer = _voteBoothDeployer
-            self.hasVoted = false
+            // Set 
+            self.option = VoteBoothST.defaultBallotOption
         }
     }
 // ----------------------------- BALLOT END --------------------------------------------------------
@@ -425,7 +416,7 @@ access(all) contract VoteBoothST: NonFungibleToken {
             }
 
             // All is OK so far. Do it.
-            storedBallotRef!.vote(newOption: option!)            
+            storedBallotRef!.vote(newOption: option)            
         }
 
         /*
@@ -1317,16 +1308,8 @@ access(all) resource BurnBox{
 
         self._options = electionOptions
 
-        self.defaultBallotOption = 0
-
-        // I want to use the default option (0) to signal Ballots to be revoked. It's a bit of a pointless feature, but important nonetheless. As such, I need to make sure that 0 is not among the election options provided
-        if (electionOptions.contains(self.defaultBallotOption)) {
-            panic(
-                "ERROR: The default Ballot option ("
-                .concat(self.defaultBallotOption.toString())
-                .concat(") is among the election options provided! Please remove this option from the valid ones to continue!")
-            )
-        }
+        // Set the default Ballot option to a nil value
+        self.defaultBallotOption = nil
 
         self.totalBallotsMinted = 0
         self.totalBallotsSubmitted = 0

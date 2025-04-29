@@ -857,7 +857,7 @@ access(all) fun testBallotRevokeAccount01() {
     // Submit both account01 and account02 Ballots with the default option to revoke them both
     txResult = executeTransaction(
         submitBallotToBallotBoxTx,
-        [0 as UInt8],
+        [VoteBoothST.defaultBallotOption],
         account01
         )
 
