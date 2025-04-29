@@ -53,6 +53,8 @@ access(all) let mintBallotsToAccountsTx: String = "../transactions/08_mint_ballo
 access(all) let submitBallotToBallotBoxTx: String = "../transactions/09_submit_ballot_to_ballot_box.cdc"
 access(all) let burnBallotFromBurnBoxTx: String = "../transactions/10_burn_ballots_from_burn_box.cdc"
 access(all) let destroyVoteBoxTx: String = "../transactions/11_destroy_vote_box.cdc"
+access(all) let castVoteTx: String = "../transactions/12_cast_vote.cdc"
+access(all) let submitBallotTx: String = "../transactions/13_submit_ballot.cdc"
 
 // SCRIPTS
 access(all) let testVoteBoxSc: String = "../scripts/01_test_vote_box.cdc"

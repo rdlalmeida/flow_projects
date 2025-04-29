@@ -112,10 +112,9 @@ access(all) contract VoteBoothST: NonFungibleToken {
         access(contract) fun burnCallback() {
             if (VoteBoothST.printLogs) {
                 log(
-                    "burnCallback called for Ballot with id"
+                    "burnCallback called for Ballot with id "
                     .concat(self.id.toString())
-                    .concat(" for owner ")
-                    .concat(self.ballotOwner!.toString())
+                    .concat(self.ballotOwner == nil ? " (anonymous)" : " for owner ".concat(self.ballotOwner!.toString()))
                 )
             }
             emit VoteBoothST.BallotBurned(_ballotId: self.id, _voterAddress: self.ballotOwner)
@@ -228,18 +227,6 @@ access(all) contract VoteBoothST: NonFungibleToken {
                 let storedBallotRef: &VoteBoothST.Ballot? = &self.storedBallot[self.storedBallotId!]
 
                 return storedBallotRef!.voteBoothDeployer
-            }
-        }
-
-        // A simple function to return the address of the account where this resource is currently stored. This only works if this function is executed through a reference.
-        access(all) view fun getVoteBoxOwner(): Address {
-            if (self.owner == nil) {
-                panic(
-                    "ERROR: This VoteBox is not stored in a valid account. Unable to determine the storage account owner!"
-                )
-            }
-            else {
-                return self.owner!.address
             }
         }
 

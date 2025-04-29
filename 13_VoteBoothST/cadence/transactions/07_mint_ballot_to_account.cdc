@@ -6,8 +6,10 @@ transaction(recipient: Address) {
     let voteBoxRef: &VoteBoothST.VoteBox
     let recipientAddress: Address
     let ownerControlRef: &VoteBoothST.OwnerControl
+    let signerAddress: Address
 
     prepare(signer: auth(Storage, Capabilities) &Account) {
+        self.signerAddress = signer.address
         let recipientAccount: &Account = getAccount(recipient)
 
         let voteBoxExists: Bool = recipientAccount.capabilities.exists(VoteBoothST.voteBoxPublicPath)
@@ -104,7 +106,25 @@ transaction(recipient: Address) {
             )
         }
 
+        // At this point, the VoteBox has no Ballots, therefore the proper function should return false at this point
+        if (self.voteBoxRef.hasBallot()) {
+            panic(
+                "VoteBoothST.VoteBox for account "
+                .concat(self.signerAddress.toString())
+                .concat(" says that it has a Ballot when empty!")
+            )
+        }
+
         self.voteBoxRef.depositBallot(ballot: <- testBallot)
+
+        // Likewise, after storing a Ballot, the same function should return true
+        if (!self.voteBoxRef.hasBallot()) {
+            panic(
+                "VoteBoothST.VoteBox for account "
+                .concat(self.signerAddress.toString())
+                .concat(" says that it is empty when a Ballot was deposited right now!")
+            )
+        }
 
         if (VoteBoothST.printLogs) {
             log(

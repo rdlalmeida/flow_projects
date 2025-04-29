@@ -31,6 +31,9 @@ access(all) let addresses: [Address] = [account01.address, account02.address, ac
 */
 access(all) let ballots: {Address: UInt64} = {}
 
+// I'm going to use this one to keep track of Ballots that I want to revoke after submitting them (because after submitting a Ballot, it becomes irrecoverable and inaccessible)
+access(all) let ballotsToRevoke: {Address: UInt64} = {}
+
 // TRANSACTIONS
 access(all) let createVoteBoxTx: String = "../transactions/05_create_vote_box.cdc"
 access(all) let mintBallotToAccountTx: String = "../transactions/07_mint_ballot_to_account.cdc"
@@ -47,6 +50,7 @@ access(all) let getBallotOwnersSc: String = "../scripts/04_get_ballot_owner.cdc"
 access(all) let getTotalBallotsMintedSc: String = "../scripts/05_get_total_ballots_minted.cdc"
 access(all) let getTotalBallotsSubmittedSc: String = "../scripts/06_get_total_ballots_submitted.cdc"
 access(all) let getCurrentVoteOptionSc: String = "../scripts/07_get_current_vote_option.cdc"
+access(all) let getHowManyBallotsToBurnSc: String = "../scripts/08_get_how_many_ballots_to_burn.cdc"
 access(all) let getOwnerControlBallotIdSc: String = "../scripts/09_get_owner_control_ballot_id.cdc"
 access(all) let getOwnerControlOwnerSc: String = "../scripts/10_get_owner_control_owner.cdc"
 
@@ -457,9 +461,6 @@ access(all) fun testReSubmitBallot() {
     var ballotMintedEvent: VoteBoothST.BallotMinted? = nil
     var ballotModifiedEvent: VoteBoothST.BallotModified? = nil
 
-    // Create a new Ballots dictionary towards being able to compare with the old one (still active)
-    var newBallots: {Address: UInt64} = {}
-
     for account in accounts {
         // Mint a new Ballot into each account
         txResult = executeTransaction(
@@ -478,12 +479,12 @@ access(all) fun testReSubmitBallot() {
         ballotMintedEvent = ballotMintedEvents[ballotMintedEvents.length - 1] as! VoteBoothST.BallotMinted
 
         // Add the new Ballot to the newBallots dictionary
-        newBallots[ballotMintedEvent!._voterAddress] = ballotMintedEvent!._ballotId
+        ballotsToRevoke[ballotMintedEvent!._voterAddress] = ballotMintedEvent!._ballotId
 
         // Check that the OwnerControl was properly updated
         tempOwnerControlEntry = getOwnerControlEntry(ballotId: ballotMintedEvent!._ballotId, owner: ballotMintedEvent!._voterAddress)
 
-        Test.assertEqual(tempOwnerControlEntry!.ballotId!, newBallots[account.address]!)
+        Test.assertEqual(tempOwnerControlEntry!.ballotId!, ballotsToRevoke[account.address]!)
         Test.assertEqual(tempOwnerControlEntry!.owner!, account.address)
     }
 
@@ -521,7 +522,7 @@ access(all) fun testReSubmitBallot() {
             ballotModifiedEvent = ballotModifiedEvents[ballotModifiedEvents.length - 1] as! VoteBoothST.BallotModified
 
             Test.assertEqual(ballotModifiedEvent!._voterAddress, account.address)
-            Test.assertEqual(ballotModifiedEvent!._newBallotId, newBallots[account.address]!)
+            Test.assertEqual(ballotModifiedEvent!._newBallotId, ballotsToRevoke[account.address]!)
             Test.assertEqual(ballotModifiedEvent!._oldBallotId, ballots[account.address]!)
         }
     }
@@ -540,13 +541,207 @@ access(all) fun testReSubmitBallot() {
     Test.assertEqual(initialBallotTotals["submitted"]! + 1, finalBallotTotals["submitted"]!)
 }
 
-access(all) fun _testRevokeBallot() {
-    
+access(all) fun testRevokeBallot() {
+    // As usual, start by taking note of all the Ballot totals
+    let initialBallotTotals: {String: UInt64} = getBallotTotals()
+
+    // To revoke the previously submitted Ballots, I need to mint another round to each of the accounts
+    var txResult: Test.TransactionResult? = nil
+    var tempOwnerControlEntry: ownerControlEntry? = nil
+    var ballotMintedEvent: VoteBoothST.BallotMinted? = nil
+    var ballotRevokedEvent: VoteBoothST.BallotRevoked? = nil
+
+    for account in accounts {
+        // First, just to be sure, try to submit a Ballot without having none in the VoteBox. It is expected that it fails
+        txResult = executeTransaction(
+            submitBallotTx,
+            [],
+            account
+        )
+
+        Test.expect(txResult, Test.beFailed())
+
+        // Proceeded with minting the Ballots to use in the revoking process
+        txResult = executeTransaction(
+            mintBallotToAccountTx,
+            [account.address],
+            deployer
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+        // Check that the new Ballot parameters were properly added to the OwnerControl resource
+        eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + 1
+        ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
+        ballotMintedEvent = ballotMintedEvents[ballotMintedEvents.length - 1] as! VoteBoothST.BallotMinted
+
+        tempOwnerControlEntry = getOwnerControlEntry(ballotId: ballotMintedEvent!._ballotId, owner: ballotMintedEvent!._voterAddress)
+
+        Test.assertEqual(ballotMintedEvent!._ballotId, tempOwnerControlEntry!.ballotId!)
+        Test.assertEqual(tempOwnerControlEntry!.owner!, account.address)
+
+        // Proceed to revoke the previously submitted Ballot by submitting this one without casting any actual vote, since these are minted with the default option set
+        txResult = executeTransaction(
+            submitBallotTx,
+            [],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+        // Ballot was revoked. Test that the OwnerControl parameters were set to nil
+        tempOwnerControlEntry = getOwnerControlEntry(ballotId: ballotMintedEvent!._ballotId, owner: ballotMintedEvent!._voterAddress)
+
+        Test.assertEqual(tempOwnerControlEntry!.ballotId, nil)
+        Test.assertEqual(tempOwnerControlEntry!.owner, nil)
+
+        // Adjust the event counters. I should have two BallotBurned and ResourceDestroyed, and one BallotRevoked per account
+        eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + 2
+        eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + 2
+        eventNumberCount[ballotRevokedEventType] = eventNumberCount[ballotRevokedEventType]! + 1
+
+        // Refresh the BallotRevoked event queue
+        ballotRevokedEvents = Test.eventsOfType(ballotRevokedEventType)
+
+        // Grab the last one and validate that the Ballot revoked data in the event matches the data stored previously for the submitted Ballots
+        ballotRevokedEvent = ballotRevokedEvents[ballotRevokedEvents.length - 1] as! VoteBoothST.BallotRevoked
+
+        Test.assertEqual(ballotsToRevoke[account.address]!, ballotRevokedEvent!._ballotId!)
+        Test.assertEqual(account.address, ballotRevokedEvent!._voterAddress)
+    }
+
+    // Validate Events at this point
+    validateEvents()
+
+    // And the Ballot totals at the end of this one
+    let finalBallotTotals: {String: UInt64} = getBallotTotals()
+
+    // The previous loop, per account, adds +1 to the total minted, but then adds -2 due to the Ballots being burned when they are revoked, therefore, the totals minted should have been reduced by 1 per account
+    Test.assertEqual(initialBallotTotals["minted"]! - UInt64(accounts.length), finalBallotTotals["minted"]!)
+
+    // The total submitted suffers from the same deficit: -1 per account to account for the Ballot revoked
+    Test.assertEqual(initialBallotTotals["submitted"]! - UInt64(accounts.length), finalBallotTotals["submitted"]!)
+
+    // Since I cleaned up all the Ballots in storage, the totals at the end should all be 0
+    Test.assertEqual(finalBallotTotals["minted"]!, 0 as UInt64)
+    Test.assertEqual(finalBallotTotals["submitted"]!, 0 as UInt64) 
 }
 
+// Just to finish this up, this function mints a new Ballot into each account and then destroy the VoteBoxes, just to trigger the BurnBox mechanics
+access(all) fun testDestroyVoteBoxes() {
+    // Grab the Ballot totals. After this one, they all should retain their 0 totals
+    let initialBallotTotals: {String: UInt64} = getBallotTotals()
 
-// TODO: Modify Ballots (Vote)
-// TODO: Multiple Vote Casting
+    var ballotMintedEvent: VoteBoothST.BallotMinted? = nil
+    var ballotSetToBurnEvent: VoteBoothST.BallotSetToBurn? = nil
+    var tempOwnerControlEntry: ownerControlEntry? = nil
+    var txResult: Test.TransactionResult? = nil
+
+    for account in accounts {
+        // Start by minting a new Ballot into each VoteBox
+        txResult = executeTransaction(
+            mintBallotToAccountTx,
+            [account.address],
+            deployer
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+        // Refresh the ballots dictionary with the new Ballot data
+        eventNumberCount[ballotMintedEventType] = eventNumberCount[ballotMintedEventType]! + 1
+        ballotMintedEvents = Test.eventsOfType(ballotMintedEventType)
+        ballotMintedEvent = ballotMintedEvents[ballotMintedEvents.length - 1] as! VoteBoothST.BallotMinted
+        
+        ballots[account.address] = ballotMintedEvent!._ballotId
+
+        // Check the consistency of the OwnerControl resource
+        tempOwnerControlEntry = getOwnerControlEntry(ballotId: ballots[account.address]!, owner: account.address)
+
+        Test.assertEqual(tempOwnerControlEntry!.ballotId!, ballots[account.address]!)
+        Test.assertEqual(tempOwnerControlEntry!.owner!, account.address)
+
+        // All good. Destroy the VoteBox for this account
+        txResult = executeTransaction(
+            destroyVoteBoxTx,
+            [],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+        // Adjust the event counters
+        eventNumberCount[voteBoxDestroyedEventType] = eventNumberCount[voteBoxDestroyedEventType]! + 1
+        eventNumberCount[ballotSetToBurnEventType] = eventNumberCount[ballotSetToBurnEventType]! + 1
+
+        // Refresh the BallotSetToBurn event queue, grab the last one and make sure its parameter match the ones set in the ballots dictionary
+        ballotSetToBurnEvents = Test.eventsOfType(ballotSetToBurnEventType)
+        ballotSetToBurnEvent = ballotSetToBurnEvents[ballotSetToBurnEvents.length - 1] as! VoteBoothST.BallotSetToBurn
+
+        Test.assertEqual(ballotSetToBurnEvent!._ballotId, ballots[account.address]!)
+        Test.assertEqual(ballotSetToBurnEvent!._voterAddress, account.address)
+
+        // Ensure that the OwnerControl resource is still consistent
+        tempOwnerControlEntry = getOwnerControlEntry(ballotId: ballots[account.address]!, owner: account.address)
+
+        Test.assertEqual(tempOwnerControlEntry!.ballotId!, ballots[account.address]!)
+        Test.assertEqual(tempOwnerControlEntry!.owner!, account.address)
+    }
+    // Validate events at this point
+    validateEvents()
+
+    // Check how many Ballots are set to be burn and confirm that is the same number as accounts considered thus far
+    var scResult: Test.ScriptResult = executeScript(
+        getHowManyBallotsToBurnSc,
+        [deployer.address]
+    )
+
+    let ballotsSetToBurn: Int = scResult.returnValue as! Int
+
+    Test.assertEqual(ballotsSetToBurn, accounts.length)
+
+    // All good. Set the Ballots in the BurnBox for destruction and validate the events and counters
+    txResult = executeTransaction(
+        burnBallotFromBurnBoxTx,
+        [],
+        deployer
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    // This last transaction should have incremented the BallotBurned and ResourceDestroyed events by the number of Ballots burned before. Check it
+    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + ballotsSetToBurn
+    eventNumberCount[resourceDestroyedEventType] = eventNumberCount[resourceDestroyedEventType]! + ballotsSetToBurn
+
+    validateEvents()
+
+    // Check that the BallotBurned events match the current values for the ballots dictionary
+    let ballotOwners: [Address] = ballots.keys
+    let ballotIds: [UInt64] = ballots.values
+    var ballotBurnedEvent: VoteBoothST.BallotBurned? = nil
+
+    for index, account in accounts {
+        ballotBurnedEvent = ballotBurnedEvents[ballotBurnedEvents.length - 1 - index] as! VoteBoothST.BallotBurned
+
+        Test.assert(ballotOwners.contains(ballotBurnedEvent!._voterAddress!))
+        Test.assert(ballotIds.contains(ballotBurnedEvent!._ballotId!))
+
+        // Test that burning the Ballot cleared the relevant parameter in the OwnerControl resource
+        tempOwnerControlEntry = getOwnerControlEntry(ballotId: ballots[account.address]!, owner: account.address)
+
+        Test.assertEqual(tempOwnerControlEntry!.ballotId, nil)
+        Test.assertEqual(tempOwnerControlEntry!.owner, nil)
+    }
+
+    // Finish this by comparing the totals among themselves and with the expected value
+    let finalBallotTotals: {String: UInt64} = getBallotTotals()
+
+    // Basically, this process burned every ballot minted, so the totals should have remained stable and 0
+    Test.assertEqual(initialBallotTotals["minted"]!, finalBallotTotals["minted"]!)
+    Test.assertEqual(initialBallotTotals["submitted"]!, finalBallotTotals["submitted"]!)
+    Test.assertEqual(finalBallotTotals["minted"]!, 0 as UInt64)
+    Test.assertEqual(finalBallotTotals["submitted"]!, 0 as UInt64)
+}
+
 // TODO: Eligibility Module
 // TODO: Tally Contract
 // TODO: Implement the Verifiability modules (check notes for the actual idea)
