@@ -74,6 +74,8 @@ access(all) contract VoteBoothST: NonFungibleToken {
     // Use this variable set (the contract constructor receives an argument to set it) to enable or disable the printing of logs in this project
     access(all) let printLogs: Bool
 
+    // CUSTOM RESOURCES
+
 // ----------------------------- BALLOT BEGIN ------------------------------------------------------
     /*
         This is the main actor in this process. The Ballot NFT is issued on demand, is editable by the voter, and can be submitted by transferring it to a VoteBooth contract
