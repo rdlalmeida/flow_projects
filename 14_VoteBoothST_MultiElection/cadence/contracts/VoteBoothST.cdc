@@ -34,18 +34,6 @@ access(all) contract VoteBoothST: NonFungibleToken {
     // This event should emit when a Ballot is deposited in a BurnBox. NOTE: this doesn't mean that the Ballot was burned, it just set into an unrecoverable place where the Ballot is going to be burned at some point
     access(all) event BallotSetToBurn(_ballotId: UInt64, _voterAddress: Address)
 
-    // TODO: Complete this one also. I'm not emitting this one
-    /*
-        I've created this custom event to be emitted whenever I failed to deposit a valid Ballot in a VoteBox. This can happen for a bunch of reasons, hence why I added the '_reason' input field for that purpose. This is an Int value that indicated the motive behind this event, namely:
-
-        0 - All is OK. This is the default code.
-        1 - Unable to retrieve a valid VoteBox
-        2 - VoteBox already has a Ballot in it
-        3 - The VoteBox is empty but the 'owners' dictionary has an entry for the current address
-        4 - The VoteBox is empty but the 'ballotIds' dictionary has an entry for the current ballotId
-    */
-    access(all) event BallotNotDelivered(_voterAddress: Address, _reason: Int)
-
     // CUSTOM ENTITLEMENTS
     access(all) entitlement BoothAdmin
 
@@ -1193,10 +1181,6 @@ access(all) resource BurnBox{
     // The next couple of functions are simple wrappers to allow emitting events from within a transaction
     access(all) view fun emitVoteBoxCreated(voterAddress: Address) {
         emit VoteBoothST.VoteBoxCreated(_voterAddress: voterAddress)
-    }
-
-    access(all) view fun emitBallotNotDelivered(voterAddress: Address, reason: Int) {
-        emit VoteBoothST.BallotNotDelivered(_voterAddress: voterAddress, _reason: reason)
     }
 
     /*
