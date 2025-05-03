@@ -72,3 +72,8 @@ for (( i = 0 ; i < $name_size ; i++ )); do
     # All good. Export the variables
     echo export $current_name=$acct_address
 done;
+
+echo export election_name="Worlds\ best\ dog\ ever\!"
+echo export election_symbol="WBDE"
+echo export election_location="Campinho"
+echo export election_ballot="Who\ was\ the\ best\ dog\ this\ summer\?\ Options\:\ n1\ \-\ Eddie,\ 2\ \-\ Argus,\ 3\ \-\ Both,\ 4\ \-\ None"

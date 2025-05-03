@@ -1,10 +1,17 @@
 {
     "contracts": {
+        "Tally": {
+            "source": "cadence/contracts/Tally.cdc",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "0000000000000008"
+            }
+        },
         "VoteBoothST": {
             "source": "cadence/contracts/VoteBoothST.cdc",
             "aliases": {
-                "testing": "0000000000000007",
-                "emulator": "f8d6e0586b0a20c7"
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "0000000000000008"
             }
         }
     },
@@ -116,32 +123,46 @@
         "testnet": "access.devnet.nodes.onflow.org:9000"
     },
     "accounts": {
-        "emulator-account": {
-            "address": "f8d6e0586b0a20c7",
-            "key": {
-                "type": "file",
-                "location": "emulator-account.pkey"
-            }
-        },
         "account01": {
-            "address": "0x179b6b1cb6755e31",
+            "address": "179b6b1cb6755e31",
             "key": {
                 "type": "file",
                 "location": "account01.pkey"
             }
         },
         "account02": {
-            "address": "0xf3fcd2c1a78f5eee",
+            "address": "f3fcd2c1a78f5eee",
             "key": {
                 "type": "file",
                 "location": "account02.pkey"
             }
         },
         "account03": {
-            "address": "0xe03daebed8ca0615",
+            "address": "e03daebed8ca0615",
             "key": {
                 "type": "file",
                 "location": "account03.pkey"
+            }
+        },
+        "account04": {
+            "address": "045a1763c93006ca",
+            "key": {
+                "type": "file",
+                "location": "account04.pkey"
+            }
+        },
+        "account05": {
+            "address": "120e725050340cab",
+            "key": {
+                "type": "file",
+                "location": "account05.pkey"
+            }
+        },
+        "emulator-account": {
+            "address": "f8d6e0586b0a20c7",
+            "key": {
+                "type": "file",
+                "location": "emulator-account.pkey"
             }
         }
     },
@@ -149,27 +170,52 @@
         "emulator": {
             "emulator-account": [
                 {
+                    "name": "Tally",
+                    "args": []
+                },
+                {
                     "name": "VoteBoothST",
                     "args": [
                         {
-                            "type": "String",
-                            "value": "World's best dog ever!"
+                            "value": "World's best dog ever!",
+                            "type": "String"
                         },
                         {
-                            "type": "String",
-                            "value": "WBDE"
+                            "value": "WBDE",
+                            "type": "String"
                         },
                         {
-                            "type": "String",
-                            "value": "Who was the best dog this summer? Options: \n1 - Eddie, \n2 - Argus, \n3 - Both, \n4 - None"
+                            "value": "Who was the best dog this summer? Options: \n1 - Eddie, 2 - Argus, 3 - Both, 4 - None",
+                            "type": "String"
                         },
                         {
-                            "type": "String",
-                            "value": "Campinho, Portugal"
+                            "value": "Campinho, Portugal",
+                            "type": "String"
                         },
                         {
-                            "type": "String",
-                            "value": "1;2;3;4"
+                            "value": [
+                                {
+                                    "value": "1",
+                                    "type": "UInt8"
+                                },
+                                {
+                                    "value": "2",
+                                    "type": "UInt8"
+                                },
+                                {
+                                    "value": "3",
+                                    "type": "UInt8"
+                                },
+                                {
+                                    "value": "4",
+                                    "type": "UInt8"
+                                }
+                            ],
+                            "type": "Array"
+                        },
+                        {
+                            "value": true,
+                            "type": "Bool"
                         }
                     ]
                 }
