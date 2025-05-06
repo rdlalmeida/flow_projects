@@ -7,8 +7,15 @@
                 "testing": "0000000000000008"
             }
         },
-        "VoteBoothST": {
-            "source": "cadence/contracts/VoteBoothST.cdc",
+        "VoteBooth": {
+            "source": "cadence/contracts/VoteBooth.cdc",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "0000000000000008"
+            }
+        },
+        "BallotToken": {
+            "source": "cadence/contracts/BallotToken.cdc",
             "aliases": {
                 "emulator": "f8d6e0586b0a20c7",
                 "testing": "0000000000000008"
@@ -199,7 +206,11 @@
                     "args": []
                 },
                 {
-                    "name": "VoteBoothST",
+                    "name": "BallotToken",
+                    "args": []
+                },
+                {
+                    "name": "VoteBooth",
                     "args": [
                         {
                             "value": "World's best dog ever!",
