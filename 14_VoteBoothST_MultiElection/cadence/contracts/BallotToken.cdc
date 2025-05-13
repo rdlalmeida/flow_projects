@@ -11,9 +11,12 @@
 import "Burner"
 
 access(all) contract interface BallotToken {
-    // Entitlements used to regulate the access the option parameter
+    // CUSTOM ENTITLEMENTS
     access(all) entitlement TallyAdmin
-    access(all) entitlement VoteEnable    
+    access(all) entitlement VoteEnable
+
+    // CUSTOM EVENTS
+    access(all) event BallotBurned(_ballotId: UInt64, _electionId: UInt64, _voterAddress: Address?)
 
     access(all) resource interface Ballot: Burner.Burnable {
         /// The main id to individualize Ballot resources. Use the 'self.uuid' to get a valid and automatic id for this resource
@@ -37,7 +40,9 @@ access(all) contract interface BallotToken {
         /** 
             The burner callback function, which emits the respective event automatically when a Ballot is burned using the Burner contract
         **/
-        access(contract) fun burnCallback(): Void
+        access(contract) fun burnCallback(): Void {
+            emit BallotBurned(_ballotId: self.ballotId, _electionId: self.electionId, _voterAddress: self.ballotOwner)
+        }
 
         /**
             Function to retrieve the name of the Election associated to this Ballot.
