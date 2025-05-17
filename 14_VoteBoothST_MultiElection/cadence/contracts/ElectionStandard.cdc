@@ -34,7 +34,7 @@ access(all) contract interface ElectionStandard {
     access(all) event BallotRevoked(_ballotId: UInt64, _electionId: UInt64)
 
     // Event for when some other resource other than a BallotToken.Ballot is retrieved
-    access(all) event NonNilResourceReturned(_tokenType: Type)
+    access(all) event NonNilResourceReturned(_resourceType: Type)
 
     // Event to inform users of how many Ballots were sent to be tallies, for a given election
     access(all) event BallotsWithdrawn(_ballots: UInt, _electionId: UInt64)
@@ -221,7 +221,7 @@ access(all) contract interface ElectionStandard {
                 let nonNilResource: @AnyResource <- self.submittedBallots.remove(key: newOwner)
 
                 // I have a custom event just for these cases
-                emit NonNilResourceReturned(_tokenType: nonNilResource.getType())
+                emit NonNilResourceReturned(_resourceType: nonNilResource.getType())
 
                 // But there's not a lot to do after. Destroy the non nil resource
                 destroy nonNilResource

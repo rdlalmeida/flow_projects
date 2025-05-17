@@ -4,6 +4,7 @@
 import "Burner"
 import "BallotToken"
 import "ElectionStandard"
+import "BallotBurner"
 
 access(all) contract VoteBooth {
     // STORAGE PATHS
@@ -24,6 +25,9 @@ access(all) contract VoteBooth {
     access(all) event VoteBoxDestroyed(_ballotsInBox: Int, _ballotId: UInt64?)
     access(all) event BallotBoxCreated(_accountAddress: Address)
     access(all) event ElectionCreated(_electionId: UInt64)
+
+    // This event is a duplicate from the similar one from the ElectionStandard module. I need to return this token in two cases and unfortunately I cannot import Events from other contracts.
+    access(all) event NonNilResourceReturned(_resourceType: Type)
 
     // This event should emit when a Ballot is deposited in a BurnBox. NOTE: this doesn't mean that the Ballot was burned, it just set into an unrecoverable place where the Ballot is going to be burned at some point
     access(all) event BallotSetToBurn(_ballotId: UInt64, _voterAddress: Address)
@@ -179,105 +183,140 @@ access(all) resource Election: Burner.Burnable {
 
 // ----------------------------- VOTE BOX BEGIN ----------------------------------------------------
 // TODO: Review this one under the new multiple Election paradigm
+    /**
+        This resource is the main point of interaction between voters and the voter framework. The VoteBox is a resource that can hold only one Ballot at a time per Election, i.e., per electionId. So, theoretically, this VoteBox can have multiple Ballots, but only one per electionId, which is fixed per Ballot.
+    **/
     access(all) resource VoteBox: Burner.Burnable {
         /*
-            I'm only allowing one Ballot at a time in this VoteBox resource. The easier way is to define it as a single variable, with access(self) for maximum protection. But unfortunately, Flow/Cadence does like at all to mess around with nested resources unless they are set in some sort of storing structure. I can do this with an array, but a dictionary is better because it has a bunch of really useful base function
+            I'm going to store Ballots in this dictionary where the UInt64 used as key is the Ballot's electionId. If another Ballot is submitted to storage with the same electionId, deal with it accordingly so that only one Ballot is allowed per Election.
         */
-        access(self) var storedBallot: @{UInt64: BallotToken.Ballot}
+        access(self) var storedBallots: @{UInt64: {BallotToken.Ballot}}
         
-        // I'm going to use these variables to ease the access to the stored Ballot without having to load it or get a reference to it all the time. Since I'm only going to have one at a time, this works
-        access(self) var storedBallotOwner: Address?
-        access(self) var storedBallotId: UInt64?
 
-        // Set the owner of this VoteBox at the constructor level to ensure that only this address can withdraw Ballots from it
+        // Set the owner of this VoteBox at the constructor level to ensure that only this address can withdraw Ballots from it. Having this parameter covers the loophole in where the user loads this resource from storage (which makes self.owner == nil)
         access(self) let voteBoxOwner: Address
         
-        // Simple function to determine if this VoteBox already has a Ballot in it or not
-        access(all) view fun hasBallot(): Bool {
-            if (self.storedBallot.length == 0) {
+        /**
+            Function to determine if a VoteBox already has a Ballot in it or not for the given electionId provided.
+
+            @param: electionId (UInt64) The unique identifier of the Election resource in question.
+
+            @return: Bool Returns a true if there's a Ballot stored in this VoteBox, a false otherwise.
+        **/
+        access(all) view fun hasBallot(electionId: UInt64): Bool {
+            let ballotRef: &{BallotToken.Ballot}? = &self.storedBallots[electionId]
+
+            if (ballotRef == nil) {
                 return false
             }
 
             return true
         }
 
-        // This function return the voteBoothDeployer address but does so by getting it from the Ballot, if any is stored. If not, a nil is returned
-        access(all) view fun getVoteBoothDeployer(): Address? {
-            if (self.storedBallot.length == 0) {
-                // No Ballots in storage yet. Return nil
-                return nil
-            }
-            else {
-                // Grab a reference for the Ballot in storage
-                let storedBallotRef: &BallotToken.Ballot? = &self.storedBallot[self.storedBallotId!]
+        /**
+            This function stores a submitted Ballot in this VoteBox indexed to the Election resource associated to it. If a Ballot already exists in the position identified by the electionId, i.e., if a new Ballot was requested before the old one had been submitted, the new Ballot replaces the old one and the old one is sent to the BurnBox
 
-                return storedBallotRef!.voteBoothDeployer
-            }
-        }
-
-        // Function to deposit a Ballot into this VoteBox. Though this Collection (of sorts. Its not a standard one) can theoretically receive multiple Ballots, I'm sticking it to a single Ballot at all times through a clever use of pre and post conditions, as well as with an exhaustive (perhaps too much even) set of internal validations, both in this function and others related.
-        access(all) fun depositBallot(ballot: @VoteBooth.Ballot) {
+            @param ballot(@{BallotToken.Ballot}) The Ballot resource to set in the internal storage for this resource.
+        **/
+        access(all) fun depositBallot(ballot: @{BallotToken.Ballot}) {
             // Each one of these boxes can only hold one vote of one type at a time. Validate this
             pre {
                 // This pre-condition is everything really. It only allows the deposit of a Ballot if there are none stored yet. After storing one Ballot, it is impossible to deposit another one: this pre-condition stop this function for every self.storedBallots >= 1
                 self.owner != nil: "Deposit is only allowed through a reference."
-                self.storedBallot.length == 0: "Account ".concat(self.owner!.address.toString()).concat(" already has a Ballot in storage. Submit it or burn it to continue.")
+                
                 // Ensure also that a Ballot with a different owner does not gets deposited. It should be impossible, given all the validations up to this point, but just in case
                 self.owner!.address == ballot.ballotOwner: "Unable to deposit a Ballot with a different owner than the one in this VoteBox (".concat(self.owner!.address.toString()).concat(")")
             }
 
-            post {
-                // Nevertheless, I'm going to be extremely paranoid with this one, therefore I'm also setting a post condition to guarantee that this whole thing blows up if, at any point, this VoteBox has more than one Ballot in storage
-                self.storedBallot.length <= 1: "Account ".concat(self.owner!.address.toString()).concat(" contains multiple Ballots (> 1) in storage! VoteBoxes are limited to 1, maximum!")
+            // Store the address of the voteBoothDeployer from the Ballot to a variable for future use.
+            let voteBoothDeployer: Address = ballot.voteBoothDeployer
+
+            // Grab a reference to whatever may be stored in the electionId position in the storedBallots dictionary
+            let randomRef: &AnyResource? = &self.storedBallots[ballot.electionId]
+
+            // Test it and act accordingly
+            if (randomRef == nil) {
+                // If there was a nil in the electionId position, this is the first Ballot submitted for that particular election. This is the simple case
+                // Proceed with storing the Ballot and destroying the older position, even though I'm 100% sure that it is a nil.
+                let nilResource: @AnyResource? <- self.storedBallots[ballot.electionId] <- ballot
+
+                destroy nilResource
+
+
             }
+            else if (randomRef.getType() == Type<&{BallotToken.Ballot}?>()) {
+                // In this case, there's an old Ballot in this position. Retrieve it and send it to the BurnBox
+                let currentElectionId: UInt64 = ballot.electionId
+                let voteBoxDeployer: Address = ballot.voteBoothDeployer
 
-            // Set the other internal properties first before losing access to the Ballot resource
-            self.storedBallotOwner = ballot.ballotOwner
-            self.storedBallotId = ballot.ballotId
+                let oldBallot: @{BallotToken.Ballot}? <- self.storedBallots[currentElectionId] <- ballot
 
-            // Deposit the Ballot
-            let randomResource: @AnyResource? <- self.storedBallot[ballot.ballotId] <- ballot
+                if (oldBallot == nil) {
+                    panic(
+                        "ERROR: Unable to retrieve the old Ballot set in position ".concat(currentElectionId.toString())
+                        .concat(" for account ")
+                        .concat(self.owner!.address.toString())
+                    )
+                }
 
-            // This is a theoretically impossible scenario, but deal with it just in case.
-            if (randomResource.getType() == Type<@VoteBooth.Ballot>()) {
+                // Grab a reference to the BurnBox
+                let burnBoxRef: &{BallotBurner.BurnBox} = getAccount(voteBoothDeployer).capabilities.borrow<&{BallotBurner.BurnBox}>(VoteBooth.burnBoxPublicPath) ??
                 panic(
-                    "ERROR: There was a @VoteBooth.Ballot already stored in a VoteBox for address "
-                    .concat(self.owner!.address.toString())
-                    .concat(". This cannot happen!")
+                    "Unable to get a valid &{BallotBurner.BurnBox} at "
+                    .concat(VoteBooth.burnBoxPublicPath.toString())
+                    .concat(" for account ")
+                    .concat(voteBoothDeployer.toString())
                 )
-            }
-            // The expectation is that, at all times, a type Never? is returned if the internal dictionary is empty. If that is not the case, emit the NonNilTokenReturned event, but proceed with the destruction of the randomResource
-            else if (randomResource.getType() != Type<Never?>()) {
-                emit VoteBooth.NonNilTokenReturned(_tokenType: randomResource.getType())
-            }
 
-            // Done with all of that. Destroy the random resource
-            destroy randomResource
+                // Deposit the old Ballot into the BurnBox
+                burnBoxRef.depositBallotToBurn(ballotToBurn: <- oldBallot!)
+
+            }
+            else {
+                // Last case is that something does exist in the electionId position, but it is not an older Ballot (it's something else...)
+                // Emit the relevant events but proceed as normal
+                let nonNilResource: @AnyResource? <- self.storedBallots[ballot.electionId] <- ballot
+
+                emit NonNilResourceReturned(_resourceType: nonNilResource.getType())
+
+                // Nothing more left to do but to destroy this nonNilResource
+                destroy nonNilResource
+
+            }
         }
+        
 
-        /*        
-            If the VoteBox has a Ballot, it returns its owner. If not, returns a nil instead, as usual. Getting the Ballot owner is pretty innocuous, but I'm protecting it with access(account) so that only the owner of the account can access it. This restricts this to transactions, which is OK. I don't want this kind of information out there to protect the voter privacy for as much as I can.
-            TODO: Delete/Protect this functions before moving to PROD. It's not a big deal, but it does sacrifices a tiny bit of voter privacy. Or maybe encrypt this in the future?
-        */
+        /**
+            Function to retrieve the address set as the Ballot owner, if any exists.
+
+            @return: Address Function returns this Ballot's owner address, if there's one set. Otherwise returns a nil
+        **/
         access(all) fun getBallotOwner(): Address? {
             // This one becomes super easy with the structure I'm using
             return self.storedBallotOwner
         }
 
-        // TODO: This one needs to be deleted or protected before moving to PROD.
+        /**
+            Function to return the ballotId associated to the current Ballot, if there's one stored in this VoteBox. NOTE: If this function returns a nil, it means that this VoteBox is empty, not that there's a Ballot with a nil as ballotId. That should be impossible.
+
+            @return: UInt64? If there's a Ballot stored in this VoteBox, this function returns a UInt64 corresponding to its ballotId. Otherwise (there's no Ballot stored yet) returns a nil.
+        **/
         access(all) view fun getBallotId(): UInt64? {
             // And this one too
             return self.storedBallotId
         }
 
-        // Set this function to be called whenever I destroy one of these VoteBoxes. IMPORTANT: For this to work, I need to use the Burner contract to destroy any VoteBoxes. If I simply use the 'destroy' function, this function is not called!
-        access(contract) fun burnCallback() {
+        /**
+            Default function to be called whenever I destroy one of these VoteBoxes using the Burner contract. IMPORTANT: For this to work, I need to use the Burner contract to destroy any VoteBoxes. If I simply use the 'destroy' function, this function is not called!
+        **/
+        access(contract) fun burnCallback(): Void {
             // Prepare this to emit the VoteBoxDestroyed event, namely, check if there's any Ballot stored, and if it is, grab its Id first
             let ballotId: UInt64? = self.storedBallotId
 
             // If the ballotId is not nil, do this properly and burn the Ballot before finishing
             if (ballotId != nil) {
-                let ballotToBurn: @VoteBooth.Ballot <- self.storedBallot.remove(key: ballotId!)!
+                let ballotToBurn: @{BallotToken.Ballot} <- self.storedBallot.remove(key: ballotId!)!
+
 
                 // Even though this resource is about to be destroyed, I'm super prickly with everything. Just to be consistent with the awesome programmer that I am, set the internal storedBallotOwner and storedBallotId to nil. It's pointless, but that how I roll
                 self.storedBallotId = nil
@@ -286,13 +325,19 @@ access(all) resource Election: Burner.Burnable {
                 /*
                     In order to properly destroy (burn) any Ballot still in storage, send it to the VoteBooth deployer's BurnBox instead. At this level, this resource is unable to access the OwnerControl resource (only this deployer can do that) to maintain contract data consistency, i.e., to remove the respective entries from the internal dictionaries and such. Sending this Ballot to the BurnBox, which I can get from this resource because the reference to it is publicly accessible, solves all these problems. As such, I've set the contract deployer address, as in the address associated with the ballotPrinterAdmin resource required to mint the Ballot in the first place, as a access(all) parameter in the Ballot resource. Do it
                 */
-                let burnBoxRef: &VoteBooth.BurnBox = getAccount(ballotToBurn.voteBoothDeployer).capabilities.borrow<&VoteBooth.BurnBox>(VoteBooth.burnBoxPublicPath) ??
+                let burnBoxRef: &{BallotBurner.BurnBox} = getAccount(ballotToBurn.voteBoothDeployer).capabilities.borrow<&{BallotBurner.BurnBox}>(VoteBooth.burnBoxPublicPath) ??
                 panic(
                     "Unable to retrieve a valid &VoteBooth.BurnBox at "
                     .concat(VoteBooth.burnBoxPublicPath.toString())
                     .concat(" from account ")
                     .concat(ballotToBurn.voteBoothDeployer.toString())
                 )
+
+                // Before depositing the Ballot into the BurnBox reference, grab a reference to the Election reference associated to this Ballot and decrement the number of minted Ballots in that Election, given that, once the Ballot is there, it's pretty much already destroyed. Also, I need to avoid circular references and, as such, cannot import this contract from the BallotBurner contract (to access the VoteBooth.election dictionary), so I need to do this here.
+                let electionRef: &{ElectionStandard.Election}? = VoteBooth.borrowElection(electionId: ballotToBurn.electionId)
+
+                // If the reference above comes back as a nil, don't sweat it. It can be because the Election was processed in the meantime and this VoteBox still had a Ballot for it. Just move on if that is the case
+                // TODO:
 
                 // Send the Ballot to the BurnBox
                 burnBoxRef.depositBallotToBurn(ballotToBurn: <- ballotToBurn)
@@ -327,12 +372,12 @@ access(all) resource Election: Burner.Burnable {
             }
             
             // Grab a reference to the ballot stored
-            let storedBallotRef: auth(BallotToken.TallyAdmin) &VoteBooth.Ballot? = &self.storedBallot[self.storedBallotId!]
+            let storedBallotRef: auth(BallotToken.TallyAdmin) &{BallotToken.Ballot}? = &self.storedBallot[self.storedBallotId!]
 
             // Just to be sure, check if the reference obtained is not nil. Panic if, by some reason, it is
             if (storedBallotRef == nil) {
                 panic(
-                    "Unable to get a valid &{NonFungibleToken.NFT} for ballotId "
+                    "Unable to get a valid &{BallotToken.Ballot} for ballotId "
                     .concat(self.storedBallotId!.toString())
                 )
             }
@@ -432,189 +477,11 @@ access(all) resource Election: Burner.Burnable {
         }
 
         init(ownerAddress: Address) {
-            self.storedBallot <- {}
-            self.storedBallotOwner = nil
-            self.storedBallotId = nil
+            self.storedBallots <- {}
             self.voteBoxOwner = ownerAddress
         }
     }
 // ----------------------------- VOTE BOX END ------------------------------------------------------
-
-// ----------------------------- BALLOT BOX BEGIN --------------------------------------------------
-/*
-    The BallotBox resource is going to be similar to a collection but not quite. I need it to store the ballots under an address key rather than an UInt64 key to keep one and only one Ballot submitted per voter, i.e., per address. Also, this allows me to properly implement the multiple vote casting feature in a more easy @and flexible manner
-*/
-access(all) resource BallotBox {
-    
-
-    
-
-    // Simple function just to check how many Ballots were submitted thus far
-    access(all) view fun getSubmittedBallotCount(): Int {
-        return self.submittedBallots.length
-    }
-
-    // Another simple function that simply returns if a Ballot for a given address is already in storage (was submitted) or not. This function is BoothAdmin protected to preserve voter privacy as much as possible. I don't anyone other than the contract deployer to be able to determine if a given voter has vote already or not.
-    access(BoothAdmin) view fun getIfOwnerVoted(ballotOwner: Address): Bool {
-        // Grab a reference to a potential Ballot in the position 'ballotOwner' and test if it is a nil or not. Return false or true accordingly
-        let resourceRef: &AnyResource? = &self.submittedBallots[ballotOwner]
-
-        if (resourceRef.getType() == Type<Never?>() || resourceRef.getType() != Type<&VoteBooth.Ballot?>()) {
-            // If the resource is a nil (which corresponds to type Never?) or some other type than the VoteBooth.Ballot, return a false. There's no valid Ballot submitted under this address
-            return false
-        }
-
-        // If the above condition is not triggered, the resource is of the correct type, so return a true instead
-        return true
-    }
-
-    // The idea with protecting the constructor with an entitlement is to prevent users other than the deployer to create these resources
-    access(BoothAdmin) init() {
-        self.submittedBallots <- {}
-    }
-}
-
-// ----------------------------- BALLOT BOX END ----------------------------------------------------
-
-// ----------------------------- BURN BOX BEGIN ----------------------------------------------------
-/*
-    Okey, since I added a whole security layer around the minting and burning of Ballots (through the OwnerControl), I now have a problem: how can voter burn a Ballot in his/her VoteBox, without BoothAdmin access to a BallotPrinterAdmin, and while maintaining data consistency in the OwnerControl resource, given that, obviously, they don't have access to this resource?
-    The solution is to create a (sort of) another Collection, but one without a withdraw function. This collection, which I'm calling BurnBox, to keep things consistent, can be used by any voter that wishes to burn their Ballot. Ballots deposited in this box have no other "exit" other than getting burned because... I'm writing it as so! Man, you gotta love blockchain and smart contracts. No other technology allows me this kind of control! Even if the deployer "forgets" to burn the Ballots in this box (unless I can came up with some sort of periodic burn function of sorts), there's no way to retrieve a Ballot that went into this box. Either they get burned or they stay in there forever.
-*/
-access(all) resource BurnBox{
-    // I'm saving the ballots to be burned in this dictionary. For now, let's keep this one with self access... Maybe it's unnecessary but it doesn't hurt
-    access(self) var ballotsToBurn: @{UInt64: VoteBooth.Ballot}
-
-    // This function receives a ballotId as argument, checks if there's a valid entry in the ballotsToBurn dictionary. If so, returns true because the ballot in question is mark for burn. If not, returns a false. This may mean that either no Ballot with that id was received, or the Ballot was burn already
-    access(all) fun isBallotToBeBurned(ballotId: UInt64): Bool {
-        if (self.ballotsToBurn[ballotId] == nil) {
-            return false
-        }
-
-        return true
-    }
-
-    access(all) fun depositBallotToBurn(ballotToBurn: @VoteBooth.Ballot) {
-        // As usual, "clean up" the dictionary entry, while checking if whatever was in the dictionary position IS NOT a valid @VoteBooth.Ballot
-        let ballotToBurnId: UInt64 = ballotToBurn.id
-        let ballotToBurnOwner: Address = ballotToBurn.ballotOwner!
-
-        // Set the ballot in the dictionary
-        let randomResource: @AnyResource? <- self.ballotsToBurn[ballotToBurn.id] <- ballotToBurn
-
-        let randomResourceType: Type = randomResource.getType()
-
-        // This is the worst case: I'm trying to replace an already existing Ballot in this dictionary. Panic in this case to prevent unwanted burns
-        if (randomResource != nil && randomResourceType == Type<@VoteBooth.Ballot>()) {
-            panic(
-                "ERROR: Found a valid @VoteBooth.Ballot already stored with key "
-                .concat(ballotToBurnId.toString())
-                .concat(". Cannot continue!")
-            )
-        }
-        // The randomResource can be not nil but also not a Ballot. In this case, I need to panic as well. I need to be 100% sure that these things work consistently. 0 room for error in this contract!
-        else if (randomResource != nil) {
-            panic(
-                "ERROR: The BurnBox.ballotsToBurn has a non-nil entry for id "
-                .concat(ballotToBurnId.toString())
-                .concat(". Found a '")
-                .concat(randomResource.getType().identifier)
-                .concat("' resource in this slot! Cannot continue")
-            )
-        }
-
-        // If I got here, all went OK: The randomResource is nil and the ballot to burn is safely stored in the internal dictionary. All there's left to do is to destroy the (nil) randomResource and emit the respective event.
-        destroy randomResource
-
-        emit VoteBooth.BallotSetToBurn(_ballotId: ballotToBurnId, _voterAddress: ballotToBurnOwner)
-    }
-    
-    // Get a list of Ids of the Ballots set to burn
-    access(BoothAdmin) fun getBallotsToBurn(): [UInt64] {
-        return self.ballotsToBurn.keys
-    }
-
-    // Simple function to determine how many ballots are set to be burn
-    access(all) fun howManyBallotsToBurn(): Int {
-        return self.ballotsToBurn.length
-    }
-
-    // This is the other important function in this resource. Think of this as the "empty garbage" button. It turns the incinerator on and burns all ballots stored in the internal dictionary. Because of access issues, I kinda need to replicate the burn function from the ballotPrinterAdmin resource
-    access(BoothAdmin) fun burnAllBallots(): Void {
-        // Get all the dictionary keys in a nice UInt64 list for iteration purposes
-        let ballotIdsToBurn: [UInt64] = self.ballotsToBurn.keys
-
-        // I also need a reference for the OwnerControl resource that it is stored in this same account storage
-        let ownerControlRef: &VoteBooth.OwnerControl = self.owner!.capabilities.borrow<&VoteBooth.OwnerControl>(VoteBooth.ownerControlPublicPath) ??
-        panic(
-            "Unable to get a valid &VoteBooth.OwnerControl at "
-            .concat(VoteBooth.ownerControlPublicPath.toString())
-            .concat(" for account ")
-            .concat(self.owner!.address.toString())
-        )
-
-        for ballotId in ballotIdsToBurn {
-            // Grab a Ballot to process
-            let ballotToBurn: @VoteBooth.Ballot <- self.ballotsToBurn.remove(key: ballotId) ??
-            panic(
-                "Unable to recover a @VoteBooth.Ballot from BurnBox.ballotsToBurn for id "
-                .concat(ballotId.toString())
-                .concat(". The dictionary returned a nil!")
-            )
-
-            // The Ballot set to burn should have valid entries in the OwnerControl resource. Check it
-            let storedBallotId: UInt64? = ownerControlRef.getBallotId(owner: ballotToBurn.ballotOwner!)
-
-            if (storedBallotId == nil) {
-                // Data inconsistency detected! There is no ballotId associated to the owner in the ballot to burn in the OwnerControl.owners dictionary. Emit the ContractDataInconsistent but don't panic yet. This is recoverable. Ensure the other dictionary is consistent, burn the Ballot and move on
-                emit VoteBooth.ContractDataInconsistent(_ballotId: storedBallotId, _owner: ballotToBurn.ballotOwner)
-
-                // This Ballot should not exist. In this case, check the ballotIds dictionary and correct it before burning the Ballot
-                let storedBallotOwner: Address? = ownerControlRef.getOwner(ballotId: ballotToBurn.id)
-
-                if (storedBallotOwner != nil) {
-                    // Looks like there's an entry in ballotIds dictionary for this ballot. Solve the inconsistency and move on
-                    ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: storedBallotOwner!)
-                }
-            }
-            else if (storedBallotId! != ballotToBurn.id) {
-                // In this case, the owner of the ballot to burn has a different ballotId associated to it, which means that, theoretically, the owner has two ballots... somehow. In this case, emit two events with the two ballotIds and the same address and then panic... This situation is critical and needs to be taken care before moving on. Ideally this branch should nevern be called
-                emit VoteBooth.ContractDataInconsistent(_ballotId: storedBallotId!, _owner: ballotToBurn.ballotOwner)
-
-                emit VoteBooth.ContractDataInconsistent(_ballotId: ballotToBurn.id, _owner: ballotToBurn.ballotOwner)
-
-                panic(
-                    "ERROR: Major data inconsistency found: Address "
-                    .concat(ballotToBurn.ballotOwner!.toString())
-                    .concat(" has two Ballots associated to it: the ballot to burn has id ")
-                    .concat(ballotToBurn.id.toString())
-                    .concat(" but the OwnerControl.owners has this address associated to ballotId ")
-                    .concat(storedBallotId!.toString())
-                    .concat(". Cannot continue until this inconsistency is solved!")
-                )
-            }
-
-            // All data is still consistent. Remove the related entries from both ballotIds and owners dictionaries from the OwnerControl resource and finally burn the damn Ballot. Ish...
-            ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: ballotToBurn.ballotOwner!)
-
-            ownerControlRef.removeOwner(owner: ballotToBurn.ballotOwner!, ballotId: ballotToBurn.id)
-
-            // Destroy (burn) the Ballot. This should emit a BallotBurned event
-            Burner.burn(<- ballotToBurn)
-
-            // Once a Ballot is destroyed, I also need to decrease the totalBallotsMinted by 1
-            VoteBooth.decrementTotalBallotsMinted(ballots: 1)
-
-            // Done. This is the end of the for loop cycle. This should repeat for all ballots set in storage to be burned.
-        }
-    }
-
-    init() {
-        self.ballotsToBurn <- {}
-    }
-
-}
-// ----------------------------- BURN BOX END ------------------------------------------------------
 
 // ----------------------------- BALLOT PRINTER BEGIN ----------------------------------------------
 /*
@@ -764,14 +631,6 @@ access(all) resource BurnBox{
 
 
 // ----------------------------- CONTRACT LOGIC BEGIN ----------------------------------------------
-    /** 
-        Simple burner function to destroy a VoteBox, if needed. This function uses the Burner standard, which allows me to define a burnCallback function in the VoteBox resource to be executed when the destruction of the resource happens through the Burner resource
-
-        @param: voteBoxToBurn (@VoteBooth.VoteBox) The VoteBox resource to burn. 
-    **/
-    access(account) fun burnVoteBox(voteBoxToBurn: @VoteBooth.VoteBox): Void {
-        Burner.burn(<- voteBoxToBurn)
-    }
     
     /** 
         Function to create an empty @VoteBooth.VoteBox resource. This function should be invoked via a signed transaction, since this resource is suppose to "live" in the voter's accounts.
@@ -798,7 +657,7 @@ access(all) resource BurnBox{
         
         @return: &VoteBooth.Election? If a @VoteBooth.Election exists for the electionId provided, this function returns a reference to it. Otherwise a nil is returned instead.
     **/
-    access(all) view fun borrowElection(electionId: UInt64): &VoteBooth.Election? {
+    access(all) view fun borrowElection(electionId: UInt64): &{ElectionStandard.Election}? {
         return &self.elections[electionId]
     }
 

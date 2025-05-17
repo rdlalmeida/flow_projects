@@ -27,6 +27,13 @@
                 "emulator": "f8d6e0586b0a20c7",
                 "testing": "0000000000000008"
             }
+        },
+        "BallotBurner": {
+            "source": "cadence/contracts/BallotBurner.cdc",
+            "aliases": {
+                "emulator": "f8d6e0586b0a20c7",
+                "testing": "0000000000000008"
+            }
         }
     },
     "dependencies": {
@@ -218,6 +225,10 @@
                 },
                 {
                     "name": "ElectionStandard",
+                    "args": []
+                },
+                {
+                    "name": "BallotBurner",
                     "args": []
                 },
                 {

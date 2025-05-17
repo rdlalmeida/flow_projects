@@ -7,6 +7,7 @@ import "Burner"
 import "BallotToken"
 import "ElectionStandard"
 
+
 access(all) contract interface BallotBurner {
     // CUSTOM EVENTS
     // Event for when some other resource other than a BallotToken.Ballot is retrieved
@@ -81,7 +82,8 @@ access(all) resource interface BurnBox: Burner.Burnable {
 
             @return: [UInt64] Return an array with all the ballotIds of the Ballots currently in storage.
         **/
-        access(ElectionStandard.ElectionAdmin) view fun getBallotsToBurn(): [UInt64] {
+        // TODO: Validate the entitlement used in this function
+        access(BallotToken.TallyAdmin) view fun getBallotsToBurn(): [UInt64] {
             return self.ballotsToBurn.keys
         }
 
@@ -98,8 +100,26 @@ access(all) resource interface BurnBox: Burner.Burnable {
             Function that clears the internal ballotsToBurn dictionary by setting every Ballot currently stored in the BurnBox instance to be burned using the Burner contract.
         **/
         // TODO: Make sure that this entitlement protects the access to this function properly.
-        access(ElectionStandard.ElectionAdmin) fun burnAllBallots(): Void {
-            
+        access(BallotToken.TallyAdmin) fun burnAllBallots(): Void {
+            // I need to iterate over the internal Ballot dictionary. Grab the keys into a [UInt64]
+            let ballotIdsToBurn: [UInt64] = self.ballotsToBurn.keys
+
+            // Burn each Ballot in a loop
+            for ballotId in ballotIdsToBurn {
+                let ballotToBurn: @{BallotToken.Ballot} <- self.ballotsToBurn.remove(key: ballotId) ??
+                panic (
+                    "Unable to recover a @{BallotToken.Ballot} from BurnBox.ballotsToBurn for id "
+                    .concat(ballotId.toString())
+                    .concat(". The dictionary returned a nil!")
+                )
+
+                // Before burning the Ballot, retrieve an authorised reference to the Election resource that is associated to this Ballot (if any), and if a valid one was obtained, decrement the number of Ballots minted to that Election resource (I can do this because the decrement function is 'access(account)' protected and this BurnBox and the VotingBooth contract which contains the Election array is all saved in the same account)
+                // TODO: THIS
+
+
+                // Nothing else to do but to burn the Ballot
+                Burner.burn(<- ballotToBurn)
+            }
         }
 
         access(contract) fun burnCallback(): Void {
