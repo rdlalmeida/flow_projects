@@ -22,7 +22,7 @@ access(all) contract VoteBooth {
     // CUSTOM EVENTS
     access(all) event ContractDataInconsistent(_ballotId: UInt64?, _owner: Address?)
     access(all) event VoteBoxCreated(_voterAddress: Address)
-    access(all) event VoteBoxDestroyed(_ballotsInBox: Int, _ballotId: UInt64?)
+    access(all) event VoteBoxDestroyed(_ballotsInBox: Int, _ballotIds: [UInt64])
     access(all) event BallotBoxCreated(_accountAddress: Address)
     access(all) event ElectionCreated(_electionId: UInt64)
 
@@ -51,8 +51,19 @@ access(all) contract VoteBooth {
 /*
     This resource is going to be used to handle multiple elections, namely, I'm going to create one per election. An election in this context is a question, a policy suggestion, etc. Mainly, it's a question that voters should give their opinion on. Because I want to have people voting for multiple items at one point, I need to change this in such a way that elections should be easy to create, as well as being able to track which voters have submitted votes to a specif election and so on.
 */
-access(all) resource Election: Burner.Burnable {
-    // TODO: Implement this one from the ElectionStandard interface
+access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
+    access(all) let _name: String
+    access(all) let _ballot: String
+    access(all) let _options: [UInt8]
+
+    access(contract) let electionId: UInt64
+    access(contract) var totalBallotsMinted: UInt
+    access(contract) var totalBallotsSubmitted: UInt
+
+    access(all) let _defaultBallotOption: UInt8?
+
+    access(contract) var submittedBallots: @{Address: {BallotToken.Ballot}}
+
     init(name: String, ballot: String, options: [UInt8]) {
         // This one is obtained automatically
         self.electionId = self.uuid
@@ -113,7 +124,7 @@ access(all) resource Election: Burner.Burnable {
         **/
         access(all) view fun getElectionName(): String {
 
-            let electionRef: &VoteBooth.Election? = VoteBooth.borrowElection(electionId: self.electionId)
+            let electionRef: &{ElectionStandard.Election}? = VoteBooth.borrowElection(electionId: self.electionId)
 
             // I don't expect this situation to happen ever, but just in case...
             if (electionRef == nil) {
@@ -134,7 +145,7 @@ access(all) resource Election: Burner.Burnable {
             @return: String Returns the ballot text for the election resource associated with this Ballot.
         **/
         access(all) view fun getElectionBallot(): String {
-            let electionRef: &VoteBooth.Election? = VoteBooth.borrowElection(electionId: self.electionId)
+            let electionRef: &{ElectionStandard.Election}? = VoteBooth.borrowElection(electionId: self.electionId)
 
             // Deal with the impossible situation nonetheless
             if (electionRef == nil) {
@@ -154,7 +165,7 @@ access(all) resource Election: Burner.Burnable {
             @return: [UInt8] The array of numerical options where the Ballot can be casted into.
         **/
         access(all) view fun getElectionOptions(): [UInt8] {
-            let electionRef: &VoteBooth.Election? = VoteBooth.borrowElection(electionId: self.electionId)
+            let electionRef: &{ElectionStandard.Election}? = VoteBooth.borrowElection(electionId: self.electionId)
 
             if (electionRef == nil) {
                 panic(
@@ -284,69 +295,103 @@ access(all) resource Election: Burner.Burnable {
 
             }
         }
-        
 
         /**
-            Function to retrieve the address set as the Ballot owner, if any exists.
+            Function to retrieve the address set as the Ballot owner, if any exists, for the electionId provided. The obvious expectation is that every Ballot in storage has the same owner.
+            NOTE: It's possible to receive a nil as return for this function if, by whatever reason, the Ballot was previously anonymised.
+
+            @param electionId (UInt64) The id of the election whose Ballot owner is to be returned. 
 
             @return: Address Function returns this Ballot's owner address, if there's one set. Otherwise returns a nil
         **/
-        access(all) fun getBallotOwner(): Address? {
-            // This one becomes super easy with the structure I'm using
-            return self.storedBallotOwner
+        access(all) fun getBallotOwner(electionId: UInt64): Address? {
+            let ballotRef: &{BallotToken.Ballot}? = &self.storedBallots[electionId]
+
+            if (ballotRef == nil) {
+                return nil
+            }
+
+            return ballotRef!.ballotOwner
         }
 
         /**
-            Function to return the ballotId associated to the current Ballot, if there's one stored in this VoteBox. NOTE: If this function returns a nil, it means that this VoteBox is empty, not that there's a Ballot with a nil as ballotId. That should be impossible.
+            Function to return the ballotId associated to the Ballot associated to the electionId provided. NOTE: If this function returns a nil, it means that this VoteBox is empty, not that there's a Ballot with a nil as ballotId. That should be impossible.
 
             @return: UInt64? If there's a Ballot stored in this VoteBox, this function returns a UInt64 corresponding to its ballotId. Otherwise (there's no Ballot stored yet) returns a nil.
         **/
-        access(all) view fun getBallotId(): UInt64? {
-            // And this one too
-            return self.storedBallotId
+        access(all) view fun getBallotId(electionId: UInt64): UInt64? {
+            // Same process as before
+            let ballotRef: &{BallotToken.Ballot}? = &self.storedBallots[electionId]
+
+            if (ballotRef == nil) {
+                return nil
+            }
+
+            return ballotRef!.ballotId
         }
 
         /**
-            Default function to be called whenever I destroy one of these VoteBoxes using the Burner contract. IMPORTANT: For this to work, I need to use the Burner contract to destroy any VoteBoxes. If I simply use the 'destroy' function, this function is not called!
+            Default function to be called whenever I destroy one of these VoteBoxes using the Burner contract. Basically, this function "empties" the VoteBox by sending any Ballots still in storage to a BurnBox.            
+            
+            IMPORTANT: For this to work, I need to use the Burner contract to destroy any VoteBoxes. If I simply use the 'destroy' function, this function is not called!
         **/
         access(contract) fun burnCallback(): Void {
-            // Prepare this to emit the VoteBoxDestroyed event, namely, check if there's any Ballot stored, and if it is, grab its Id first
-            let ballotId: UInt64? = self.storedBallotId
+            // Grab a list of the keys for the storedBallots internal dictionary. Each corresponds to an electionId
+            let electionIds: [UInt64] = self.storedBallots.keys
 
-            // If the ballotId is not nil, do this properly and burn the Ballot before finishing
-            if (ballotId != nil) {
-                let ballotToBurn: @{BallotToken.Ballot} <- self.storedBallot.remove(key: ballotId!)!
+            // I need an array to store the ballotIds of the Ballots set to burn
+            var ballotsToBurnIds: [UInt64] = []
 
+            // Grab a reference to the BurnBox as well, but do so only if there are Ballots to be burned
+            if (electionIds.length > 0) {
+                // There are Ballots that need to be sent to the BurnBox. Grab a reference to it. I need on of the Ballots for it
+                let ballotRef: &{BallotToken.Ballot}? = &self.storedBallots[electionIds[electionIds.length - 1]]
 
-                // Even though this resource is about to be destroyed, I'm super prickly with everything. Just to be consistent with the awesome programmer that I am, set the internal storedBallotOwner and storedBallotId to nil. It's pointless, but that how I roll
-                self.storedBallotId = nil
-                self.storedBallotOwner = nil
+                // Just to be sure, make sure a valid reference was retrieved
+                if (ballotRef == nil) {
+                    panic(
+                        "ERROR: Unable to get a valid &{BallotToken.Ballot} for electionId "
+                        .concat(electionIds[electionIds.length - 1].toString())
+                        .concat(" for account ")
+                        .concat(self.owner!.address.toString())
+                    )
+                }
 
-                /*
-                    In order to properly destroy (burn) any Ballot still in storage, send it to the VoteBooth deployer's BurnBox instead. At this level, this resource is unable to access the OwnerControl resource (only this deployer can do that) to maintain contract data consistency, i.e., to remove the respective entries from the internal dictionaries and such. Sending this Ballot to the BurnBox, which I can get from this resource because the reference to it is publicly accessible, solves all these problems. As such, I've set the contract deployer address, as in the address associated with the ballotPrinterAdmin resource required to mint the Ballot in the first place, as a access(all) parameter in the Ballot resource. Do it
-                */
-                let burnBoxRef: &{BallotBurner.BurnBox} = getAccount(ballotToBurn.voteBoothDeployer).capabilities.borrow<&{BallotBurner.BurnBox}>(VoteBooth.burnBoxPublicPath) ??
+                let voteBoothDeployer: Address = ballotRef!.voteBoothDeployer
+
+                let burnBoxRef: &{BallotBurner.BurnBox} = getAccount(voteBoothDeployer).capabilities.borrow<&{BallotBurner.BurnBox}>(VoteBooth.burnBoxPublicPath) ??
                 panic(
-                    "Unable to retrieve a valid &VoteBooth.BurnBox at "
+                    "Unable to retrieve a valid &{BallotBurner.BurnBox} at "
                     .concat(VoteBooth.burnBoxPublicPath.toString())
-                    .concat(" from account ")
-                    .concat(ballotToBurn.voteBoothDeployer.toString())
+                    .concat(" for account ")
+                    .concat(self.owner!.address.toString())
                 )
 
-                // Before depositing the Ballot into the BurnBox reference, grab a reference to the Election reference associated to this Ballot and decrement the number of minted Ballots in that Election, given that, once the Ballot is there, it's pretty much already destroyed. Also, I need to avoid circular references and, as such, cannot import this contract from the BallotBurner contract (to access the VoteBooth.election dictionary), so I need to do this here.
-                let electionRef: &{ElectionStandard.Election}? = VoteBooth.borrowElection(electionId: ballotToBurn.electionId)
+                // All ready. Loop over all the existing Ballots and deposit them in the BurnBox
 
-                // If the reference above comes back as a nil, don't sweat it. It can be because the Election was processed in the meantime and this VoteBox still had a Ballot for it. Just move on if that is the case
-                // TODO:
+                for electionId in electionIds {
+                    let currentBallot: @{BallotToken.Ballot}? <- self.storedBallots.remove(key: electionId)
 
-                // Send the Ballot to the BurnBox
-                burnBoxRef.depositBallotToBurn(ballotToBurn: <- ballotToBurn)
+                    // Don't bother if the currentBallot is a nil
+                    if (currentBallot != nil) {
+                        let currentBallotId: UInt64 = currentBallot?.ballotId!
+
+                        // Save this Ballot's ballotId
+                        ballotsToBurnIds.append(currentBallotId)
+                        burnBoxRef.depositBallotToBurn(ballotToBurn: <- currentBallot!)
+                    }
+                    else {
+                        // For consistency reasons, I need to destroy the nil value as well
+                        destroy currentBallot
+                    }
+                }
             }
 
-            // Emit the respective event. NOTE: any ballotId emitted with this event refers to a Ballot set to burn in a BurnBox and not a Ballot that was destroyed
-            // Just a reminder: I'm using a ternary operator to define the number of Ballots in the box that was destroyed. It reads as: is ballotId a nil ? if true, no Ballots in storage, thus set a 0. If not, there was one Ballot in storage, thus set a 1 instead.
-            emit VoteBooth.VoteBoxDestroyed(_ballotsInBox: ballotId == nil ? 0 : 1, _ballotId: ballotId)
+            // Once the last step is done, all Ballots were properly processed. All there's left to do is to emit the respective Events
+            emit VoteBoxDestroyed(_ballotsInBox: ballotsToBurnIds.length, _ballotIds: ballotsToBurnIds)
         }
+
+        // TODO: Continue from here
 
         /*
             NOTE: This function is for TEST and DEBUG purposes only.
