@@ -1,6 +1,6 @@
-/*
+/**
     I'm killing two birds with one stone with this one. I came to the conclusion that the best approach for this system is not to have one contract per election (which would require deploying a new contract whenever a new election was needed, which would defeat the purpose of this system in the first place) but to have a easy way to create multiple elections with only one contract, like in a function or something of the sort. The obvious solution? To abstract elections as resources! It is surprising to see how useful linear types and resources are, especially in this context. Anyway, need requires a profound modification of the current contract. But since I'm moving in this direction, might as well take the opportunity to do the other thing that I wanted to do, which was to remove the NonFungibleToken standard requirement. No disrespect to Flow (on the contrary actually), but the NFT standard is actually making this worse than it needs to be. I mean, the standard was created to regulate digital collectibles, which is similar to what I want to do, but not quite enough for it to be useful to me. I now know enough of Cadence to make my own standards (which I will at some point...) as well as do this without one. So, lets roll the sleeves and get cracking...
-*/
+**/
 import "Burner"
 import "BallotToken"
 import "ElectionStandard"
@@ -20,6 +20,7 @@ access(all) contract VoteBooth {
     access(all) event VoteBoxCreated(_voterAddress: Address)
     access(all) event VoteBoxDestroyed(_ballotsInBox: Int, _ballotIds: [UInt64])
     access(all) event ElectionCreated(_electionId: UInt64)
+    access(all) event BallotMinted(_ballotId: UInt64, _voterAddress: Address, _electionId: UInt64)
 
     // This event is a duplicate from the similar one from the ElectionStandard module. I need to return this token in two cases and unfortunately I cannot import Events from other contracts.
     access(all) event NonNilResourceReturned(_resourceType: Type)
@@ -95,19 +96,6 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
         access(all) let defaultBallotOption: UInt8?
 
         access(all) var ballotOwner: Address?
-        
-        /**
-            Burner callBack function to be automatically called when the Burner.burn function is invoked on a Ballot resource. This call back simply emits the related event.
-        **/
-        access(contract) fun burnCallback() {
-            if (VoteBooth.printLogs) {
-                log(
-                    "burnCallback called for Ballot with id "
-                    .concat(self.ballotId.toString())
-                    .concat(self.owner!.address == nil ? " (anonymous)" : " for owner ".concat(self.owner!.address.toString()))
-                )
-            }
-        }
 
         /**
             Function that uses this Ballot's electionId, which points to a valid @VoteBooth.Election resource, to get a reference to the Election resource and then use that resource to retrieve the election name.
@@ -530,144 +518,71 @@ access(all) resource BurnBox: BallotBurner.BurnBox, Burner.Burnable {
 // ----------------------------- BURN BOX END ------------------------------------------------------
 
 // ----------------------------- BALLOT PRINTER BEGIN ----------------------------------------------
-/*
+/**
     To protect the most sensible functions of the BallotPrinterAdmin resource, namely the printBallot function, I'm protecting it with a custom 'BoothAdmin' entitlement defined at the contract level.
     This means that, in order to have the 'printBallot' and 'sot' available in a &BallotPrinterAdmin, I need an authorized reference instead of a normal one.
-    Authorized references are indicated with a 'auth(VoteBooth.BoothAdmin) &VoteBooth.BallotPrinterAdmin' and these can only be successfully obtained from the
-    'account.storage.borrow<auth(VoteBooth.BoothAdmin) &VoteBooth.BallotPrinterAdmin>(PATH)', instead of the usual 'account.capabilities.borrow...'
+    Authorized references are indicated with a 'auth(VoteBooth.BoothAdmin) &VoteBooth.BallotPrinterAdmin' and these can only be successfully obtained from the 'account.storage.borrow<auth(VoteBooth.BoothAdmin) &VoteBooth.BallotPrinterAdmin>(PATH)', instead of the usual 'account.capabilities.borrow...'
     Because I now need to access the 'storage' subset of the Flow API, I necessarily need to obtain this reference from the transaction signer and no one else! The transaction need to be signed by the deployed to work! Cool, that's exactly what I want!
     It is now impossible to call the 'printBallot' function from a reference obtained by the usual, capability-based reference retrievable by a simple account reference, namely, from 'let account: &Account = getAccount(accountAddress)'
 
     NOTE: VERY IMPORTANT
     This resource can only be used as a reference, never directly as a resource!!
-    In other words, never load this, use it, and then put it back into storage. Because, not only it is extremely inefficient from the blockchain point of view, but most importantly, the resource is dangling and, as such, the self.owner!.address is going to break this due to the fact that self.owner == nil! This resource relies A LOT in knowing who the owner of the resource is (mostly because of the OwnerControl resource), so one more reason to avoid this.
-*/
+    In other words, never load this, use it, and then put it back into storage. Because, not only it is extremely inefficient from the blockchain point of view, but most importantly, the resource is "dangling" and, as such, the self.owner!.address is going to break this due to the fact that self.owner == nil! This resource relies A LOT in knowing who the owner of the resource is, so one more reason to avoid this.
+**/
     access(all) resource BallotPrinterAdmin {
-        // Use this parameter to store the contract owner, given that this resource is only (can only) be created in the contract constructor, and use it to prevent the contract owner from voting. It's a simple but probably necessary precaution.
+        /**
+            Function to create a new Ballot. Each Ballot cannot exist by themselves, they need to be associated to an Election resource identified by the electionId. This function, due to its importance, validates if the electionId provided has a valid Election object in this account's storage (because all the individual Election resources are stored under the VoteBooth contract) and panics if the Election in question does not exists.
 
-        access(BoothAdmin) fun printBallot(voterAddress: Address): @VoteBooth.Ballot {
+            @param: voterAddress (Address) The account address of the voter that is to receive this Ballot.
+            @param: electionId (UInt64) The identifier of the Election resource that this Ballot is to be associated to.
+
+            @return (@{BallotToken.Ballot}) a Ballot resource associated to a specific voterAddress and an Election resource. 
+        **/
+        access(BoothAdmin) fun printBallot(voterAddress: Address, electionId: UInt64): @{BallotToken.Ballot} {
             pre {
                 // First, ensure that the contract owner (obtainable via self.owner!.address) does not match the address provided.
                 self.owner!.address != voterAddress: "The contract owner is not allowed to vote!"
             }
 
-            let newBallot: @Ballot <- create Ballot(_ballotOwner: voterAddress, _voteBoothDeployer: self.owner!.address)
-
-            // Load a reference to the ownerControl resource from public storage
-            let ownerControlRef: &VoteBooth.OwnerControl = self.owner!.capabilities.borrow<&VoteBooth.OwnerControl>(VoteBooth.ownerControlPublicPath) ??
+            // Validate that the electionId provided has a valid Election backing it up.
+            let electionRef: &{ElectionStandard.Election} = VoteBooth.borrowElection(electionId: electionId) ??
+            // If the borrow function returns a nil, don't waste anytime and panic immediately
             panic(
-                "Unable to get a valid &VoteBooth.OwnerControl at "
-                .concat(VoteBooth.ownerControlPublicPath.toString())
-                .concat(" for account ")
+                "ERROR: Unable to retrieve a valid &{ElectionStandard.Election} for electionId "
+                .concat(electionId.toString())
+                .concat(" in the VoteBooth contract in account ")
                 .concat(self.owner!.address.toString())
+                .concat(". Cannot mint a new Ballot without a valid Election created first!")
             )
 
-            // Validate that the current owner does not has a Ballot already, i.e., if the resource internal dictionaries are consistent
-            // First, check if the address provided has no Ballot associated to it
-            let ballotId: UInt64? = ownerControlRef.getBallotId(owner: voterAddress)
+            let newBallot: @{BallotToken.Ballot} <- create Ballot(_ballotOwner: voterAddress, _voteBoothDeployer: self.owner!.address, _electionId: electionId)
 
-            if (ballotId != nil) {
-                // Data inconsistency detected. Emit the respective event and panic
-                emit VoteBooth.ContractDataInconsistent(_ballotId: ballotId, _owner: voterAddress)
+            // Increment the total Ballots associated to the Election whose reference I already have to account for the new Ballot just created
+            electionRef.incrementTotalBallotsMinted(ballots: 1)
 
-                panic(
-                    "ERROR: The address provided ("
-                    .concat(voterAddress.toString())
-                    .concat(") already has a ballot with id ")
-                    .concat(ballotId!.toString())
-                    .concat(" issued to it!")
-                )
-            }
-
-            // This one is a bit "rare", but there's a small possibility of a Ballot with the current Id was already issued, i.e., there's an address already associated to it
-            let ballotOwner: Address? = ownerControlRef.getOwner(ballotId: newBallot.id)
-
-            if (ballotOwner != nil) {
-                // Same as before: emit the event and panic
-                emit VoteBooth.ContractDataInconsistent(_ballotId: ballotId!, _owner: voterAddress)
-                
-                panic(
-                    "ERROR: The Ballot Id generated ("
-                    .concat(newBallot.id.toString())
-                    .concat(") was already issued to address ")
-                    .concat(ballotOwner!.toString())
-                    .concat("!")
-                )
-            }
-
-            // Seems that all went OK so far. Add the required elements to the ownerControl resource
-            ownerControlRef.setBallotId(ballotId: newBallot.id, owner: voterAddress)
-            ownerControlRef.setOwner(owner: voterAddress, ballotId: newBallot.id)
-
-            emit BallotMinted(_ballotId: newBallot.id, _voterAddress: voterAddress)
-
-            // Increment the number of total Ballots minted by 1 before returning the Ballot
-            VoteBooth.incrementTotalBallotsMinted(ballots: 1)
-
+            // Emit the BallotMinted event
+            emit BallotMinted(_ballotId: newBallot.ballotId, _voterAddress: voterAddress, _electionId: electionId)
+            
+            // All done. Return the new Ballot
             return <- newBallot
         }
 
-        /*
-            This function receives the identification number of a token that was minted by the BoothAdmin Ballot printer and removes all entries from the internal dictionaries. This is useful for when a token is burned, so that the internal contract data structure maintains its consistency.
-            For obvious reasons, this function is also BoothAdmin entitlement protected. Also, I've decided to mix the burnBallot function with this one to minimize the probability of creating inconsistencies in these structures
-        */
-        access(BoothAdmin) fun burnBallot(ballotToBurn: @VoteBooth.Ballot): Void {
-            // Get an authorized reference to the OwnerControl resource with a Remove modifier
-            let ownerAccount: &Account = getAccount(self.owner!.address)
+        /**
+            Function to destroy a Ballot provided as argument using the Burner contract, therefore triggering the burnCallback function from the BallotToken.Ballot standard. Destroying the Ballot using this function adjusts the ballot totals in the Election resource associated to the Ballot to destroy, if any.
 
-            let ownerControlRef: &VoteBooth.OwnerControl = ownerAccount.capabilities.borrow<&VoteBooth.OwnerControl>(VoteBooth.ownerControlPublicPath) ??
-            panic(
-                "Unable to get a valid &VoteBooth.OwnerControl at "
-                .concat(VoteBooth.ownerControlPublicPath.toString())
-                .concat(" for account ")
-                .concat(self.owner!.address.toString())
-            )
+            @param: ballotToBurn (@{BallotToken.Ballot}) The Ballot resource to destroy.
+        **/
+        access(BoothAdmin) fun burnBallot(ballotToBurn: @{BallotToken.Ballot}): Void {
+            // Grab a reference to an Election resource and check if it is a valid (non-nil) one. If so, decrement the total Ballots minted from it.
+            let electionRef: &{ElectionStandard.Election}? = VoteBooth.borrowElection(electionId: ballotToBurn.electionId)
 
-            // Validate that the Ballot provided is correctly inserted into the OwnerControl structures. Panic if any inconsistencies are detected
-            let storedBallotId: UInt64? = ownerControlRef.getBallotId(owner: ballotToBurn.ballotOwner!)
-
-            if (storedBallotId == nil) {
-                // Data inconsistency detected! There is no ballotId associated to the owner in the ballot to burn in the 'owners' dictionary. Emit the event but don't panic: make sure both dictionaries are consistent, burn the token and get out
-                emit VoteBooth.ContractDataInconsistent(_ballotId: storedBallotId, _owner: ballotToBurn.ballotOwner)
-
-                // This ballot should not exist. In this case, check the other internal dictionary and correct it and burn the ballot before panicking
-                let storedBallotOwner: Address? = ownerControlRef.getOwner(ballotId: ballotToBurn.id)
-
-                if (storedBallotOwner != nil) {
-                    // It appears that there's a record for this ballot in the owners dictionary. Clean it to keep data consistency
-                    ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: storedBallotOwner!)
-                }
-            }
-            else if (storedBallotId! != ballotToBurn.id) {
-                // The owner of the ballot to burn has a different ballotId associated to it, which means that, theoretically, the owner has two ballots... somehow. In this case, emit two events with the two ballotIds and the same address and then panic... This situation is critical and needs to be taken care before moving on. Ideally this branch should never be called
-                emit VoteBooth.ContractDataInconsistent(_ballotId: storedBallotId!, _owner: ballotToBurn.ballotOwner)
-
-                emit VoteBooth.ContractDataInconsistent(_ballotId: ballotToBurn.id, _owner: ballotToBurn.ballotOwner)
-
-                panic(
-                    "ERROR: Major data inconsistency found: Address "
-                    .concat(ballotToBurn.ballotOwner!.toString())
-                    .concat(" has two Ballots associated to it: the ballot to burn has id ")
-                    .concat(ballotToBurn.id.toString())
-                    .concat(" but the OwnerControl.owners has this address associated to ballotId ")
-                    .concat(storedBallotId!.toString())
-                    .concat(". Cannot continue until this inconsistency is solved!")
-                )
-
-            }
-            else {
-                // All is consistent, it seems. Remove related entries from both OwnerControl internal dictionaries. The last step of this function is to burn the ballot provided
-                ownerControlRef.removeBallotId(ballotId: ballotToBurn.id, owner: ballotToBurn.ballotOwner!)
-
-                ownerControlRef.removeOwner(owner: ballotToBurn.ballotOwner!, ballotId: ballotToBurn.id)
-
+            // There is a non-zero probability that the Election may not exist anymore at the point where this Ballot is being destroyed. As such, test if the reference is a nil and decrement the total ballots minted (not the submitted ones) from it. If it is a nil, forget about it
+            if (electionRef != nil) {
+                electionRef!.decrementTotalBallotsMinted(ballots: 1)
             }
 
-            // Destroy (burn) the Ballot finally
+            // Destroy (burn) the Ballot finally using the Burner contract.
             Burner.burn(<- ballotToBurn)
-
-            // Decrease the totalBallotsMinted by 1 to account for this burned Ballots
-            VoteBooth.decrementTotalBallotsMinted(ballots: 1)
         }
 
         init() {
@@ -698,12 +613,13 @@ access(all) resource BurnBox: BallotBurner.BurnBox, Burner.Burnable {
 
     /**
         Retrieves a reference to a @VoteBooth.Election resource, is one with the provided electionId exists. This function has an 'access(all)' permission, which means anyone can invoke this. But this is not dangerous because the critical elements of this resource are protected with more restrictive access control.
+        NOTE: I need to restrict the access to Election resources for (obvious)security reasons. For now I'm restricting the borrowing of Election to 'access(account)' but I need to test this thoroughly to be 100% sure there are no leaks.
 
         @param: electionId (UInt64) The unique identifier for the @VoteBooth.Election resource to retrieve.
         
         @return: &VoteBooth.Election? If a @VoteBooth.Election exists for the electionId provided, this function returns a reference to it. Otherwise a nil is returned instead.
     **/
-    access(all) view fun borrowElection(electionId: UInt64): &{ElectionStandard.Election}? {
+    access(account) view fun borrowElection(electionId: UInt64): &{ElectionStandard.Election}? {
         return &self.elections[electionId]
     }
 

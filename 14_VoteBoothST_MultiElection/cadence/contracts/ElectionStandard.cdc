@@ -85,15 +85,15 @@ access(all) contract interface ElectionStandard {
             return self.totalBallotsSubmitted
         }
 
-        access(account) fun incrementTotalBallotsMinted(ballots: UInt): Void {
+        access(all) fun incrementTotalBallotsMinted(ballots: UInt): Void {
             self.totalBallotsMinted = self.totalBallotsMinted + ballots
         }
 
-        access(account) fun incrementTotalBallotsSubmitted(ballots: UInt): Void {
+        access(all) fun incrementTotalBallotsSubmitted(ballots: UInt): Void {
             self.totalBallotsSubmitted = self.totalBallotsSubmitted + ballots
         }
 
-        access(account) fun decrementTotalBallotsMinted(ballots: UInt): Void {
+        access(all) fun decrementTotalBallotsMinted(ballots: UInt): Void {
             // I'm using unsigned integers to represent these totals, which means that any subtraction that brings this value to < 0 throws an underflow error. Nevertheless, I'm doing a check and raising my own error (panic) just to have a more obvious error message than the underflow one.
             if (ballots > self.totalBallotsMinted) {
                 panic(
@@ -108,7 +108,7 @@ access(all) contract interface ElectionStandard {
             self.totalBallotsMinted = self.totalBallotsMinted - ballots
         }
 
-        access(account) fun decrementTotalBallotsSubmitted(ballots: UInt): Void {
+        access(all) fun decrementTotalBallotsSubmitted(ballots: UInt): Void {
             if (ballots > self.totalBallotsSubmitted) {
                 panic(
                     "Unable to decrease the total Ballots submitted! Cannot decrease a total of "
