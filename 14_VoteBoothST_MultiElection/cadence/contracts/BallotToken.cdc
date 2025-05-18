@@ -23,7 +23,7 @@ access(all) contract interface BallotToken {
         access(all) let ballotId: UInt64
 
         /// The main option to represent the choice selected for the current election. This parameter requires a 'VoteEnable' entitlement to be changed
-        access(VoteEnable) var option: UInt8?
+        access(VoteEnable | TallyAdmin) var option: UInt8?
 
         /// The id of an Election resource 
         access(all) let electionId: UInt64

@@ -19,7 +19,7 @@ access(all) contract interface BallotBurner {
     // Event to signal when a BurnBox is destroyed using the Burner contract
     access(all) event BurnBoxDestroyed(_deployer: Address?)
 
-access(all) resource interface BurnBox: Burner.Burnable {
+    access(all) resource interface BurnBox: Burner.Burnable {
         // Save the Ballots to burn in an internal dictionary
         access(contract) var ballotsToBurn: @{UInt64: {BallotToken.Ballot}}
 

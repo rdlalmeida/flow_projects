@@ -10,12 +10,8 @@ access(all) contract VoteBooth {
     // STORAGE PATHS
     access(all) let ballotPrinterAdminStoragePath: StoragePath
     access(all) let ballotPrinterAdminPublicPath: PublicPath
-    access(all) let ballotBoxStoragePath: StoragePath
-    access(all) let ballotBoxPublicPath: PublicPath
     access(all) let voteBoxStoragePath: StoragePath
     access(all) let voteBoxPublicPath: PublicPath
-    access(all) let ownerControlStoragePath: StoragePath
-    access(all) let ownerControlPublicPath: PublicPath
     access(all) let burnBoxStoragePath: StoragePath
     access(all) let burnBoxPublicPath: PublicPath
 
@@ -23,14 +19,10 @@ access(all) contract VoteBooth {
     access(all) event ContractDataInconsistent(_ballotId: UInt64?, _owner: Address?)
     access(all) event VoteBoxCreated(_voterAddress: Address)
     access(all) event VoteBoxDestroyed(_ballotsInBox: Int, _ballotIds: [UInt64])
-    access(all) event BallotBoxCreated(_accountAddress: Address)
     access(all) event ElectionCreated(_electionId: UInt64)
 
     // This event is a duplicate from the similar one from the ElectionStandard module. I need to return this token in two cases and unfortunately I cannot import Events from other contracts.
     access(all) event NonNilResourceReturned(_resourceType: Type)
-
-    // This event should emit when a Ballot is deposited in a BurnBox. NOTE: this doesn't mean that the Ballot was burned, it just set into an unrecoverable place where the Ballot is going to be burned at some point
-    access(all) event BallotSetToBurn(_ballotId: UInt64, _voterAddress: Address)
 
     // CUSTOM ENTITLEMENTS
     access(all) entitlement BoothAdmin
@@ -92,7 +84,7 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
         access(all) let ballotId: UInt64
 
         /// The main option to represent the choice. A nil indicates none selected yet
-        access(BallotToken.VoteEnable) var option: UInt8?
+        access(BallotToken.VoteEnable | BallotToken.TallyAdmin) var option: UInt8?
 
         /// The address to the VoteBooth contract deployer. This is useful to be able to retrieve references to deployer bound resources through accessing public capabilities.
         access(all) let voteBoothDeployer: Address
@@ -193,7 +185,6 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
 // ----------------------------- BALLOT END --------------------------------------------------------
 
 // ----------------------------- VOTE BOX BEGIN ----------------------------------------------------
-// TODO: Review this one under the new multiple Election paradigm
     /**
         This resource is the main point of interaction between voters and the voter framework. The VoteBox is a resource that can hold only one Ballot at a time per Election, i.e., per electionId. So, theoretically, this VoteBox can have multiple Ballots, but only one per electionId, which is fixed per Ballot.
     **/
@@ -391,46 +382,38 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
             emit VoteBoxDestroyed(_ballotsInBox: ballotsToBurnIds.length, _ballotIds: ballotsToBurnIds)
         }
 
-        // TODO: Continue from here
-
-        /*
+        /**
             NOTE: This function is for TEST and DEBUG purposes only.
             This function returns the current option in a Ballot stored internally, or nil if there are none.
-            I've set the protections to prevent people other than the owner in the Ballot resource itself. If someone else tries to fetch the current vote other than the Ballot owner (which is also the VoteBox owner by obvious reasons), it fails a pre condition and panics. If there are no Ballots yet in the VoteBox, a nil is returned instead.
+            I've set the protections to prevent people other than the owner in the Ballot resource itself. If someone else tries to fetch the current vote other than the Ballot owner (which is also the VoteBox owner by obvious reasons), it fails a pre condition and panics. If there are no Ballots yet in the VoteBox for the electionId provided, a nil is returned instead.
             TODO: Delete or protect this function with a proper entitlement before moving this to PROD
-        */
-        access(BallotToken.TallyAdmin) fun getCurrentVote(): UInt8? {
+
+            @param electionId (UInt64) The electionId parameter that identifies the election whose vote is to be returned, if exists.
+
+            @return UInt8? The option selected (or lack of one) for a Ballot submitted under the provided Election
+        **/
+        access(BallotToken.TallyAdmin) fun getCurrentVote(electionId: UInt64): UInt8? {
             // Grab the id for the Ballot in storage, if any
-            if (self.storedBallot.length == 0) {
+            if (self.storedBallots.length == 0) {
                 // If there are no Ballots stored yet, return a nil
                 return nil
             }
-            else if (self.storedBallot.length > 1) {
-                // If by some reason there are more than 1 Ballot stored, panic. I've made all sort of checks up to this point in this sense, but one more doesn't hurt. The contract is gigantic, but its worth it
-                panic(
-                    "ERROR: VoteBox for account "
-                    .concat(self.owner!.address.toString())
-                    .concat(" has ")
-                    .concat(self.storedBallot.length.toString())
-                    .concat(" Ballots in it. Only one is allowed, max!")
-                )
-            }
             
             // Grab a reference to the ballot stored
-            let storedBallotRef: auth(BallotToken.TallyAdmin) &{BallotToken.Ballot}? = &self.storedBallot[self.storedBallotId!]
+            let storedBallotRef: auth(BallotToken.TallyAdmin) &{BallotToken.Ballot}? = &self.storedBallots[electionId]
 
-            // Just to be sure, check if the reference obtained is not nil. Panic if, by some reason, it is
+            // Check if the reference returned is a nil, which means that no Ballot was yet submitted for the electionId provided
             if (storedBallotRef == nil) {
-                panic(
-                    "Unable to get a valid &{BallotToken.Ballot} for ballotId "
-                    .concat(self.storedBallotId!.toString())
-                )
+                // Send back a nil in this case as well
+                return nil
             }
 
-            // Check also that the VoteBox owner and the Ballot owner match. I mean, it is impossible for a VoteBox to store a Ballot from a different owner, given all the checks and balances that I've placed so far, but check it just in case
+            // A valid Ballot was found if I get to this point in the code. Validate that the ballotOwner and the current owner of this VoteBox match. Panic if not
             if(self.voteBoxOwner != storedBallotRef!.ballotOwner) {
                 panic(
-                    "ERROR: Somehow the Ballot stored has owner "
+                    "ERROR: The Ballot stored for the election with Id "
+                    .concat(electionId.toString())
+                    .concat(" has owner ")
                     .concat(storedBallotRef!.ballotOwner!.toString())
                     .concat(" while this VoteBox has owner ")
                     .concat(self.voteBoxOwner.toString())
@@ -442,32 +425,43 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
             return storedBallotRef!.getVote()
         }
 
-        /*
-            This is the function used to cast a Vote. It verifies an insane number of pre and post conditions, but if successful, it changes the option field in a stored Ballot, which equates to a valid vote
-        */
-        access(BallotToken.VoteEnable) fun castVote(option: UInt8?) {
+        /**
+            This is the function used to cast a vote. It does an abnormal number of (somewhat redundant) validations before allowing the user to cast a vote. The function receives the option to set in the Ballot, if one exists, which includes the possibility of providing the defaultBallotOption, which makes the Ballot into a revoke one.
+
+            @param: electionId (UInt64) The id of the Election to check for Ballots in storage.
+            @param: option (UInt8?) The option to set in the Ballot, if it exists.
+        **/
+        access(BallotToken.VoteEnable) fun castVote(electionId: UInt64, option: UInt8?): Void {
             pre {
                 self.owner != nil: "Voting is only allowed through an authorized reference!"
-                self.storedBallot.length > 0: "Account ".concat(self.owner!.address.toString()).concat(" does not have a Ballot in storage to vote!")
-                self.storedBallot.length <= 1: "Account ".concat(self.owner!.address.toString()).concat(" has multiple Ballots in storage! This cannot happen!")
-                self.storedBallotOwner != nil: "VoteBox for account ".concat(self.owner!.address.toString()).concat(" has a Ballot in storage but the internal owner is not set. Unable to continue.")
-                self.storedBallotId != nil: "VoteBox for account ".concat(self.owner!.address.toString()).concat(" has a Ballot in storage but the internal id is not set. Unable to continue.")
-                self.storedBallotOwner! == self.owner!.address: "The VoteBox owner(".concat(self.owner!.address.toString()).concat(") is different from the Ballot owner(").concat(self.storedBallotOwner!.toString()).concat("). Cannot continue!")
+                self.storedBallots.length > 0: "Account ".concat(self.owner!.address.toString()).concat(" does not have a Ballot in storage to vote!")
             }
 
             post {
-                before(self.storedBallot.length) == self.storedBallot.length: "This function should not change the number of Ballots in storage!"
+                before(self.storedBallots.length) == self.storedBallots.length: "This function should not change the number of Ballots in storage!"
             }
 
-            // Get a reference to the stored Ballot
-            let storedBallotRef: auth(BallotToken.VoteEnable) &VoteBooth.Ballot? = &self.storedBallot[self.storedBallotId!]
+            // Get a reference to the stored Ballot under the electionId provided.
+            let storedBallotRef: auth(BallotToken.VoteEnable) &{BallotToken.Ballot}? = &self.storedBallots[electionId]
 
+            // If the reference comes back as a nil, it means that no Ballot exists for the electionId provided.
             if (storedBallotRef == nil) {
                 panic(
-                    "ERROR: Unable to get a valid &VoteBooth.Ballot with stored id "
-                    .concat(self.storedBallotId!.toString())
-                    .concat(" for VoteBox in account ")
-                    .concat(self.owner!.address.toString())
+                    "ERROR: No Ballots found in storage for the electionId ("
+                    .concat(electionId.toString())
+                    .concat(") provided for a VoteBox from account ")
+                    .concat(self.voteBoxOwner.toString())
+                )
+            }
+            else if (self.voteBoxOwner != storedBallotRef!.ballotOwner) {
+                // In this branch, the Ballot reference is not nil, but the owner from the Ballot and the one from this VoteBox does not match. That's a panic as well
+                panic(
+                    "ERROR: The owner of this VoteBox ("
+                    .concat(self.voteBoxOwner.toString())
+                    .concat(") does not matches the owner set in the Ballot (")
+                    .concat(storedBallotRef!.ballotOwner!.toString())
+                    .concat(") for election with Id ")
+                    .concat(electionId.toString())
                 )
             }
 
@@ -475,50 +469,46 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
             storedBallotRef!.vote(newOption: option)            
         }
 
-        /*
-            I'm going to split the casting of a vote and the submission of said vote in different function. Maybe I'll regret this in the future, but for now it seems the best approach. The cast vote above changes the vote in a stored Ballot. The following submit vote sends it to the VotingBooth's contract BallotBox to be tallied at a future point.
-        */
-        access(VoteEnable) fun submitBallot() {
+        /**
+            This function sets the Ballot to be tallied at a later stage. This, essentially, amounts at submitting the Ballot into the Election resource identified by the electionId provided.
+
+            @param: electionId (UInt64) The election identifier for the Election resource to submit a Ballot currently in storage.
+        **/
+        access(BallotToken.VoteEnable) fun submitBallot(electionId: UInt64): Void {
             // Make sure that everything is correct for submit the Ballot
             pre {
                 self.owner != nil: "Ballots can only be submitted from an authorized reference!"
-                self.storedBallot.length > 0: "No Ballots stored in the VoteBox for account ".concat(self.owner!.address.toString())
-                self.storedBallot.length <= 1: "Multiple Ballots detected for the VoteBox for account ".concat(self.owner!.address.toString())
-                self.storedBallotOwner != nil: "The VoteBox for account ".concat(self.owner!.address.toString()).concat(" doesn't have a valid owner set for the Ballot in storage. Cannot continue!")
-                self.storedBallotId != nil: "The VoteBox for account ".concat(self.owner!.address.toString()).concat(" doesn't have a valid id set for the Ballot in storage. Cannot continue!")
-                self.storedBallotOwner! == self.owner!.address: "Only the owner can submit a Ballot."
+                self.storedBallots.length > 0: "No Ballots stored in the VoteBox for account ".concat(self.owner!.address.toString())
             }
 
             post {
                 // Check that the VoteBox was reset after submission
-                self.storedBallot.length == 0: "The Ballot was not properly submitted!"
-                self.storedBallotId == nil: "The stored Ballot id was not reset!"
-                self.storedBallotOwner == nil: "The stored Ballot owner was not reset!"
+                self.storedBallots[electionId] == nil: "The Ballot was not properly submitted for election ".concat(electionId.toString()).concat("!")
             }
         
             // All good. Grab the Ballot in storage
-            let ballotToSubmit: @VoteBooth.Ballot <- self.storedBallot.remove(key: self.storedBallotId!) ??
+            let ballotToSubmit: @{BallotToken.Ballot} <- self.storedBallots.remove(key: electionId) ??
+            // Panic immediately if I didn't get a valid reference back
             panic(
-                "Unable to load a @VoteBooth.Ballot for a VoteBox in account "
+                "Unable to load a valid  @{BallotToken.Ballot} for a VoteBox in account "
                 .concat(self.owner!.address.toString())
+                .concat(" for election with Id ")
+                .concat(electionId.toString())
             )
 
-            // Use the voteBoothDeployer address to retrieve a reference to the BallotBox to where the Ballot is to be submitted
-            let voteBoothDeployerAccount: Address = ballotToSubmit.voteBoothDeployer!
-            let ballotBoxRef: &VoteBooth.BallotBox = getAccount(voteBoothDeployerAccount).capabilities.borrow<&VoteBooth.BallotBox>(VoteBooth.ballotBoxPublicPath) ??
+            // Use the voteBoothDeployer address to retrieve a reference to the Election resource to where the Ballot is to be submitted
+            let voteBoothDeployerAccount: Address = ballotToSubmit.voteBoothDeployer
+            
+            let electionRef: &{ElectionStandard.Election} = VoteBooth.borrowElection(electionId: electionId) ??
             panic(
-                "Unable to get a valid &VoteBooth.BallotBox in "
-                .concat(VoteBooth.ballotBoxPublicPath.toString())
+                "ERROR: Unable to retrieve a valid &{ElectionStandard.Election} with Id "
+                .concat(electionId.toString())
                 .concat(" for account ")
                 .concat(voteBoothDeployerAccount.toString())
             )
 
-            // Submit the ballot to the BallotBox
-            ballotBoxRef.submitBallot(ballot: <- ballotToSubmit)
-
-            // Reset the internal ballotId and owner. NOTE: No need to emit any events. The BallotBox resource is the one that does that
-            self.storedBallotId = nil
-            self.storedBallotOwner = nil
+            // And that's pretty much it. Submit the ballot and get on with it. The submission function deals with all the parameter manipulation.
+            electionRef.submitBallot(ballot: <- ballotToSubmit)
         }
 
         init(ownerAddress: Address) {
@@ -527,6 +517,17 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
         }
     }
 // ----------------------------- VOTE BOX END ------------------------------------------------------
+
+// ----------------------------- BURN BOX BEGIN ----------------------------------------------------
+// Local implementation of the BurnBox
+access(all) resource BurnBox: BallotBurner.BurnBox, Burner.Burnable {
+    access(contract) var ballotsToBurn: @{UInt64: {BallotToken.Ballot}}
+
+    init() {
+        self.ballotsToBurn <- {}
+    }
+}
+// ----------------------------- BURN BOX END ------------------------------------------------------
 
 // ----------------------------- BALLOT PRINTER BEGIN ----------------------------------------------
 /*
@@ -738,12 +739,8 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
     init(printLogs: Bool) {
         self.ballotPrinterAdminStoragePath = /storage/BallotPrinterAdmin
         self.ballotPrinterAdminPublicPath = /public/BallotPrinterAdmin
-        self.ballotBoxStoragePath = /storage/BallotBox
-        self.ballotBoxPublicPath = /public/BallotBox
         self.voteBoxStoragePath = /storage/VoteBox
         self.voteBoxPublicPath = /public/VoteBox
-        self.ownerControlStoragePath = /storage/OwnerControl
-        self.ownerControlPublicPath = /public/OwnerControl
         self.burnBoxStoragePath = /storage/BurnBox
         self.burnBoxPublicPath = /public/BurnBox
 
@@ -754,7 +751,7 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
 
         self.elections <- {}
 
-        // Clean up storage and capabilities for all the resources that I need to create in this constructor
+        // Clean up storage and capabilities for all the resources that I need to create in this constructor. First one: the ballotPrinterAdmin
         let randomResource01: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.ballotPrinterAdminStoragePath)
 
         if (randomResource01 != nil) {
@@ -782,14 +779,15 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
             )
         }
 
-        let randomResource02: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.ballotBoxStoragePath)
+        // Repeat the process for the BurnBox
+        let randomResource02: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.burnBoxStoragePath)
 
         if (randomResource02 != nil) {
             log(
                 "Found a type '"
                 .concat(randomResource02.getType().identifier)
                 .concat("' object in at ")
-                .concat(self.ballotBoxStoragePath.toString())
+                .concat(self.burnBoxStoragePath.toString())
                 .concat(" path in account ")
                 .concat(self.account.address.toString())
                 .concat(" storage!")
@@ -798,36 +796,9 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
 
         destroy randomResource02
 
-        let oldCap02: Capability? = self.account.capabilities.unpublish(self.ballotBoxPublicPath)
+        let oldCap02: Capability? = self.account.capabilities.unpublish(self.burnBoxPublicPath)
 
         if (oldCap02 != nil) {
-            log(
-                "Found an active capability at "
-                .concat(self.ballotBoxPublicPath.toString())
-                .concat(" from account ")
-                .concat(self.account.address.toString())
-            )
-        }
-
-        let randomResource04: @AnyResource? <- self.account.storage.load<@AnyResource>(from: self.burnBoxStoragePath)
-
-        if (randomResource04 != nil) {
-            log(
-                "Found a type '"
-                .concat(randomResource04.getType().identifier)
-                .concat("' object in at ")
-                .concat(self.ownerControlStoragePath.toString())
-                .concat(" path in account ")
-                .concat(self.account.address.toString())
-                .concat(" storage!")
-            )
-        }
-
-        destroy randomResource04
-
-        let oldCap04: Capability? = self.account.capabilities.unpublish(self.burnBoxPublicPath)
-
-        if (oldCap04 != nil) {
             log(
                 "Found an active capability at "
                 .concat(self.burnBoxPublicPath.toString())
@@ -843,20 +814,11 @@ access(all) resource Election: ElectionStandard.Election, Burner.Burnable {
 
         self.account.capabilities.publish(printerCapability, at: self.ballotPrinterAdminPublicPath)
 
-        // Repeat the process for the BallotBox
-        self.account.storage.save(<- create BallotBox(), to: self.ballotBoxStoragePath)
-
-        let BallotBoxCap: Capability<&VoteBooth.BallotBox> = self.account.capabilities.storage.issue<&VoteBooth.BallotBox>(self.ballotBoxStoragePath)
-
-        self.account.capabilities.publish(BallotBoxCap, at: self.ballotBoxPublicPath)
-
         // Process the BurnBox as well
         self.account.storage.save(<- create BurnBox(), to: self.burnBoxStoragePath)
 
         let BurnBoxCap: Capability<&VoteBooth.BurnBox> = self.account.capabilities.storage.issue<&VoteBooth.BurnBox> (self.burnBoxStoragePath)
         self.account.capabilities.publish(BurnBoxCap, at: self.burnBoxPublicPath)
-
-        emit VoteBooth.BallotBoxCreated(_accountAddress: self.account.address)
     }
 }
 // ----------------------------- CONSTRUCTOR END ---------------------------------------------------
