@@ -13,7 +13,7 @@
 **/
 
 import "Burner"
-import "BallotToken"
+import "BallotStandard"
 
 access(all) contract interface ElectionStandard {
     // CUSTOM PATHS
@@ -33,14 +33,14 @@ access(all) contract interface ElectionStandard {
     // Event for when a Ballot is revoked.
     access(all) event BallotRevoked(_ballotId: UInt64, _electionId: UInt64)
 
-    // Event for when some other resource other than a BallotToken.Ballot is retrieved
+    // Event for when some other resource other than a BallotStandard.Ballot is retrieved
     access(all) event NonNilResourceReturned(_resourceType: Type)
 
     // Event to inform users of how many Ballots were sent to be tallies, for a given election
     access(all) event BallotsWithdrawn(_ballots: UInt, _electionId: UInt64)
 
     // Event to emit when one of these Election resources gets destroyed using the Burner contract
-    access(all) event ElectionDestroyed(_electionId: UInt64)
+    access(all) event ElectionDestroyed(_electionId: UInt64, _ballotsSubmitted: UInt)
 
     access(all) resource interface Election: Burner.Burnable {
         // Characterizing parameter for the Election resource
@@ -57,7 +57,7 @@ access(all) contract interface ElectionStandard {
         access(all) let _defaultBallotOption: UInt8?
 
         // Main structure to store submitted Ballots
-        access(contract) var submittedBallots: @{Address: {BallotToken.Ballot}}
+        access(contract) var submittedBallots: @{Address: {BallotStandard.Ballot}}
 
         // Getters for the election parameters
         access(all) view fun getElectionName(): String {
@@ -125,9 +125,9 @@ access(all) contract interface ElectionStandard {
         /**
             This function submits a Ballot provided as argument into the internal Election storage. This Ballot, if valid, is anonymised (ballotOwner parameter set to nil) and stored in an Address -> Ballot dictionary. So, there's a tenuous (but private) link between a submitted Ballot and the user that submitted it, but it is not able to be accessed (let alone modified) by an unauthorized party. Why? Because this dictionary is 'access(contract)', therefore only the Election resource itself, and other contract methods, can access this dictionary. Once submitted, a Ballot is either sent to a TallyBox for counting (still in its anonymised version) or can be removed if the original voter submits a revoke Ballot (a Ballot with the defaultBallotOption set). Also, if the user/voter changes his/her mind and wants to change their opinion, they can simply submit another Ballot with a new option selected. Since I'm storing only one Ballot per Address, any Ballots submitted after the first one replaces any older one.
 
-            @param: ballot (@{BallotToken.Ballot} The Ballot to be submitted to this Election instance)
+            @param: ballot (@{BallotStandard.Ballot} The Ballot to be submitted to this Election instance)
         **/
-        access(all) fun submitBallot(ballot: @{BallotToken.Ballot}): Void {
+        access(all) fun submitBallot(ballot: @{BallotStandard.Ballot}): Void {
             pre{
                 ballot.ballotOwner != nil: "Anonymous Ballot provided! The Ballot submitted is not registered to a valid address!"
                 ballot.electionId == self.electionId: "The Ballot provided was registered to Election '".concat(ballot.electionId.toString()).concat(" but this Election has id '").concat(self.electionId.toString()).concat("'. Please submit the right Ballot or chose the right Election!")
@@ -171,10 +171,10 @@ access(all) contract interface ElectionStandard {
                 }
             }
             // TODO: Make sure the next 'else if' is properly tested to ensure the type is correct
-            else if (randomResourceRef.getType() == Type<&{BallotToken.Ballot}?>()) {
+            else if (randomResourceRef.getType() == Type<&{BallotStandard.Ballot}?>()) {
                 // In this case, there's an older Ballot in this position. This is either a revoke or a re-submission. Test it and act accordingly
                 // Start by removing the old Ballot from storage
-                let oldBallot: @{BallotToken.Ballot} <- self.submittedBallots.remove(key: newOwner) as! @{BallotToken.Ballot}
+                let oldBallot: @{BallotStandard.Ballot} <- self.submittedBallots.remove(key: newOwner) as! @{BallotStandard.Ballot}
 
                 // Grab the old Ballot info to throw an Event later on
                 let oldBallotId: UInt64 = oldBallot.ballotId
@@ -255,17 +255,17 @@ access(all) contract interface ElectionStandard {
             This function removes the Ballots in storage in an even more anonymised fashion, thus increasing the level of voter privacy. Right now, the only link between a submitted Ballot and the voter that casted it is the address used as key for the submittedBallots internal dictionary. This function simply returns the values of such dictionary in an array, in a semi randomised fashion.
             Due to the sensitive nature of this function, it can only be invoked with a TallyAdmin entitlement, which requires a borrow from storage, which implies that only this contract deployer can use it. Gotta love how simple and secure these things have become!
 
-            @return: @[BallotToken.Ballot] Returns an array with all the Ballots in no specific order, as stipulated in the Cadence documentation. The expectation is that this is going to build upon the voter privacy principles enacted thus far.
+            @return: @[BallotStandard.Ballot] Returns an array with all the Ballots in no specific order, as stipulated in the Cadence documentation. The expectation is that this is going to build upon the voter privacy principles enacted thus far.
         **/
-        access(BallotToken.TallyAdmin) fun withdrawBallots(): @[{BallotToken.Ballot}] {
+        access(BallotStandard.TallyAdmin) fun withdrawBallots(): @[{BallotStandard.Ballot}] {
             // Because I have a bunch of resources as values in an internal dictionary, Cadence does not allows me to simply do a "return <- self.submittedBallots.values" willy nilly. I need to "manually" extract each Ballot into an array to be able to return them.
-            var ballotsToTally: @[{BallotToken.Ballot}] <- []
+            var ballotsToTally: @[{BallotStandard.Ballot}] <- []
 
             // I need to do this in a loop
             let storageAddresses: [Address] = self.submittedBallots.keys
 
             for storageAddress in storageAddresses {
-                let currentBallot: @{BallotToken.Ballot} <- self.submittedBallots.remove(key: storageAddress)!
+                let currentBallot: @{BallotStandard.Ballot} <- self.submittedBallots.remove(key: storageAddress)!
 
                 // Validate that the Ballot is properly anonymised
                 if (currentBallot.ballotOwner != nil) {
@@ -298,14 +298,31 @@ access(all) contract interface ElectionStandard {
 
         /**
             The callback function that runs whenever one of these resources is destroyed using the Burner instance.
+            Destroying an Election resource can, potentially, leave a whole slew of Ballots still stored in the resource kinda dangling. They still exist is the blockchain, but it is impossible to access them because the resource housing them was destroyed. To prevent this, this callback goes ahead and destroys any Ballot in storage as well. The number of Ballots destroyed in this process is indicated in the final event emitted
         **/
         access(contract) fun burnCallback(): Void {
-            // TODO: Check if there are any Ballots left in this election. If there are, send them to the BurnBox
 
-            // TODO: Use this callBack to run a BurnBox ballot burn all Ballots in the BurnBox, if any
+            // Start by getting the keys of all the Ballots still in storage
+            let submittedBallotsOwners: [Address] = self.submittedBallots.keys
+
+            // Take note of the number of Ballots in storage
+            let totalBallotsInStorage: UInt = UInt(self.submittedBallots.length)
+
+            // Use these keys to load and destroy each Ballot
+            for submittedBallotOwner in submittedBallotsOwners {
+                // Load Ballots one at a time as optional. If they came up as nil, ignore it and move on because there's no need to process these
+                let ballotToBurn: @{BallotStandard.Ballot}? <- self.submittedBallots.remove(key: submittedBallotOwner)
+
+                // Use the Burner contract to destroy these Ballots so that the proper events get emitted as well
+                Burner.burn(<- ballotToBurn)
+
+                // Decrement both the total number of Ballots minted and submitted, just to keep things consistent
+                self.decrementTotalBallotsMinted(ballots: 1)
+                self.decrementTotalBallotsSubmitted(ballots: 1)
+            }
 
             // Emit the relevant event
-            emit ElectionDestroyed(_electionId: self.electionId)
+            emit ElectionDestroyed(_electionId: self.electionId, _ballotsSubmitted: totalBallotsInStorage)
         }
     }
 }

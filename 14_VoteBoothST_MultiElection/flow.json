@@ -14,8 +14,8 @@
                 "testing": "0000000000000008"
             }
         },
-        "BallotToken": {
-            "source": "cadence/contracts/BallotToken.cdc",
+        "BallotStandard": {
+            "source": "cadence/contracts/BallotStandard.cdc",
             "aliases": {
                 "emulator": "f8d6e0586b0a20c7",
                 "testing": "0000000000000008"
@@ -220,7 +220,7 @@
                     "args": []
                 },
                 {
-                    "name": "BallotToken",
+                    "name": "BallotStandard",
                     "args": []
                 },
                 {

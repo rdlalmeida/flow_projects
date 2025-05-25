@@ -10,7 +10,7 @@
 
 import "Burner"
 
-access(all) contract interface BallotToken {
+access(all) contract interface BallotStandard {
     // CUSTOM ENTITLEMENTS
     access(all) entitlement TallyAdmin
     access(all) entitlement VoteEnable
@@ -105,7 +105,7 @@ access(all) contract interface BallotToken {
 
             @param: newOption (UInt8?) The option to set in this Ballot. Provide a 'nil' to make this Ballot into a revoke one.
         **/
-        access(BallotToken.VoteEnable) fun vote(newOption: UInt8?): Void {
+        access(BallotStandard.VoteEnable) fun vote(newOption: UInt8?): Void {
             pre {
                 self.owner != nil: "Need a valid owner to vote! Please use an authorized reference to this Ballot to vote."
                 self.owner!.address != self.voteBoothDeployer: "The election administrator (".concat(self.voteBoothDeployer.toString()).concat(") is not allowed to vote!")

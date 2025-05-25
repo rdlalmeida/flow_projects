@@ -4,13 +4,13 @@
 **/
 
 import "Burner"
-import "BallotToken"
+import "BallotStandard"
 import "ElectionStandard"
 
 
 access(all) contract interface BallotBurner {
     // CUSTOM EVENTS
-    // Event for when some other resource other than a BallotToken.Ballot is retrieved
+    // Event for when some other resource other than a BallotStandard.Ballot is retrieved
     access(all) event NonNilResourceReturned(_tokenType: Type)
 
     // Event to emit whenever a Ballot is sent to the BurnBox to be destroyed at a later stage
@@ -21,7 +21,7 @@ access(all) contract interface BallotBurner {
 
     access(all) resource interface BurnBox: Burner.Burnable {
         // Save the Ballots to burn in an internal dictionary
-        access(contract) var ballotsToBurn: @{UInt64: {BallotToken.Ballot}}
+        access(contract) var ballotsToBurn: @{UInt64: {BallotStandard.Ballot}}
 
         /**
             Function to determine if a given Ballot, identified by its ballotId, is set to burn or not. In other words, this function returns a boolean regarding if there's a valid entry in the internal dictionary for the ballotId provided.
@@ -41,9 +41,9 @@ access(all) contract interface BallotBurner {
         /**
             Function to deposit a Ballot resource into this resource for a future burn. This function simply sets a Ballot received as argument into the internal ballotsToBurn dictionary, emits the respective event and nothing else.
 
-            @param: ballotToBurn (@{BallotToken.Ballot}) The Ballot resource to be set in the burn dictionary.
+            @param: ballotToBurn (@{BallotStandard.Ballot}) The Ballot resource to be set in the burn dictionary.
         **/
-        access(all) fun depositBallotToBurn(ballotToBurn: @{BallotToken.Ballot}): Void {
+        access(all) fun depositBallotToBurn(ballotToBurn: @{BallotStandard.Ballot}): Void {
             // Save the Ballot's parameter to use them in the event emission later on
             let ballotToBurnBallotId: UInt64 = ballotToBurn.ballotId
             let ballotToBurnElectionId: UInt64 = ballotToBurn.electionId
@@ -57,10 +57,10 @@ access(all) contract interface BallotBurner {
             // Test the resource to check if a non-nil value was returned somehow
             if (randomResource != nil) {
                 // If the code gets here, the randomResource is not a nil. Test if it is a Ballot resource also
-                if (randomResource.getType() == Type<@{BallotToken.Ballot}?>()) {
+                if (randomResource.getType() == Type<@{BallotStandard.Ballot}?>()) {
                     // This is an extreme case in which, somehow, there was a Ballot resource already stored in the same position identified by the ballotId. Panic in this case
                     panic(
-                        "ERROR: Found a valid @{BallotToken.Ballot} already stored with key "
+                        "ERROR: Found a valid @{BallotStandard.Ballot} already stored with key "
                         .concat(ballotToBurnBallotId.toString())
                         .concat(". Cannot continue!")
                     )
@@ -83,7 +83,7 @@ access(all) contract interface BallotBurner {
             @return: [UInt64] Return an array with all the ballotIds of the Ballots currently in storage.
         **/
         // TODO: Validate the entitlement used in this function
-        access(BallotToken.TallyAdmin) view fun getBallotsToBurn(): [UInt64] {
+        access(BallotStandard.TallyAdmin) view fun getBallotsToBurn(): [UInt64] {
             return self.ballotsToBurn.keys
         }
 
@@ -100,15 +100,15 @@ access(all) contract interface BallotBurner {
             Function that clears the internal ballotsToBurn dictionary by setting every Ballot currently stored in the BurnBox instance to be burned using the Burner contract.
         **/
         // TODO: Make sure that this entitlement protects the access to this function properly.
-        access(BallotToken.TallyAdmin) fun burnAllBallots(): Void {
+        access(BallotStandard.TallyAdmin) fun burnAllBallots(): Void {
             // I need to iterate over the internal Ballot dictionary. Grab the keys into a [UInt64]
             let ballotIdsToBurn: [UInt64] = self.ballotsToBurn.keys
 
             // Burn each Ballot in a loop
             for ballotId in ballotIdsToBurn {
-                let ballotToBurn: @{BallotToken.Ballot} <- self.ballotsToBurn.remove(key: ballotId) ??
+                let ballotToBurn: @{BallotStandard.Ballot} <- self.ballotsToBurn.remove(key: ballotId) ??
                 panic (
-                    "Unable to recover a @{BallotToken.Ballot} from BurnBox.ballotsToBurn for id "
+                    "Unable to recover a @{BallotStandard.Ballot} from BurnBox.ballotsToBurn for id "
                     .concat(ballotId.toString())
                     .concat(". The dictionary returned a nil!")
                 )
