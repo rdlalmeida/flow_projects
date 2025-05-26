@@ -16,10 +16,6 @@ import "Burner"
 import "BallotStandard"
 
 access(all) contract interface ElectionStandard {
-    // CUSTOM PATHS
-    access(all) let burnBoxStoragePath: StoragePath
-    access(all) let burnBoxPublicPath: PublicPath
-
     // CUSTOM ENTITLEMENTS
     access(all) entitlement ElectionAdmin
 

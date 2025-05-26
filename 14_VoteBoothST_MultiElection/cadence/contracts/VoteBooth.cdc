@@ -16,12 +16,14 @@ access(all) contract VoteBooth {
     access(all) let burnBoxPublicPath: PublicPath
 
     // CUSTOM EVENTS
-    access(all) event ContractDataInconsistent(_ballotId: UInt64?, _owner: Address?)
     access(all) event VoteBoxCreated(_voterAddress: Address)
     access(all) event VoteBoxDestroyed(_ballotsInBox: Int, _ballotIds: [UInt64])
 
     // Event for when a new Election resource is created.
     access(all) event ElectionCreated(_electionId: UInt64)
+
+    // Event for when a new BurnBox resource is created
+    access(all) event BurnBoxCreated(_deployerAddress: Address)
 
     access(all) event BallotMinted(_ballotId: UInt64, _voterAddress: Address, _electionId: UInt64)
 
@@ -789,6 +791,9 @@ access(all) resource BurnBox: BallotBurner.BurnBox, Burner.Burnable {
 
         let BurnBoxCap: Capability<&VoteBooth.BurnBox> = self.account.capabilities.storage.issue<&VoteBooth.BurnBox> (self.burnBoxStoragePath)
         self.account.capabilities.publish(BurnBoxCap, at: self.burnBoxPublicPath)
+
+        // Emit the BurnBoxCreated event to finish this
+        emit BurnBoxCreated(_deployerAddress: self.account.address)
     }
 }
 // ----------------------------- CONSTRUCTOR END ---------------------------------------------------
