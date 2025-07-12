@@ -19,8 +19,5 @@ I'm working on this alongside with the development of the first resource-based r
 # The Resource-based voting platform (I don't have a cool name for it yet... :confused:) 
 The basis of my idea is summarised in the figure bellow:
 
-something
+<img width="905" height="844" alt="15_Resource_based_enc_framework" src="https://github.com/user-attachments/assets/4345bb2c-45b5-4c9c-8f8e-c80359147dd7" />
 
-some more synch stuff
-
-one more try
