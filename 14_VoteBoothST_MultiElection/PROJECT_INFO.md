@@ -21,3 +21,12 @@ The basis of my idea is summarised in the figure bellow:
 
 <img width="905" height="844" alt="15_Resource_based_enc_framework" src="https://github.com/user-attachments/assets/4345bb2c-45b5-4c9c-8f8e-c80359147dd7" />
 
+From the point of view of other remote voting systems, even blockchain-based ones, there's not a lot added to this approach, given that it is a tried and successful one. The biggest addition from my part is to use resources to abstract ballots as a way to research how these can fare in such context.
+
+**NOTE:** From this point onwards, for simplicity sake, I'm referring to any resource instance in a capitalised fashion. A "Ballot" refers to an instance of a Cadence resource defined through a smart contract and minted using the usual admin-type resource. A "ballot" on the other hand refers to the general object.
+
+The star of this system is the Ballot resource. I've build this one to emulate a real world ballot as much as possible (given than resources are inspired by *linear types* and these intend to represent real-world values as well). Just like with real-life ballots, Ballot's ownership is implied from the account owner whose storage they exist at any point.
+Ballots are printed on demand by an authority (The *Election Authority (EA)* in the figure) and delivered to the voter's account upon successful registration/authentication. This emulates a physical voting booth where a voter gets a paper ballot printed by the election organisers after these check that the voter's ID is an eligibility list.
+
+## System Actors:
+- **Voter:** The main actor in the system. The registration process inserts $$E_{j}$$
