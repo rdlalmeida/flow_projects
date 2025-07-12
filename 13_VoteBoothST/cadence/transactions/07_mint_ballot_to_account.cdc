@@ -12,17 +12,6 @@ transaction(recipient: Address) {
         self.signerAddress = signer.address
         let recipientAccount: &Account = getAccount(recipient)
 
-        let voteBoxExists: Bool = recipientAccount.capabilities.exists(VoteBoothST.voteBoxPublicPath)
-
-        if (!voteBoxExists) {
-            panic(
-                "ERROR: Unable to retrieve a valid Capability<&VoteBoothST.VoteBox> from account "
-                .concat(recipient.toString())
-                .concat(" stored in public path at ")
-                .concat(VoteBoothST.voteBoxPublicPath.toString())
-            )
-        }
-
         self.voteBoxRef = recipientAccount.capabilities.borrow<&VoteBoothST.VoteBox>(VoteBoothST.voteBoxPublicPath) ??
         panic(
             "Account "
