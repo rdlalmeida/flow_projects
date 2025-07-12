@@ -16,6 +16,6 @@ Currently, my researched has shifted towards providing a full analysis of the re
 
 I'm working on this alongside with the development of the first resource-based remote voting platform, which I obviously want to develop in Cadence and Flow.
 
-# The Resource-based voting platform (I don't have a cool name for it yet...) 
+# The Resource-based voting platform (I don't have a cool name for it yet... :confused:) 
+The basis of my idea is summarised in the figure bellow:
 
-:confused:
