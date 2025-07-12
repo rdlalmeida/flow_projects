@@ -19,3 +19,4 @@ I'm working on this alongside with the development of the first resource-based r
 # The Resource-based voting platform (I don't have a cool name for it yet... :confused:) 
 The basis of my idea is summarised in the figure bellow:
 
+something
