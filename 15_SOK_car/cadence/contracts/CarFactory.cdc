@@ -116,6 +116,11 @@ access(all) contract CarFactory {
             if (storedCar == nil) {
                 emit GarageMissingCar(carId: carId)
             }
+            // The '<-' operator is used to move a resource. In this case, the resource is withdrawn from the internal storage
+            // dictionary and it is unhoused at this point. At the end of this function, the resource needs to go somewhere.
+            // In this specific case, because this function returns a resource (the '@' in the return type means resource)
+            // the '<-' operator is used to move the resource from within the function context into whatever context (another 
+            // function or a transaction) invoked this function in the first place.
             return <- storedCar
         }
 
@@ -124,6 +129,9 @@ access(all) contract CarFactory {
             // First, retrieve the car to be sold from the Garage. Panic if no car was found since it is pointless
             // to carry on with this without one. Panic stops the current transaction and reverts the global state
             // to the point it was before this instruction.
+            // After this instruction, the Car resource is no longer inside the Garage. So, currently, the resource
+            // is in an unstable state. By the end of this function, this resource needs to end up in a permanent location
+            // of any kind, or destroyed. This contract cannot be deployed until all the type safety restrictions from Cadence are met
             let carToSell: @CarFactory.Car <- self.storedCars.remove(key: carIdToSell) ??
             panic(
                 "Unable to retrieve car with Id "
