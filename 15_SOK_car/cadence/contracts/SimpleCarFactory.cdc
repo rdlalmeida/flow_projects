@@ -1,6 +1,9 @@
 access(all) contract SimpleCarFactory {
     access(all) let garageStoragePath: StoragePath
     access(all) let garagePublicPath: PublicPath
+    access(all) let garageCapabilityReceiverStoragePath: StoragePath
+    access(all) let garageCapabilityReceiverPublicPath: PublicPath
+
     access(all) let factoryAdminStoragePath: StoragePath
     access(all) let factoryAdminPublicPath: PublicPath
 
@@ -64,16 +67,59 @@ access(all) contract SimpleCarFactory {
         }
     }
 
+    access(all) resource interface PublicGarage {
+        access(all) fun storeCar(carToStore: @SimpleCarFactory.Car): Void
+        access(all) fun getCarIds(): [UInt64]
+        access(all) fun testPublicCapability(): String
+    }
+
+    access(all) resource interface GarageCapabilityReceiverPublic {
+        access(all) fun addGarageCapability
+            (cap: Capability<&SimpleCarFactory.Garage>)
+    }
+
+    access(all) resource GarageCapabilityReceiver: 
+        GarageCapabilityReceiverPublic {
+    
+    access(all) var garageCapability: Capability<&SimpleCarFactory.Garage>?
+
+        init() {
+            self.garageCapability = nil
+        }
+
+        access(all) fun addGarageCapability
+            (cap: Capability<&SimpleCarFactory.Garage>) {
+                self.garageCapability = cap
+        }
+    }
+
+    access(all) fun createGarageCapabilityReceiver(): 
+        @SimpleCarFactory.GarageCapabilityReceiver {
+        return <- create SimpleCarFactory.GarageCapabilityReceiver()
+    }
+
     // Collection-type resource. Starts as a normal resource
-    access(all) resource Garage {
+    access(all) resource Garage: PublicGarage {
         // But with an internal capacity to store other resources
         // using a key-value dictionary using the Car's ID as key
-        access(account) var storedCars: @{UInt64: SimpleCarFactory.Car}
+        access(all) var storedCars: @{UInt64: SimpleCarFactory.Car}
         
         // Resource constructor. Sets the internal dictionary to an empty one
         init () {
             self.storedCars <- {}
         }
+
+        access(all) fun getCarIds(): [UInt64] {
+            return self.storedCars.keys
+        }
+
+        access(all) fun testPublicCapability(): String {
+            return "I have a public &{SimpleCarFactory.PublicGarage}"
+        }
+
+        access(all) fun testPrivateCapability(): String {
+            return "Got a private capability from the CapabilityReceiver"
+        } 
 
         // Store a Car provided as input into this Garage
         access(all) fun storeCar(carToStore: @SimpleCarFactory.Car): Void {
@@ -90,7 +136,7 @@ access(all) contract SimpleCarFactory {
         }
 
         // Retrieve a Car from this Garage
-        access(account) fun getCar(carId: UInt64): @SimpleCarFactory.Car {
+        access(all) fun getCar(carId: UInt64): @SimpleCarFactory.Car {
             /* 
                 Attempt to retrieve a Car with the provided ID from this 
                 Garage's internal storage. If the Car does not exist, a 
@@ -100,12 +146,13 @@ access(all) contract SimpleCarFactory {
                 will trigger the panic statement, which reverts the transaction 
                 invoking this function with the message in the statement's argument
             */
-            let storedCar: @SimpleCarFactory.Car <- self.storedCars.remove(key: carId) ??
-            panic(
-                "Car with id "
-                .concat(carId.toString())
-                .concat(" is not in this Garage!")
-                )
+            let storedCar: @SimpleCarFactory.Car <- 
+                self.storedCars.remove(key: carId) ??
+                panic(
+                    "Car with id "
+                    .concat(carId.toString())
+                    .concat(" is not in this Garage!")
+                    )
             // If I got here, I have a valid Car to return
             return <- storedCar
         }
@@ -119,7 +166,7 @@ access(all) contract SimpleCarFactory {
             entitlement, which means that only an authorised reference
             can access it and only the owner of the resource can get those.
         */
-        access(Admin) fun destroyCar(oldCarId: UInt64): Void {
+        access(all) fun destroyCar(oldCarId: UInt64): Void {
             // Grab the car to be destroyed from the garage collection, 
             // if it exists. Panic if not
             let carToDestroy: @SimpleCarFactory.Car 
@@ -148,6 +195,11 @@ access(all) contract SimpleCarFactory {
         }
     }
 
+    // Anyone can create a new Garage, since it's not that critical
+    access(all) fun createGarage(): @{SimpleCarFactory.PublicGarage} {
+        return <- create SimpleCarFactory.Garage()
+    }
+
     access(all) resource FactoryAdmin {
         /*    
             The creation of new Cars is protected with the Admin entitlement.
@@ -160,13 +212,13 @@ access(all) contract SimpleCarFactory {
             newColor: String,
             newInsurancePolicy: String,
             newCarOwner: Address
-            ): Void {
+            ) {
                 // Create the car only if the owner provided has a valid Garage
                 // already set in his/her account to store the new Car
                 // Check if the owner account is properly set
                 let ownerAccount: &Account = getAccount(newCarOwner);
-                let ownerGarageRef: &SimpleCarFactory.Garage = 
-                    ownerAccount.capabilities.borrow<&SimpleCarFactory.Garage>
+                let ownerGarageRef: &{SimpleCarFactory.PublicGarage} = 
+                    ownerAccount.capabilities.borrow<&{SimpleCarFactory.PublicGarage}>
                     (SimpleCarFactory.garagePublicPath) ??
                         panic(
                             "Unable to retrieve a valid &Garage for account "
@@ -202,6 +254,8 @@ access(all) contract SimpleCarFactory {
         // a contract abstraction
         self.garageStoragePath = /storage/Garage
         self.garagePublicPath = /public/Garage
+        self.garageCapabilityReceiverStoragePath = /storage/GarageCapabilityReceiver
+        self.garageCapabilityReceiverPublicPath = /public/GarageCapabilityReceiver
         self.factoryAdminStoragePath = /storage/FactoryAdmin
         self.factoryAdminPublicPath = /public/FactoryAdmin
 
@@ -224,5 +278,28 @@ access(all) contract SimpleCarFactory {
         // Save it to the same path as the old one
         self.account.storage.save(<- newFactoryAdmin, 
             to: SimpleCarFactory.factoryAdminStoragePath)
+
+        // Create, store and publish a public (normal) capability
+        // to a Garage resource belonging to this contract deployer
+        let newGarage: @SimpleCarFactory.Garage <- create SimpleCarFactory.Garage()
+
+        let randomResource: @AnyResource <- 
+            self.account
+                .storage
+                    .load<@SimpleCarFactory.Garage>
+                        (from: SimpleCarFactory.garageStoragePath)
+        destroy randomResource
+
+        self.account.storage.save(<- newGarage, to: SimpleCarFactory.garageStoragePath)
+
+        // Create and publish a "normal" capability
+        let garagePublicCap: Capability<&{SimpleCarFactory.PublicGarage}> = 
+            self.account
+                .capabilities
+                    .storage
+                        .issue<&{SimpleCarFactory.PublicGarage}>
+                            (SimpleCarFactory.garageStoragePath)
+        self.account.capabilities.publish(garagePublicCap, 
+            at: SimpleCarFactory.garagePublicPath)
     }
 }
