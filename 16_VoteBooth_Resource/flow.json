@@ -1,44 +1,21 @@
 {
 	"contracts": {
-		"BallotBurner": {
-			"source": "cadence/contracts/BallotBurner.cdc",
+		"BallotInterface": {
+			"source": "cadence/contracts/BallotInterface.cdc",
 			"aliases": {
-				"emulator": "f8d6e0586b0a20c7",
-				"testing": "0000000000000008"
+				"testing": "0000000000000007"
 			}
 		},
-		"BallotStandard": {
-			"source": "cadence/contracts/BallotStandard.cdc",
+		"Counter": {
+			"source": "cadence/contracts/Counter.cdc",
 			"aliases": {
-				"emulator": "f8d6e0586b0a20c7",
-				"testing": "0000000000000008"
+				"testing": "0000000000000007"
 			}
 		},
 		"ElectionInterface": {
 			"source": "cadence/contracts/ElectionInterface.cdc",
 			"aliases": {
 				"testing": "0000000000000007"
-			}
-		},
-		"ElectionStandard": {
-			"source": "cadence/contracts/ElectionStandard.cdc",
-			"aliases": {
-				"emulator": "f8d6e0586b0a20c7",
-				"testing": "0000000000000008"
-			}
-		},
-		"Tally": {
-			"source": "cadence/contracts/Tally.cdc",
-			"aliases": {
-				"emulator": "f8d6e0586b0a20c7",
-				"testing": "0000000000000008"
-			}
-		},
-		"VoteBooth": {
-			"source": "cadence/contracts/VoteBooth.cdc",
-			"aliases": {
-				"emulator": "f8d6e0586b0a20c7",
-				"testing": "0000000000000008"
 			}
 		}
 	},
@@ -55,15 +32,6 @@
 		"Crypto": {
 			"source": "mainnet://e467b9dd11fa00df.Crypto",
 			"hash": "610692c2092bd29d8f49aefc10b6e8ff3d4b3909331fece98f6966fbdcb4cdd4",
-			"aliases": {
-				"emulator": "f8d6e0586b0a20c7",
-				"mainnet": "e467b9dd11fa00df",
-				"testnet": "8c5303eaa26202d6"
-			}
-		},
-		"EVM": {
-			"source": "mainnet://e467b9dd11fa00df.EVM",
-			"hash": "df2065d3eebc1e690e0b52a3f293bdf6c22780c7a9e7ef48a708a651b87abdf0",
 			"aliases": {
 				"emulator": "f8d6e0586b0a20c7",
 				"mainnet": "e467b9dd11fa00df",
@@ -115,7 +83,7 @@
 		},
 		"FungibleToken": {
 			"source": "mainnet://f233dcee88fe0abe.FungibleToken",
-			"hash": "050328d01c6cde307fbe14960632666848d9b7ea4fef03ca8c0bbfb0f2884068",
+			"hash": "23c1159cf99b2b039b6b868d782d57ae39b8d784045d81597f100a4782f0285b",
 			"aliases": {
 				"emulator": "ee82856bf20e2aa6",
 				"mainnet": "f233dcee88fe0abe",
@@ -133,7 +101,7 @@
 		},
 		"MetadataViews": {
 			"source": "mainnet://1d7e57aa55817448.MetadataViews",
-			"hash": "10a239cc26e825077de6c8b424409ae173e78e8391df62750b6ba19ffd048f51",
+			"hash": "9032f46909e729d26722cbfcee87265e4f81cd2912e936669c0e6b510d007e81",
 			"aliases": {
 				"emulator": "f8d6e0586b0a20c7",
 				"mainnet": "1d7e57aa55817448",
@@ -220,58 +188,7 @@
 	},
 	"deployments": {
 		"emulator": {
-			"emulator-account": [
-				"Tally",
-				"BallotStandard",
-				"ElectionStandard",
-				"BallotBurner",
-				{
-					"name": "VoteBooth",
-					"args": [
-						{
-							"value": "World's best dog ever!",
-							"type": "String"
-						},
-						{
-							"value": "WBDE",
-							"type": "String"
-						},
-						{
-							"value": "Who was the best dog this summer? Options: \n1 - Eddie, 2 - Argus, 3 - Both, 4 - None",
-							"type": "String"
-						},
-						{
-							"value": "Campinho, Portugal",
-							"type": "String"
-						},
-						{
-							"value": [
-								{
-									"value": "1",
-									"type": "UInt8"
-								},
-								{
-									"value": "2",
-									"type": "UInt8"
-								},
-								{
-									"value": "3",
-									"type": "UInt8"
-								},
-								{
-									"value": "4",
-									"type": "UInt8"
-								}
-							],
-							"type": "Array"
-						},
-						{
-							"value": true,
-							"type": "Bool"
-						}
-					]
-				}
-			]
+			"emulator-account": []
 		}
 	}
 }
