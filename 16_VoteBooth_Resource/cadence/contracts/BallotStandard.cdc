@@ -30,7 +30,7 @@ access(all) contract BallotStandard {
         /**
             This capability is going to be used to access the "submitBallot" function from the Election resource that points to it. The idea is to keep Election resources somewhat hidden in the VoteBooth deployer account and delegate access to it on a per-voter basis, using the Ballot resources to that effect.
         */
-        access(self) let electionCapability: Capability
+        access(BallotAdmin) let electionCapability: Capability
         
         /**
             This field is used by the Election resource as the key for the internal dictionary where Ballots are stored
@@ -51,7 +51,7 @@ access(all) contract BallotStandard {
 
         // I can put a getter for the Ballot option here as well since there's no danger in returning it, given that its either a default String, or an
         // encrypted option
-        access(self) view fun getOption(): String {
+        access(BallotStandard.BallotAdmin) view fun getOption(): String {
             return self.option
         }
 
