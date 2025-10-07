@@ -7,13 +7,14 @@
 **/
 
 import "Burner"
+import "Crypto"
 
 access(all) contract BallotStandard {
 // CUSTOM ENTITLEMENTS
     access(all) entitlement BallotAdmin
 
     // CUSTOM EVENTS
-    access(all) event BallotBurned(_ballotId: UInt64, _linkedElectionId:UInt64, _ballotIndex: String)
+    access(all) event BallotBurned(_ballotId: UInt64, _linkedElectionId:UInt64)
 
     access(all) resource interface BallotPublic {
         access(all) let ballotId: UInt64
@@ -31,23 +32,18 @@ access(all) contract BallotStandard {
             This capability is going to be used to access the "submitBallot" function from the Election resource that points to it. The idea is to keep Election resources somewhat hidden in the VoteBooth deployer account and delegate access to it on a per-voter basis, using the Ballot resources to that effect.
         */
         access(BallotAdmin) let electionCapability: Capability
-        
-        /**
-            This field is used by the Election resource as the key for the internal dictionary where Ballots are stored
-            As such, this field needs to be unique and also prevent information leakage to the voter. An obvious choice
-            would be the voter's address, since it is a unique element by default, but that raises some privacy issues, since
-            there a link somewhere between an address and a Ballot and that's a no no. So, I'm going a level deep and store the
-            hash digest of the voter's address in this field and use it as a sort of "private identification string" that is
-            also unique, under the assumption that the hash algorithm used is collision resistant to a degree.
-            This makes sure that multiple Ballots by the same voter have the same ballotIndex, in principle that is.
-        **/
-        access(all) let ballotIndex: String
-
         /**
             This is the field where the choice in the ballot gets reflected. The idea is to have an encrypted value here, hence why I set it as a String.
             What gets encrypted is still open to debate, My idea was to simplify this and just put a number in this field to make counting easier, but once I add an encryption layer, this strategy limits my cipher space quite a lot. But if I concatenate it with a very large random integer tough... Anyway, this needs some thinking, but the idea is to have the frontend setting this field so that the encryption process happens off-chain.
         **/
         access(self) var option: String
+
+        /**
+            I need a pair of parameter to prevent an adversary from taking advantage of this system. I need a "voterAddress" as well as a "ballotIndex" parameter that is derived from the initial one. The idea is to use this to ensure that this Ballot is either inside of an account that matches the "voterAddress" parameter, be it by itself or while in a VoteBox, or inside an Election resource. To restrict the Ballot to these two states only, I need to be creative with this aspect.
+            For now, I'm setting the ballotIndex as H(voterAddress) = ballotIndex, i.e., the ballotIndex is the hash digest for the address of the voter.
+        **/
+        access(all) let voterAddress: Address
+        access(all) let ballotIndex: String
 
         // I can put a getter for the Ballot option here as well since there's no danger in returning it, given that its either a default String, or an
         // encrypted option
@@ -65,20 +61,38 @@ access(all) contract BallotStandard {
 
         access(contract) fun burnCallback(): Void {
             // From the Ballot's point of view, all I need to do is to emit the proper Event
-            emit BallotBurned(_ballotId: self.ballotId, _linkedElectionId: self.linkedElectionId, _ballotIndex: self.ballotIndex)
+            emit BallotBurned(_ballotId: self.ballotId, _linkedElectionId: self.linkedElectionId)
         }
 
         init(
             _linkedElectionId: UInt64,
             _electionCapability: Capability,
-            _ballotIndex: String
+            _voterAddress: Address
         ) {
             self.ballotId = self.uuid
             self.linkedElectionId = _linkedElectionId
             self.electionCapability = _electionCapability
-            self.ballotIndex = _ballotIndex
+
+            // The voterAddress is achieved directly
+            self.voterAddress = _voterAddress
+
+            // But the ballotIndex needs more processing. First, cast the voterAddress to a String and then convert that String to a [UInt8]. Finally, 
+            // apply the SHA3_256 hashing algorithm to the [UInt8] with the hash digest of the address String.  
+            let addressDigest: [UInt8] = HashAlgorithm.SHA3_256.hash(self.voterAddress.toString().utf8)
+
+            // To make things much easier, I'm converting the hash digest, currently set as [UInt8], back to a String to use as a dictionary key.
+            self.ballotIndex = String.fromUTF8(addressDigest)!
             // Set any new Ballots to a default option, which for now is just a String saying that. Obviously, this is not a valid option for any election.
             self.option = "default"
         }
+    }
+
+    access(all) fun createBallot(newLinkedElectionId: UInt64, newElectionCapability: Capability, newVoterAddress: Address): @BallotStandard.Ballot {
+        return <- create Ballot(_linkedElectionId: newLinkedElectionId, _electionCapability: newElectionCapability, _voterAddress: newVoterAddress)
+    }
+
+    // Contract constructor
+    init() {
+
     }
 }

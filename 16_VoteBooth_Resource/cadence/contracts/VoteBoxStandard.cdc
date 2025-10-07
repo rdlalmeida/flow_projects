@@ -23,11 +23,17 @@ access(all) contract VoteBoxStandard {
     // submit Ballots (the _electionsVoted array), as well as the list of active Ballots, or better, the electionIds for the Elections that this VoteBox
     // has an active Ballot in it
     access(all) event VoteBoxDestroyed(_electionsVoted: [UInt64], _activeBallots: Int, _voterAddress: Address)
+
+    // The public version of the VoteBox resource that only exposes the depositBallot function
+    access(all) resource interface VoteBoxPublic {
+        access(all) let voteBoxId: UInt64
+        access(all) fun depositBallot(ballot: @BallotStandard.Ballot) 
+    }
     
     access(all) resource VoteBox: Burner.Burnable {
-        access(self) let voteBoxId: UInt64
+        access(all) let voteBoxId: UInt64
         // Internally, I want this VoteBox to store only one Ballot per Election. As such, I'm using the Ballot's electionId index as key for the
-        // internal dictionary
+        // internal dictionary, i.e., the UInt64 used as key in this dictionary relates to the linkedElectionId parameter from the Ballot itself.
         access(self) var activeBallots: @{UInt64: BallotStandard.Ballot}
 
         // This array stores all the electionIds for submitted Ballots, regardless of their outcome, i.e., even if a voter revokes their Ballot at a later
@@ -113,9 +119,30 @@ access(all) contract VoteBoxStandard {
 
             // Use the reference to access the "submitBallot" function and send the Ballot to the Election where it belongs
             electionReference.submitBallot(ballot: <- ballotToSubmit)
+
+            // Add the electionId provided to the votedElections array
+            self.electionsVoted.append(electionId)
         }
 
+        /**
+            This function is supposed to be exposed by the VoteBoxPublic interface and should be used by an Admin entity to deliver a requested Ballot into this VoteBox. Obviously, the printing of new Ballots is heavily regulated in this process and can only be invoked by Admin level people. But these also need a way to deliver the Ballot into one of these VoteBoxes. This is the function they should use for the effect.
+            To prevent idiots from importing the BallotStandard contract and deliver Ballots at will to unsuspecting voters, this function is protected with the VoteBooth.VoteBoothAdmin entitlement, which requires an authorized reference to this VoteBox to do anything
 
+            TODO: I don't like this function with an access all. Need to make sure if this is totally OK
+
+        **/
+        access(all) fun depositBallot(ballot: @BallotStandard.Ballot) {
+            // Check and panic if, by whatever reason, there's a Ballot already with the provided electionId
+            pre {
+                self.activeBallots[ballot.linkedElectionId] == nil: "The VoteBox in account ".concat(self.owner!.address.toString()).concat(" already has a Ballot under electionId ").concat(ballot.linkedElectionId.toString())
+                // Validate that the Ballot being deposited has the same owner as this VoteBox resource
+                ballot.voterAddress == self.owner!.address: "ERROR: Ballot with owner ".concat(ballot.voterAddress.toString()).concat(" is trying to be deposited onto voter ").concat(self.owner!.address.toString()).concat(" account. These addresses must match!")
+            }
+
+            // Clean up the storage slot and deposit the new Ballot
+            let phantomResource: @AnyResource? <- self.activeBallots[ballot.linkedElectionId] <- ballot
+            destroy phantomResource
+        }
 
         // This function retrieves all active Ballots from the activeBallots dictionary and burns them one by one with the Burner contract so that the
         // respective burnCallback is called for each destroyed Ballot
@@ -137,6 +164,15 @@ access(all) contract VoteBoxStandard {
             self.activeBallots <- {}
             self.electionsVoted = []
         }
+    }
+
+    /**
+        The usual builder function for VoteBox resources.
+
+        @return (@VoteBoxStandard.VoteBox) A brand new VoteBox resource.
+    **/
+    access(all) fun createVoteBox(): @VoteBoxStandard.VoteBox {
+        return <- create VoteBoxStandard.VoteBox()
     }
 
     // Contract constructor

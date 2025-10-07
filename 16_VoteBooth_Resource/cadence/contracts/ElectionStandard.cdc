@@ -35,7 +35,7 @@ access(all) contract ElectionStandard {
     // This interface is used to expose the public version of the Election resource, i.e., which parameters and functions are available
     // to a third party user.
     access(all) resource interface ElectionPublic {
-        access(contract) let publicKey: String
+        access(contract) let publicKey: PublicKey
         access(all) let electionStoragePath: StoragePath
         access(all) let electionPublicPath: PublicPath
         
@@ -43,7 +43,7 @@ access(all) contract ElectionStandard {
         access(all) view fun getElectionBallot(): String
         access(all) view fun getElectionOptions(): {UInt8: String}
         access(all) view fun getElectionId(): UInt64
-        access(all) view fun getPublicEncryptionKey(): String
+        access(all) view fun getPublicEncryptionKey(): PublicKey
         access(all) view fun getTotalBallotsMinted(): UInt
         access(all) view fun getTotalBallotsSubmitted(): UInt
         access(all) fun submitBallot(ballot: @BallotStandard.Ballot): Void
@@ -64,8 +64,9 @@ access(all) contract ElectionStandard {
         // This parameter stores the public encryption to distribute to the voters through Ballots
         // The voter's frontend uses this key to encrypt the selected option on the Ballot before submitting it
         // The private counterpart of this key remains secured with the Election Administration, to be used during
-        // the counting process
-        access(contract) let publicKey: String
+        // the counting process. This parameter has Cadence's dedicated type used to represent public encryption key, 
+        // which in itself is just a normalised struct
+        access(contract) let publicKey: PublicKey
 
         // Use these parameters to keep track of how many Ballots were printed and submitted for this particular Election instance
         // I set these as "access(ElectionAdmin)" because I want my BallotPrinterAdmin resource to operate on them and no one else.
@@ -80,6 +81,13 @@ access(all) contract ElectionStandard {
         // issued to be used in this particular Election. If a Ballot submitted is not in this list,
         // it cannot be accepted. If the Ballot is submitted successfully, remove it from this list
         access(ElectionAdmin) var mintedBallots: [UInt64]
+
+        // I also want to minimize the number of times I need to build the Capability to access this Election (the one that needs to 
+        // be added to the Ballot resources), therefore I'm creating an internal, ElectionAdmin protected field in each Election to
+        // store this value once the Election is ready to produce it. The Election needs to be constructed first, then saved somewhere
+        // to allow this capability to be created
+        access(ElectionAdmin) var electionCapability: Capability<&{ElectionStandard.ElectionPublic}>?
+
 
         // Set of simple Getters for the Election parameters
         access(all) view fun getElectionName(): String {
@@ -98,7 +106,7 @@ access(all) contract ElectionStandard {
             return self.electionId
         }
 
-        access(all) view fun getPublicEncryptionKey(): String {
+        access(all) view fun getPublicEncryptionKey(): PublicKey {
             return self.publicKey
         }
 
@@ -218,6 +226,8 @@ access(all) contract ElectionStandard {
 
             // Store the ballotId from the Ballot to store for Event emission purposes
             let newBallotId: UInt64 = ballot.ballotId
+
+            // TODO: Replace this with the logic to create the Ballot's own index by hashing the owner's address
             let newBallotIndex: String = ballot.ballotIndex
 
             // Check if the index where this Ballot is to be set has anything in it already
@@ -306,6 +316,15 @@ access(all) contract ElectionStandard {
         }
 
         /**
+            And this function is used to set this Election's electionCapability value when it is available
+
+            @param electionCapability Capability<&{ElectionStandard.ElectionPublic}> This function expects a capability that points to a valid &{ElectionStandard.ElectionPublic} in storage
+        **/
+        access(ElectionAdmin) fun setElectionCapability(capability: Capability<&{ElectionStandard.ElectionPublic}>): Void {
+            self.electionCapability = capability
+        }
+
+        /**
             Callback function to be executed when one of these Elections gets destroyed using the Burned contract
         **/
         access(contract) fun burnCallback(): Void {
@@ -331,7 +350,7 @@ access(all) contract ElectionStandard {
             _electionName: String,
             _electionBallot: String,
             _electionOptions: {UInt8: String},
-            _publicKey: String,
+            _publicKey: PublicKey,
             _electionStoragePath: StoragePath,
             _electionPublicPath: PublicPath
         ) {
@@ -348,7 +367,41 @@ access(all) contract ElectionStandard {
 
             self.storedBallots <- {}
             self.mintedBallots = []
+
+            // The electionCapability is initially set to nil
+            self.electionCapability = nil
         }
+    }
+
+    /**
+        This function is the only entry point in this process to create a new Election resource. Since new resources can only be created from within the issuing contract, I need this create function in each independent contract.
+        The function is protected with a ElectionAdmin entitlement to ensure that only the owner of this contract can run it.
+
+        @param newElectionName (String) The name for the Election resource.
+        @param newElectionBallot (String) The question that this Election wants to answer.
+        @param newElectionOptions ({UInt8: String}) The set of options that the voter must chose from.
+        @param newPublicKey (PublicKey) A PublicKey resource representing the public encryption key that is to be used to encrypt the Ballot option from the frontend side.
+        @param newElectionStoragePath (StoragePath) A StoragePath-type item to where this Election resource is going to be stored into the voter's own account.
+        @param newElectionPublicPath (PublicPath) A PublicPath-type item where the public reference to this Election can be retrieved from.
+
+        @return @ElectionStandard.Election If successful, this function returns the Election resource back to the user
+    **/
+    access(all) fun createElection(
+        newElectionName: String,
+        newElectionBallot: String,
+        newElectionOptions: {UInt8: String},
+        newPublicKey: PublicKey,
+        newElectionStoragePath: StoragePath,
+        newElectionPublicPath: PublicPath
+    ): @ElectionStandard.Election {
+        return <- create ElectionStandard.Election(
+            _electionName: newElectionName,
+            _electionBallot: newElectionBallot,
+            _electionOptions: newElectionOptions,
+            _publicKey: newPublicKey,
+            _electionStoragePath: newElectionStoragePath,
+            _electionPublicPath: newElectionPublicPath
+            )
     }
 
     // ElectionStandard contract constructor
