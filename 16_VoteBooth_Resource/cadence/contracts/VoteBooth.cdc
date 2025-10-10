@@ -5,6 +5,7 @@
 
     @author: Ricardo Lopes Almeida - https://github.com/rdlalmeida
 **/
+import "Burner"
 import "BallotStandard"
 import "ElectionStandard"
 import "VoteBoxStandard"
@@ -12,20 +13,156 @@ import "VoteBoxStandard"
 access(all) contract VoteBooth {
     // CUSTOM PATHS
     access(all) let voteBoothPrinterAdminStoragePath: StoragePath
-    // access(all) let voteBoothPrinterAdminPublicPath: PublicPath
+    access(all) let electionIndexStoragePath: StoragePath
+    access(all) let electionIndexPublicPath: PublicPath
 
     // CUSTOM ENTITLEMENTS
     access(all) entitlement VoteBoothAdmin
 
     // CUSTOM EVENTS
+    // Emit this event when the function to clean all storage from existing Election resources
+    access(all) event ElectionsDestroyed(_electionsDestroyed: Int, _accountAddress: Address)
     // ---------------------------------------------------------------- BALLOT BEGIN ---------------------------------------------------------------------------
     // ---------------------------------------------------------------- BALLOT END -----------------------------------------------------------------------------
 
     // ---------------------------------------------------------------- ELECTION BEGIN -------------------------------------------------------------------------
+    // This one is a simple public interface to apply to the ElectionIndex, just to expose the electionExists function
+    access(all) resource interface ElectionIndexPublic {
+        access(all) view fun electionExists(electionId: UInt64): Bool
+        access(all) view fun getElectionStoragePath(electionId: UInt64): StoragePath?
+        access(all) view fun getElectionPublicPath(electionId: UInt64): PublicPath?
+    }
+
+
     /**
-        I'm using this contract-level dictionary to keep track of all Election resources created since Cadence good practices discourages the use of collections  of collections. Elections are themselves collections of Ballots, therefore I need a way to keep them organised. The strategy is to use this internal dictionary of the format {electionId: {ElectionStoragePath: ElectionPublicPath}} which provides me with all I need to access every Election in storage and their public references.
+        I need a way to keep track of all Election resources created and saved in this account. The obvious strategy would be to create another collection-type resource, but this goes against Cadence good programming practices, which strongly discourages collections of collections, since Elections are Ballot-type collections themselves already. I also want to ensure that only the contract deployer can play around with this data, so the most secure approach is to encode all this into a new, admin-type resource.
     **/
-    access(self) var electionIndex: {UInt64: {StoragePath: PublicPath}}
+    access(all) resource ElectionIndex: ElectionIndexPublic {
+        // Use this dictionary to keep track of any issued Elections. This dictionary uses the format {electionId: {ElectionStoragePath: ElectionPublicPath}}
+        access(self) var electionIndex: {UInt64: {StoragePath: PublicPath}}
+
+        // Simple getter to determine if a given Election exists and it is still active
+        access(all) view fun electionExists(electionId: UInt64): Bool {
+            return self.electionIndex.containsKey(electionId)
+        }
+
+        /**
+            Function to add a new record to the ElectionIndex resource.
+
+            @param electionId (UInt64) The electionId of the resource in question.
+            @param electionStoragePath (StoragePath) The path to the private storage area where the Election resource was stored.
+            @param electionPublicPath (PublicPath) The path to the public storage area where a public reference to this Election can be retrieved from.
+        **/
+        access(account) fun addElectionToIndex(electionId: UInt64, electionStoragePath: StoragePath, electionPublicPath: PublicPath): Void {
+            // Done
+            self.electionIndex[electionId] = {electionStoragePath: electionPublicPath}
+        }
+        
+        /**
+            Function to remove a record identified by the electionId provided from this ElectionIndex resource.
+
+            @param electionId (UInt64) The electionId of the resource in question.
+        **/
+        access(account) fun removeElectionFromIndex(electionId: UInt64): {StoragePath: PublicPath}? {
+            return self.electionIndex.remove(key: electionId)
+        }
+
+        /**
+            Simple function to retrieve a {StoragePath: PublicPath} record from an existing ElectionIndex, for the electionId provided. If no Election exists in the current ElectionIndex, a nil is returned instead.
+
+            @param electionId (UInt64) The electionId of the Election resource in question.
+
+            @return {StoragePath: PublicPath}? If an Election with the provided electionId exists, the function returns the corresponding entry. If the Election does not exists, a nil is returned instead.
+        **/
+        access(account) view fun getElectionIndexEntry(electionId: UInt64): {StoragePath: PublicPath}? {
+            if (!self.electionExists(electionId: electionId)) {
+                return nil
+            }
+            else {
+                let electionEntry: {StoragePath: PublicPath} = self.electionIndex[electionId] ??
+                panic(
+                    "Unable to retrieve a valid {StoragePath: PublicPath} record for electionId "
+                    .concat(electionId.toString())
+                    .concat(" for account ")
+                    .concat(self.owner!.address.toString())
+                )
+            
+            return electionEntry
+            }
+        }
+
+        /**
+            This function receives an electionId and returns the private storage path where the Election in question is currently stored, if one exists. Otherwise, returns nil.
+
+            @param electionId (UInt64) The electionId of the Election resource in question.
+
+            @return StoragePath? If an Election with the provided electionId exists, the function returns the corresponding StoragePath. If the Election does not exists, a nil is returned instead.
+        **/
+        access(all) view fun getElectionStoragePath(electionId: UInt64): StoragePath? {    
+            let electionEntry: {StoragePath: PublicPath}? = self.getElectionIndexEntry(electionId: electionId)
+            
+            if (electionEntry == nil) {
+                return nil
+            }
+            else {
+                // Return only the single key
+                return electionEntry!.keys[0]
+            }
+        }
+
+        /**
+            This function receives an electionId and returns the public storage path where the Election in question has its public capability stored to, if one exists.
+
+            @param electionId (UInt64) The electionId of the Election resource in question.
+
+            @return PublicPath? If an Election with the provided electionId exists, the function returns the corresponding PublicPath. If the Election does not exists, a nil is returned instead
+        **/
+        access(all) view fun getElectionPublicPath(electionId: UInt64): PublicPath? {
+            let electionEntry: {StoragePath: PublicPath}? = self.getElectionIndexEntry(electionId: electionId)
+
+            if (electionEntry == nil) {
+                return nil
+            }
+            else {
+                // Return the one value
+                return electionEntry!.values[0]
+            }
+        }
+
+        /**
+            Typical burnCallback function to be automatically executed when this resource gets destroyed with the Burner contract. This allows me to ensure that all Election resources are also properly destroyed before destroying this ElectionIndex resource permanently. But since I need to load each individual Election in order to destroy it, I cannot use the usual Burner contract and the burnCallback function. The burnCallback function does not accepts any arguments but I need to provide it with an authorized reference to the account where the Elections are currently stored in.
+
+            @param deployed (auth(Storage) &Account) An authorized reference to the account that stores all Elections.
+        **/
+        access(account) fun cleanElectionStorage(deployer: auth(Storage) &Account): Void {
+            // Use the internal electionIndex to load, unpublish and destroy all Elections in storage
+            let electionListRef: &VoteBooth.ElectionIndex? = deployer.storage.borrow<&VoteBooth.ElectionIndex>(from: VoteBooth.electionIndexStoragePath)
+
+            // Proceed only of this reference is not nil. Otherwise it is pointless to go on
+            if (electionListRef != nil) {
+                let electionKeys: &[UInt64] = electionListRef!.electionIndex.keys
+
+                // Do the rest in a loop
+                for electionKey in electionKeys {
+                    // Process each record individually
+                    let currentRecord: &{StoragePath: PublicPath}? = electionListRef!.electionIndex[electionKey]
+
+                    if (currentRecord != nil) {
+                        let currentKey: StoragePath = currentRecord!.keys[0]
+
+                        let currentElection: @ElectionStandard.Election? <- deployer.storage.load<@ElectionStandard.Election>(from: currentKey)
+                        
+                        // Use the Burner contract to destroy the individual Elections and trigger their burnCallback functions
+                        Burner.burn(<- currentElection)
+                    }
+                }
+            }
+        }
+
+        init() {
+            self.electionIndex = {}
+        }
+    }
     // ---------------------------------------------------------------- ELECTION END ---------------------------------------------------------------------------
 
     // ---------------------------------------------------------------- VOTEBOX BEGIN --------------------------------------------------------------------------
@@ -38,26 +175,157 @@ access(all) contract VoteBooth {
 
             @param newLinkedElectionId (UInt64) The electionId to the Election resource that this Ballot can be submitted to.
             @param newElectionCapability (Capability<&{ElectionStandard.ElectionPublic}>) A Capability to retrieve the public reference to the Election associated to this Ballot.
-        **/
-        access(all) fun createBallot(newLinkedElectionId: UInt64, newElectionCapability: Capability<&{ElectionStandard.ElectionPublic}>, voterAddress: Address): @BallotStandard.Ballot?
-        {
+            @param deployer (auth(VoteBoxStandard.VoteBoxAdmin, ElectionStandard.ElectionAdmin)) An authorized reference to an account with VoteBoxAdmin and ElectionAdmin privileges so that I can use it to retrieve authorized references to those resources.
 
-            return <- BallotStandard.createBallot(
+            @returns (UInt64?) If successful, this function stores the minted Ballot directly into the voterAddress's account and returns the ballotId of the new Ballot created. Otherwise a nil is returned instead.
+        **/
+        access(all) fun createBallot(newLinkedElectionId: UInt64, voterAddress: Address, deployer: auth(BorrowValue, VoteBoxStandard.VoteBoxAdmin, ElectionStandard.ElectionAdmin) &Account): UInt64?
+        {
+            // New Ballots can only be created if an ElectionIndex exists, an Election with the provided newLinkedElectionId provided exists also, 
+            // and the account retrieved from the voterAddress provided has a valid @VoteBoxStandard.VoteBox. Validate these points an create the 
+            // Ballot if everything is OK
+
+            // 1. Validate and get a reference to the ElectionIndex resource
+            let electionIndexRef: &{VoteBooth.ElectionIndexPublic} = deployer.capabilities.borrow<&{VoteBooth.ElectionIndexPublic}>(VoteBooth.electionIndexPublicPath) ??
+            panic(
+                "Unable to retrieve a valid &{VoteBooth.ElectionIndexPublic} at "
+                .concat(VoteBooth.electionIndexPublicPath.toString())
+                .concat(" from account ")
+                .concat(deployer.address.toString())
+            )
+
+            // Use the index to get the storage path to the election in question. I need to grab an authorized reference from it
+            let electionStoragePath: StoragePath = electionIndexRef.getElectionStoragePath(electionId: newLinkedElectionId) ??
+            panic(
+                "Unable to retrieve a valid election Storage Path for electionId "
+                .concat(newLinkedElectionId.toString())
+            )
+
+            // 2. Validate and get a reference to the Election with an electionId matching the provided newLinkedElectionId
+            // Grab an authorized version to the Election resource
+            let electionRef: auth(ElectionStandard.ElectionAdmin) &ElectionStandard.Election = deployer.storage.borrow<auth(ElectionStandard.ElectionAdmin) &ElectionStandard.Election>(from: electionStoragePath) ??
+            panic(
+                "Unable to retrieve a valid auth(ElectionStandard.ElectionAdmin) &ElectionStandard.Election at "
+                .concat(electionStoragePath.toString())
+                .concat(" from account ")
+                .concat(deployer.address.toString())
+            )
+
+            // 3. Validate and get a reference to a valid VoteBox in the account identified by the voterAddress parameter provided.
+            let voterAccount: &Account = getAccount(voterAddress)
+
+            let voteBoxRef: &{VoteBoxStandard.VoteBoxPublic} = voterAccount.capabilities.borrow<&{VoteBoxStandard.VoteBoxPublic}>(VoteBoxStandard.voteBoxPublicPath) ??
+            panic(
+                "Unable to retrieve a valid &{VoteBoxStandard.VoteBoxPublic} at "
+                .concat(VoteBoxStandard.voteBoxPublicPath.toString())
+                .concat(" for account ")
+                .concat(voterAddress.toString())
+            )
+
+            // 4. Use the reference to the Election to get its public capability. Force cast it if needed
+            let electionPublicCap: Capability<&{ElectionStandard.ElectionPublic}> = electionRef.getElectionCapability() as! Capability<&{ElectionStandard.ElectionPublic}>
+
+            // 5. Create the Ballot resource and set this capability to it
+            let newBallot: @BallotStandard.Ballot <- BallotStandard.createBallot(
                 newLinkedElectionId: newLinkedElectionId, 
-                newElectionCapability: newElectionCapability, 
+                newElectionCapability: electionPublicCap, 
                 newVoterAddress: voterAddress
-                )
+            )
+
+            // 6. Add this Ballot's electionId to the Election's totalBallotsMinted and the mintedBallots array
+            let newBallotId: UInt64 = newBallot.ballotId
+
+            electionRef.increaseBallotsMinted(ballots: 1)
+            electionRef.addMintedBallot(ballotId: newBallotId)
+
+            // 7. Save the ballot onto the voter's VoteBox
+            voteBoxRef.depositBallot(ballot: <- newBallot)
+
+            // 8. Finish by returning the ballotId
+            return newBallotId
         }
 
+        /**
+            Function to add a new entry to the ElectionIndex resource, from within the VoteBoothPrinterAdmin resource.
+
+            @param deployer (auth(Storage) &Account) Authorized reference to the account currently storing the ElectionIndex resource.
+            @param electionId (UInt64) The election identifier to the Election resource to process.
+            @param electionStoragePath (StoragePath) The storage path to be used as key in the new record.
+            @param electionPublicPath (PublicPath) The path to the public storage area to retrieve the public reference to the Election resource.
+        **/
+        access(all) fun addElectionIndexEntry(deployer: auth(Storage) &Account, electionId: UInt64, electionStoragePath: StoragePath, electionPublicPath: PublicPath): Void {
+            let electionIndexRef: &VoteBooth.ElectionIndex = deployer.storage.borrow<&VoteBooth.ElectionIndex>(from: VoteBooth.electionIndexStoragePath) ?? 
+            panic(
+                "Unable to retrieve a valid &VoteBooth.ElectionIndex at "
+                .concat(VoteBooth.electionIndexStoragePath.toString())
+                .concat(" from account at ")
+                .concat(self.owner!.address.toString())
+            )
+
+            electionIndexRef.addElectionToIndex(electionId: electionId, electionStoragePath: electionStoragePath, electionPublicPath: electionPublicPath)
+        }
+
+        /**
+            Function to remove the entry defined by the electionId provided, from within the VoteBoothPrinterAdmin resource.
+
+            @param deployer (auth(Storage) &Account) Authorized reference to the account currently storing the ElectionIndex resource.
+            @param electionId (UInt64) The election identifier to the Election resource to process.
+
+            @return ({StoragePath: PublicPath})? If successful, this function returns back the entry removed from the ElectionIndex. If the entry does not exist, return a nil instead.
+
+        **/
+        access(all) fun removeElectionIndexEntry(deployer: auth(Storage) &Account, electionId: UInt64): {StoragePath: PublicPath}? {
+            let electionIndexRef: auth(Storage) &VoteBooth.ElectionIndex = deployer.storage.borrow<auth(Storage) &VoteBooth.ElectionIndex>(from: VoteBooth.electionIndexStoragePath) ?? panic("Ooops")
+
+            return electionIndexRef.removeElectionFromIndex(electionId: electionId)
+        }
+
+        /**
+            Function to retrieve the storage path associated to an ElectionIndex record corresponding to the electionId provided.
+
+            @param deployer (auth(Storage) &Account) Authorized reference to the account currently storing the ElectionIndex resource.
+
+            @return StoragePath If there's a valid ElectionIndex in storage and it contains a record matching the electionId provided, this function returns the StoragePath associated. Otherwise a nil is returned instead.
+        **/
+        access(all) fun getElectionStoragePath(deployer: auth(BorrowValue) &Account, electionId: UInt64): StoragePath? {
+            let electionIndexRef: &VoteBooth.ElectionIndex = deployer.storage.borrow<&VoteBooth.ElectionIndex>(from: VoteBooth.electionIndexStoragePath) ??
+            panic(
+                "Unable to retrieve a valid &VoteBooth.ElectionIndex at "
+                .concat(VoteBooth.electionIndexStoragePath.toString())
+                .concat(" from account at ")
+                .concat(self.owner!.address.toString())
+            )
+
+            let electionStoragePath: StoragePath? = electionIndexRef.getElectionStoragePath(electionId: electionId)
+
+            return electionStoragePath
+        }
+
+        /**
+            Function to create new Election resources by tapping the respective contract. This function is a simple wrapper for the ElectionStandard contract function.
+
+            @param newElectionName (String) The name for the Election resource.
+            @param newElectionBallot (String) The question that this Elections wants to answer.
+            @param newElectionOptions ({UInt8: String}) The set of options that the voter must chose from.
+            @param newPublicKey ([UInt8]) A [UInt8] representing the public encryption key that is to be used to encrypt the Ballot option from the frontend side.
+            @param newElectionStoragePath (StoragePath) A StoragePath-type item to where this Election resource is going to be stored into the voter's own account.
+            @param newElectionPublicPath (PublicPath) A PublicPath-type item where the public reference to this Election can be retrieved from.
+            @param deployerAccount (auth(Storage) &Account) An authorized reference, with Storage entitlement, to the account where these Elections are to be stored to.
+
+            @return UInt64 If successful, this function returns the electionId of the Election created with the provided parameters.  
+        **/
         access(all) fun createElection(
             newElectionName: String,
             newElectionBallot: String,
             newElectionOptions: {UInt8: String},
-            newPublicKey: PublicKey,
+            newPublicKey: [UInt8],
             newElectionStoragePath: StoragePath,
-            newElectionPublicPath: PublicPath
-        ): @ElectionStandard.Election {
-            return <- ElectionStandard.createElection(
+            newElectionPublicPath: PublicPath,
+            deployerAccount: auth(Storage, Capabilities, ElectionStandard.ElectionAdmin) &Account
+        ): UInt64 {
+            // Start by creating the Election resource
+
+            let newElection: @ElectionStandard.Election <- ElectionStandard.createElection(
                 newElectionName: newElectionName,
                 newElectionBallot: newElectionBallot,
                 newElectionOptions: newElectionOptions,
@@ -65,10 +333,51 @@ access(all) contract VoteBooth {
                 newElectionStoragePath: newElectionStoragePath,
                 newElectionPublicPath: newElectionPublicPath
             )
+
+            let newElectionId: UInt64 = newElection.getElectionId()
+
+            // Add this election details to the internal electionIndex dictionary
+            self.addElectionIndexEntry(
+                deployer: deployerAccount,
+                electionId: newElection.getElectionId(),
+                electionStoragePath: newElectionStoragePath,
+                electionPublicPath: newElectionPublicPath
+            )
+
+            // Cleanup the storage slot and save this Election to the StoragePath provided
+            let oldResource: @ElectionStandard.Election? <- deployerAccount.storage.load<@ElectionStandard.Election>(from: newElectionStoragePath)
+            // Burn the old resource, if it exists, with the Burner contract to trigger any lingering burnCallback functions
+            Burner.burn(<- oldResource)
+
+            // Save the new Election resource to the provided StoragePath
+            deployerAccount.storage.save(<- newElection, to: newElectionStoragePath)
+
+            // Unpublish and old public capabilities for the PublicPath provided and re-create these as well.
+            let oldCapability: Capability? = deployerAccount.capabilities.unpublish(newElectionPublicPath)
+
+            // Capabilities are simple values in Cadence, so I don't need to destroy this oldCapability. Create a fresh one and continue
+            let newElectionCapability: Capability<&{ElectionStandard.ElectionPublic}> = deployerAccount.capabilities.storage.issue<&{ElectionStandard.ElectionPublic}>(newElectionStoragePath)
+
+            // Publish this capability to the PublicPath provided
+            deployerAccount.capabilities.publish(newElectionCapability, at: newElectionPublicPath)
+
+            // Grab an authorized reference to the Election just stored and set the created capability in it
+            let authElectionRef: auth(ElectionStandard.ElectionAdmin) &ElectionStandard.Election = deployerAccount.storage.borrow<auth(ElectionStandard.ElectionAdmin) &ElectionStandard.Election>(from: newElectionStoragePath) ??
+            panic(
+                "Unable to retrieve a valid &ElectionStandard.Election at "
+                .concat(newElectionStoragePath.toString())
+                .concat(" from account ")
+                .concat(deployerAccount.address.toString())
+            )
+
+            authElectionRef.setElectionCapability(capability: newElectionCapability)
+
+            // All done. Return the electionId from the new resource at the end of this
+            return newElectionId
         }
 
-        access(all) fun createVoteBox(): @VoteBoxStandard.VoteBox {
-            return <- VoteBoxStandard.createVoteBox()
+        access(all) fun createVoteBox(newVoteBoxOwner: Address): @VoteBoxStandard.VoteBox {
+            return <- VoteBoxStandard.createVoteBox(newVoteBoxOwner: newVoteBoxOwner)
         }
     }
     // ---------------------------------------------------------------- BALLOT PRINTER ADMIN END ---------------------------------------------------------------
@@ -76,18 +385,43 @@ access(all) contract VoteBooth {
     // ---------------------------------------------------------------- VOTEBOOTH BEGIN ------------------------------------------------------------------------
     // VoteBooth Contract constructor
     init() {
-        self.voteBoothPrinterAdminStoragePath = /storage/voteBoothPrinterAdmin
-        // self.voteBoothPrinterAdminPublicPath = /public/voteBoothPrinterAdmin
+        self.voteBoothPrinterAdminStoragePath = /storage/VoteBoothPrinterAdmin
+        self.electionIndexStoragePath = /storage/ElectionIndex
+        self.electionIndexPublicPath = /public/ElectionIndex
 
-        self.electionIndex = {}
 
         // Clean up the usual storage slot and re-create the BallotPrinterAdmin
-        let randomResource: @AnyResource? <- self.account.storage.load<@VoteBoothPrinterAdmin>(from: self.voteBoothPrinterAdminStoragePath)
-
-        destroy randomResource
+        let oldPrinter: @AnyResource? <- self.account.storage.load<@VoteBoothPrinterAdmin>(from: self.voteBoothPrinterAdminStoragePath)
+        destroy oldPrinter
         
         let newPrinterAdmin: @VoteBoothPrinterAdmin <- create VoteBoothPrinterAdmin()
         self.account.storage.save(<- newPrinterAdmin, to: self.voteBoothPrinterAdminStoragePath)
+
+        // Repeat the process for the ElectionIndex resource
+        let oldIndex:@VoteBooth.ElectionIndex? <- self.account.storage.load<@ElectionIndex>(from: self.electionIndexStoragePath)
+
+        // Check if the oldIndex resource returned is not nil and of the expected type
+        if (oldIndex != nil && (oldIndex.getType() == Type<@VoteBooth.ElectionIndex?>())) {
+            // If there's a valid ElectionIndex, use the clean up function to clear all the Elections in storage first
+            let electionIndexRef: &VoteBooth.ElectionIndex? = &oldIndex
+
+            // As it is the rule so far, Cadence is super picky with everything. Turns out that invoking the cleanElectionStorage function from the 
+            // ElectionIndex resource is a big no no and creates all sorts of issues. The "correct" way to process this is to get a reference to the 
+            // resource itself.
+            electionIndexRef!.cleanElectionStorage(deployer: self.account)
+        }
+ 
+        Burner.burn(<- oldIndex)
+
+        // Unpublish any old capabilities
+        let oldCapability: Capability? = self.account.capabilities.unpublish(VoteBooth.electionIndexPublicPath)
+
+        // Re-create the whole thing
+        let newElectionIndex: @ElectionIndex <- create ElectionIndex()
+        self.account.storage.save(<- newElectionIndex, to: self.electionIndexStoragePath)
+
+        let newElectionIndexCap: Capability<&{VoteBooth.ElectionIndexPublic}> = self.account.capabilities.storage.issue<&{VoteBooth.ElectionIndexPublic}>(VoteBooth.electionIndexStoragePath)
+        self.account.capabilities.publish(newElectionIndexCap, at: VoteBooth.electionIndexPublicPath)
     }
     // ---------------------------------------------------------------- VOTEBOOTH END --------------------------------------------------------------------------
 }

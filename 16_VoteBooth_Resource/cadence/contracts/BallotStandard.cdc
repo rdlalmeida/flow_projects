@@ -16,16 +16,16 @@ access(all) contract BallotStandard {
     // CUSTOM EVENTS
     access(all) event BallotBurned(_ballotId: UInt64, _linkedElectionId:UInt64)
 
+    // The public interface applied to the BallotStandard.Ballot resource. These parameter and functions is what a voter has access when he/she grabs a public
+    // reference to an Election resource through the Ballot-based election capability. 
     access(all) resource interface BallotPublic {
         access(all) let ballotId: UInt64
         access(all) let linkedElectionId: UInt64
-        access(all) view fun getElectionName(): String
-        access(all) view fun getElectionBallot(): String
-        access(all) view fun getElectionOptions(): {UInt8: String}
-        access(all) view fun getOption(): String
+        access(all) view fun getElectionCapability(): Capability
     }
 
-    access(all) resource Ballot: Burner.Burnable {
+    // The Ballot resource standard definition.
+    access(all) resource Ballot: Burner.Burnable, BallotPublic {
         access(all) let ballotId: UInt64
         access(all) let linkedElectionId: UInt64
         /**
@@ -45,25 +45,52 @@ access(all) contract BallotStandard {
         access(all) let voterAddress: Address
         access(all) let ballotIndex: String
 
-        // I can put a getter for the Ballot option here as well since there's no danger in returning it, given that its either a default String, or an
-        // encrypted option
+
+        /**
+            Simple getter function to retrieve the option parameter from this Ballot. This parameter can only exist either in its default state or set to an encrypted string encoding the voter's decision. Even so, there's some privacy measures that need to be in place, hence why I protected this function with a BallotStandard.BallotAdmin, i.e., only the owner of this Ballot can invoke this function through an authorized reference to this Ballot resource.
+
+            @returns (String) The option currently set in this Ballot resource.
+        **/
         access(BallotStandard.BallotAdmin) view fun getOption(): String {
             return self.option
         }
 
+        /**
+            Function to set the "option" field in this BallotStandard.Ballot resource. The function is protected with access(BallotStandard.BallotAdmin) to ensure that only the owner of this resource can call this function through an authorized reference to this Ballot resource.
 
-        // The function to set the option parameter. This one is BallotAdmin protected, which is going to require an authorized reference to invoke 
-        // this function.
+            @param newOption (String) The new option to set in this Ballot. The assumption is that this String comes already encrypted from the frontend or whatever process is happening off-chain.
+        **/
         access(BallotStandard.BallotAdmin) fun vote(newOption: String): Void {
             // There's not a lot more that I need to do. The blinding and encrypting logic needs to necessarily occur outside of this contract.
             self.option = newOption
         }
 
+        /**
+            Simple access(all) getter for the electionCapability parameter. I need this to be accessible for anyone.
+
+            @returns (Capability) This function returns the Capability value set in this Ballot resource. This capability can be force cast into a Capability<&{ElectionStandard.ElectionPublic}> if needed
+        **/
+        access(all) view fun getElectionCapability(): Capability {
+            return self.electionCapability
+        }
+
+        /**
+            Standard "burnCallback" function as defined by the Burner contract. This function is automatically invoked when a Ballot resource is burned using the "Burner.burn()" function.
+        **/
         access(contract) fun burnCallback(): Void {
             // From the Ballot's point of view, all I need to do is to emit the proper Event
             emit BallotBurned(_ballotId: self.ballotId, _linkedElectionId: self.linkedElectionId)
         }
+        
+        /**
+            BallotStandard.Ballot resource constructor. This is the standard resource constructor to build new Ballot resources.
 
+            @param _linkedElectionId (UInt64) The election identifier to the Election resource this Ballot is associated to, i.e., where it can be submitted to.
+            @param _electionCapability (Capability) A capability value to the public interface of the Election resource associated to this Ballot. At this level, to avoid the circular referencing that happens if I import the ElectionStandard into this one, I'm setting this parameter as just a broader Capability value, but the idea is to set this with a specific Capability<&{ElectionStandard.ElectionPublic}> to retrieve an ElectionPublic reference from this Ballot directly.
+            @param voterAddress (Address) The account address of the voter that is going to receive this Ballot in its VoteBox resource. This Ballot sets this value internally through the resource constructor to ensure that only the voter identified by this address can mutate and submit it.
+
+            @returns (@BallotStandard.Ballot) If successful, this function returns a fresh @BallotStandard.Ballot back to the caller.
+        **/
         init(
             _linkedElectionId: UInt64,
             _electionCapability: Capability,
@@ -87,11 +114,22 @@ access(all) contract BallotStandard {
         }
     }
 
+    /**
+        Entry point function to create new Ballot resources. New Ballots can only be created from their issuing contract, therefore I need a function at this level to be able to create new Ballots.
+
+        @param newLinkedElectionId (UInt64) The electionId connecting to the Election where this Ballot can be deposited to.
+        @param newElectionCapability (Capability<&{ElectionStandard.ElectionPublic}>) A capability value to retrieve the public reference to the Election where this Ballot can be submitted to.
+        @param newVoterAddress (Address) The account address for the voter that is to receive this Ballot, for consistency checks.
+
+        @return @BallotStandard.Ballot If successful, this function returns a newly minted Ballot resource.
+    **/
     access(all) fun createBallot(newLinkedElectionId: UInt64, newElectionCapability: Capability, newVoterAddress: Address): @BallotStandard.Ballot {
         return <- create Ballot(_linkedElectionId: newLinkedElectionId, _electionCapability: newElectionCapability, _voterAddress: newVoterAddress)
     }
 
-    // Contract constructor
+    /**
+        BallotStandard contract constructor. I'm not setting anything relevant at the contract level, hence the empty constructor.
+    **/
     init() {
 
     }

@@ -27,10 +27,16 @@ access(all) contract VoteBoxStandard {
     // The public version of the VoteBox resource that only exposes the depositBallot function
     access(all) resource interface VoteBoxPublic {
         access(all) let voteBoxId: UInt64
-        access(all) fun depositBallot(ballot: @BallotStandard.Ballot) 
+        access(VoteBoxStandard.VoteBoxAdmin) fun depositBallot(ballot: @BallotStandard.Ballot): Void
+        access(all) view fun getElectionName(electionId: UInt64): String?
+        access(all) view fun getElectionBallot(electionId: UInt64): String?
+        access(all) view fun getElectionOptions(electionId: UInt64): {UInt8: String}?
+        access(all) view fun getElectionPublicKey(electionId: UInt64): [UInt8]?
+        access(all) view fun getElectionTotalBallotsMinted(electionId: UInt64): UInt?
+        access(all) view fun getElectionTotalBallotsSubmitted(electionId: UInt64): UInt?
     }
     
-    access(all) resource VoteBox: Burner.Burnable {
+    access(all) resource VoteBox: Burner.Burnable, VoteBoxPublic {
         access(all) let voteBoxId: UInt64
         // Internally, I want this VoteBox to store only one Ballot per Election. As such, I'm using the Ballot's electionId index as key for the
         // internal dictionary, i.e., the UInt64 used as key in this dictionary relates to the linkedElectionId parameter from the Ballot itself.
@@ -40,6 +46,179 @@ access(all) contract VoteBoxStandard {
         // stage, the electionId of that Election is still stored here. This is merely a statistical parameter to provide feedback to the voter more than
         // anything. This array stored the electionId whenever a Ballot is submitted to a given Election.
         access(self) var electionsVoted: [UInt64]
+
+        // This parameter may seem a bit of overkill, but I want to prevent voters from transferring their VoteBox resource to another account, which they 
+        // are allowed to do according to Cadence rules. I cannot prevent this but I can prevent this resource from functioning properly if at any
+        // point the address of the account storage differs from the one set with the resource constructor, the voter is prevented from accessing and
+        // invoking functions.
+        access(self) let voteBoxOwner: Address
+
+        /**
+            Function to abstract the validation step hat also retrieves a reference to the Ballot in storage, for the provided electionId, and grabs a public reference to the Election resource associated to the Ballot.
+
+            @param electionId (UInt64) The Election identifier associated to the Ballot to retrieve from among the active ones.
+
+            @returns (&{ElectionStandard.ElectionPublic}?) If a valid Ballot was retrieved from the electionId provided, and a valid Election was found referenced by it, this function returns the public reference to the Election in question. If any of these steps fails, the function returns nil instead
+        **/
+        access(self) view fun getPublicElectionReference(electionId: UInt64): &{ElectionStandard.ElectionPublic}? {
+            let ballotRef: &BallotStandard.Ballot? = &self.activeBallots[electionId]
+
+            if (ballotRef == nil) {
+                // No Ballots found for that electionId. Return a nil instead.
+                return nil
+            }
+            else {
+                // Grab the public reference for the Election associated to this Ballot
+                // First force cast the Ballot's capability to the right type of Capability
+                let electionPubCap: Capability<&{ElectionStandard.ElectionPublic}> = ballotRef!.getElectionCapability() as! Capability<&{ElectionStandard.ElectionPublic}>
+
+                let electionRef: &{ElectionStandard.ElectionPublic} = electionPubCap.borrow() ??
+                panic(
+                    "Unable to retrieve a valid &{ElectionStandard.ElectionPublic} from the electionCapability set in Ballot "
+                    .concat(ballotRef!.ballotId.toString())
+                    .concat(" in the VoteBox for account ")
+                    .concat(self.owner!.address.toString())
+                )
+
+                // Done. Return the reference
+                return electionRef
+            }
+        }
+
+        /**
+            Function to retrieve the name of the Election associated to the Ballot retrieved with the input argument.
+
+            @param electionId (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
+
+            @returns (String) If a Ballot exists under the provided electionId, this function returns the name of the Election associated to it. Otherwise, it returns a nil.
+        **/
+        access(all) view fun getElectionName(electionId: UInt64): String? {
+            let electionRef: &{ElectionStandard.ElectionPublic}? = self.getPublicElectionReference(electionId: electionId)
+
+            if (electionRef == nil) {
+                return nil
+            }
+            else {
+                return electionRef!.getElectionName()
+            }
+        }
+
+        /**
+            Function to retrieve the ballot for the Election associated to the Ballot retrieved with the input argument.
+
+            @param electionId (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
+
+            @returns (String) If a Ballot exists under the provided electionId, this function returns the name of the Election associated to it. Otherwise, it returns a nil.
+        **/
+        access(all) view fun getElectionBallot(electionId: UInt64): String? {
+            let electionRef: &{ElectionStandard.ElectionPublic}? = self.getPublicElectionReference(electionId: electionId)
+
+            if (electionRef == nil) {
+                return nil
+            }
+            else {
+                return electionRef!.getElectionBallot()
+            }
+        }
+
+        /**
+            Function to retrieve the set of available ballot options for the Election associated to the Ballot retrieved with the input argument.
+
+            @param electionId (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
+
+            @returns ({UInt8: String}?) If a Ballot exists under the provided electionId, this function returns a {UInt8: String} with an option index as key and the option text as value, for the Election associated to it. Otherwise, it returns a nil.
+        **/
+        access(all) view fun getElectionOptions(electionId: UInt64): {UInt8: String}? {
+            let electionRef: &{ElectionStandard.ElectionPublic}? = self.getPublicElectionReference(electionId: electionId)
+
+            if (electionRef == nil) {
+                return nil
+            }
+            else {
+                return electionRef!.getElectionOptions()
+            }
+        }
+
+        /**
+            Function to retrieve the public encryption key, as an array of UInt8 values, for the Election associated to the Ballot retrieved with the input argument.
+
+            @param electionId (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
+
+            @returns ([UInt8]) If a Ballot exists under the provided electionId, this function returns an array of UInt8 values encoding the public encryption key of the Election associated to it. Otherwise, it returns a nil.
+        **/
+        access(all) view fun getElectionPublicKey(electionId: UInt64): [UInt8]? {
+            let electionRef: &{ElectionStandard.ElectionPublic}? = self.getPublicElectionReference(electionId: electionId)
+
+            if (electionRef == nil) {
+                return nil
+            }
+            else {
+                return electionRef!.getPublicEncryptionKey()
+            }
+        }
+
+        /**
+            Function to retrieve the total number of minted Ballots for the Election associated to the Ballot retrieved with the input argument.
+
+            @param electionId (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
+
+            @returns (UInt) If a Ballot exists under the provided electionId, this function returns the total for ballots minted to the Election associated to it. Otherwise, it returns a nil.
+        **/
+        access(all) view fun getElectionTotalBallotsMinted(electionId: UInt64): UInt? {
+            let electionRef: &{ElectionStandard.ElectionPublic}? = self.getPublicElectionReference(electionId: electionId)
+
+            if (electionRef == nil) {
+                return nil
+            }
+            else {
+                return electionRef!.getTotalBallotsMinted()
+            }
+        }
+
+        /**
+            Function to retrieve the total number of submitted Ballots for the Election associated to the Ballot retrieved with the input argument.
+
+            @param electionId (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
+
+            @returns (UInt) If a Ballot exists under the provided electionId, this functions returns the total of ballots submitted to the Election associated to it. Otherwise, it returns a nil.
+        **/
+        access(all) view fun getElectionTotalBallotsSubmitted(electionId: UInt64): UInt? {
+            let electionRef: &{ElectionStandard.ElectionPublic}? = self.getPublicElectionReference(electionId: electionId)
+
+            if (electionRef == nil) {
+                return nil
+            }
+            else {
+                return electionRef!.getTotalBallotsSubmitted()
+            }
+        }
+
+        /**
+            This function is used to abstract the validation step for the remaining getter function. Before attempting any of the following getters I need:
+            1. This VoteBox needs to have a valid Ballot stored under the electionId provided. NOTE: The internal activeBallots dictionary uses electionIds as keys to store Ballots.
+            2. The Election in question needs to have a valid Capability<&{ElectionStandard.ElectionPublic}> set in it
+
+            This function abstracts the steps to ensure these two steps
+
+            @param electionId (UInt64) The election identifier to retrieve the desired Election resource.
+
+            @return (Bool) True if the getter function can proceed, False otherwise.
+        **/
+        access(self) view fun validateElection(electionId: UInt64): Bool {
+            let targetBallotRef: &BallotStandard.Ballot? = &self.activeBallots[electionId]
+
+            if (targetBallotRef == nil) {
+                return false
+            }
+            else {
+                if (targetBallotRef!.getElectionCapability() == nil) {
+                    return false
+                }
+                else {
+                    return true
+                }
+            }
+        }
 
         /**
             Simple getter to retrieve the current option set. This is inoffensive since the String returned is the blinded ciphertext. The only information leaked is if the current Ballot was set or not.
@@ -126,12 +305,12 @@ access(all) contract VoteBoxStandard {
 
         /**
             This function is supposed to be exposed by the VoteBoxPublic interface and should be used by an Admin entity to deliver a requested Ballot into this VoteBox. Obviously, the printing of new Ballots is heavily regulated in this process and can only be invoked by Admin level people. But these also need a way to deliver the Ballot into one of these VoteBoxes. This is the function they should use for the effect.
-            To prevent idiots from importing the BallotStandard contract and deliver Ballots at will to unsuspecting voters, this function is protected with the VoteBooth.VoteBoothAdmin entitlement, which requires an authorized reference to this VoteBox to do anything
+            To prevent idiots from importing the BallotStandard contract and deliver Ballots at will to unsuspecting voters, this function is protected with the VoteBooth.VoteBoothAdmin entitlement, which requires an authorized reference to this VoteBox to do anything.
+            I've protected this function with this contract's entitlement, namely, VoteBoxStandard.VoteBoxAdmin on the hopes of guaranteeing that only the deployer of this contract can deposit Ballots into other voter's VoteBoxes.
 
-            TODO: I don't like this function with an access all. Need to make sure if this is totally OK
-
+            @param ballot (@BallotStandard.Ballot) The Ballot resource to deposit in this VoteBox
         **/
-        access(all) fun depositBallot(ballot: @BallotStandard.Ballot) {
+        access(VoteBoxStandard.VoteBoxAdmin) fun depositBallot(ballot: @BallotStandard.Ballot): Void {
             // Check and panic if, by whatever reason, there's a Ballot already with the provided electionId
             pre {
                 self.activeBallots[ballot.linkedElectionId] == nil: "The VoteBox in account ".concat(self.owner!.address.toString()).concat(" already has a Ballot under electionId ").concat(ballot.linkedElectionId.toString())
@@ -144,8 +323,9 @@ access(all) contract VoteBoxStandard {
             destroy phantomResource
         }
 
-        // This function retrieves all active Ballots from the activeBallots dictionary and burns them one by one with the Burner contract so that the
-        // respective burnCallback is called for each destroyed Ballot
+        /**
+            This function retrieves all active Ballots from the activeBallots dictionary and burns them one by one with the Burner contract so that the respective burnCallback is called for each destroyed Ballot.
+        **/
         access(contract) fun burnCallback(): Void {
             let ballotKeys: [UInt64] = self.activeBallots.keys
             let ballotsBurned: Int = self.activeBallots.length
@@ -158,11 +338,13 @@ access(all) contract VoteBoxStandard {
             }
         }
 
+        // TODO: REDO this constructor descriptor
         // VoteBox resource constructor
-        init() {
+        init(_voteBoxOwner: Address) {
             self.voteBoxId = self.uuid
             self.activeBallots <- {}
             self.electionsVoted = []
+            self.voteBoxOwner = _voteBoxOwner
         }
     }
 
@@ -171,8 +353,8 @@ access(all) contract VoteBoxStandard {
 
         @return (@VoteBoxStandard.VoteBox) A brand new VoteBox resource.
     **/
-    access(all) fun createVoteBox(): @VoteBoxStandard.VoteBox {
-        return <- create VoteBoxStandard.VoteBox()
+    access(all) fun createVoteBox(newVoteBoxOwner: Address): @VoteBoxStandard.VoteBox {
+        return <- create VoteBoxStandard.VoteBox(_voteBoxOwner: newVoteBoxOwner)
     }
 
     // Contract constructor
