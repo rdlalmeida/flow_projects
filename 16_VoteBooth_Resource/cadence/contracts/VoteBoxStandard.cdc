@@ -23,11 +23,13 @@ access(all) contract VoteBoxStandard {
     // submit Ballots (the _electionsVoted array), as well as the list of active Ballots, or better, the electionIds for the Elections that this VoteBox
     // has an active Ballot in it
     access(all) event VoteBoxDestroyed(_electionsVoted: [UInt64], _activeBallots: Int, _voterAddress: Address)
+    
+    access(all) let deployerAddress: Address
 
     // The public version of the VoteBox resource that only exposes the depositBallot function
     access(all) resource interface VoteBoxPublic {
         access(all) let voteBoxId: UInt64
-        access(VoteBoxStandard.VoteBoxAdmin) fun depositBallot(ballot: @BallotStandard.Ballot): Void
+        access(all) fun depositBallot(ballot: @BallotStandard.Ballot): Void
         access(all) view fun getElectionName(electionId: UInt64): String?
         access(all) view fun getElectionBallot(electionId: UInt64): String?
         access(all) view fun getElectionOptions(electionId: UInt64): {UInt8: String}?
@@ -266,8 +268,10 @@ access(all) contract VoteBoxStandard {
             Function to deliver the Ballot to the Election resource whose reference is obtainable through the Ballot's electionCapability parameter. The electionId argument is used to retrieve the Ballot from internal storage. If there's none, the relevant event is emitted instead.
 
             @param electionId (UInt64) The Election identifier for the Ballot that is to be be cast.
+
+            @returns (UInt64) This function returns the electionId provided as input just to confirm that the whole process was successful.
         **/
-        access(BallotStandard.BallotAdmin) fun castBallot(electionId: UInt64): Void {
+        access(BallotStandard.BallotAdmin) fun castBallot(electionId: UInt64): UInt64 {
             // Similar to the "setOption" function, this one checks initially if a Ballot with the provided electionId already exists before continuing
             pre {
                 self.activeBallots[electionId] != nil: "There are no Ballot for election ".concat(electionId.toString()).concat(" currently in storage!")
@@ -301,21 +305,38 @@ access(all) contract VoteBoxStandard {
 
             // Add the electionId provided to the votedElections array
             self.electionsVoted.append(electionId)
+
+            return electionId
         }
 
         /**
-            This function is supposed to be exposed by the VoteBoxPublic interface and should be used by an Admin entity to deliver a requested Ballot into this VoteBox. Obviously, the printing of new Ballots is heavily regulated in this process and can only be invoked by Admin level people. But these also need a way to deliver the Ballot into one of these VoteBoxes. This is the function they should use for the effect.
-            To prevent idiots from importing the BallotStandard contract and deliver Ballots at will to unsuspecting voters, this function is protected with the VoteBooth.VoteBoothAdmin entitlement, which requires an authorized reference to this VoteBox to do anything.
-            I've protected this function with this contract's entitlement, namely, VoteBoxStandard.VoteBoxAdmin on the hopes of guaranteeing that only the deployer of this contract can deposit Ballots into other voter's VoteBoxes.
+            Simple internal function to validate all dependencies so far. In other words, this function validates that all dependencies and this contract share the same deployer address.
+
+            @returns (Bool) If all contract dependencies and this contract were deployed into the same account, this function returns true. Otherwise the function returns false.
+        **/
+        access(self) view fun validateContracts(): Bool {
+            if ((VoteBoxStandard.deployerAddress == BallotStandard.deployerAddress) && (VoteBoxStandard.deployerAddress == ElectionStandard.deployerAddress)) {
+                return true
+            }
+            else {
+                return false
+            }
+        }
+
+        /**
+            This function is supposed to be exposed publicly by the VoteBoxPublic resource interface and should be used by the ElectionAdministration to deposit newly minted Ballots so that the VoteBox owner can cast them. It is impossible for an ElectionAdministrator to retrieve an authorized reference to a VoteBox resource in storage since the resource is not stored in his/her Administrator account. As such, this function needs to be set as access(all) to have even the slightest hope of working. But this opens it to all sorts of shenanigans from dishonest people. Anyone is able to import the BallotStandard contract, mint a new Ballot and deposit that Ballot into this VoteBox. To prevent this, all I can do at this point is ensuring contract consistency among the contracts that I can "see" from this point.
+
+            In that regard, I've set a "deployerAddress" parameter at the root of every contract in this project. The idea is, as long as all the contracts that I can see from where I am, i.e., the set of contracts imported at the top of the current contract, have the same deployerAddress, there is a strong chance that I'm getting Ballots and Elections from where I'm supposed to get them. This verification guarantees that all contracts imported from this contract, as well as this contract, were deployed into the same account.
 
             @param ballot (@BallotStandard.Ballot) The Ballot resource to deposit in this VoteBox
         **/
-        access(VoteBoxStandard.VoteBoxAdmin) fun depositBallot(ballot: @BallotStandard.Ballot): Void {
+        access(all) fun depositBallot(ballot: @BallotStandard.Ballot): Void {
             // Check and panic if, by whatever reason, there's a Ballot already with the provided electionId
             pre {
                 self.activeBallots[ballot.linkedElectionId] == nil: "The VoteBox in account ".concat(self.owner!.address.toString()).concat(" already has a Ballot under electionId ").concat(ballot.linkedElectionId.toString())
                 // Validate that the Ballot being deposited has the same owner as this VoteBox resource
                 ballot.voterAddress == self.owner!.address: "ERROR: Ballot with owner ".concat(ballot.voterAddress.toString()).concat(" is trying to be deposited onto voter ").concat(self.owner!.address.toString()).concat(" account. These addresses must match!")
+                self.validateContracts(): "ERROR: Contract inconsistencies detected! VoteBoxStandard, BallotStandard, and the ElectionStandard contracts are not deployed to the same account."
             }
 
             // Clean up the storage slot and deposit the new Ballot
@@ -338,8 +359,13 @@ access(all) contract VoteBoxStandard {
             }
         }
 
-        // TODO: REDO this constructor descriptor
-        // VoteBox resource constructor
+        /**
+            VoteBox resource constructor.
+
+            @param _voteBoxOwner (Address) The account address of this VoteBox owner. I'm setting this value as an immutable VoteBox parameter to ensure that voters do not transfer their VoteBoxes to another users. Well, they can but if they do so, the VoteBox does not work.
+
+            @returns (@VoteBoxStandard.VoteBox) The constructor returns a @VoteBoxStandard.VoteBox resource back if all goes well.    
+        **/
         init(_voteBoxOwner: Address) {
             self.voteBoxId = self.uuid
             self.activeBallots <- {}
@@ -357,9 +383,13 @@ access(all) contract VoteBoxStandard {
         return <- create VoteBoxStandard.VoteBox(_voteBoxOwner: newVoteBoxOwner)
     }
 
-    // Contract constructor
+    /**
+        VoteBoxStandard contract constructor    
+    **/
     init() {
         self.voteBoxStoragePath = /storage/voteBox
         self.voteBoxPublicPath = /public/voteBox
+
+        self.deployerAddress = self.account.address
     }
 }

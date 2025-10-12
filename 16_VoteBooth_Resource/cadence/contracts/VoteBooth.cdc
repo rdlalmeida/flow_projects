@@ -22,6 +22,32 @@ access(all) contract VoteBooth {
     // CUSTOM EVENTS
     // Emit this event when the function to clean all storage from existing Election resources
     access(all) event ElectionsDestroyed(_electionsDestroyed: Int, _accountAddress: Address)
+
+    // Use this parameter to validate the process structure by ensuring that all contracts in the project were deployed by the same address, i.e., to the same account.
+    access(all) let deployerAddress: Address
+
+    // I'm using this variable to determine the verbosity of some of the functions in this project which log stuff to the blockchain's message stack. 
+    // This makes sense for local tests where there's little traffic in the local blockchain emulator, but it is pointless to do in a test or mainnet setting
+    // Adjust this accordingly
+    access(all) var verbose: Bool
+
+    /**
+        Internal function to validate contract consistency up to this point. In other words, this function ensures that all dependencies and this contract has the same deployerAddress.
+
+        @returns (Bool) If this contract and all dependencies have the same deployerAddress, this function returns true. Otherwise a false is returned instead.
+    **/
+    access(self) view fun validateContract(): Bool {
+        if (
+            (BallotStandard.deployerAddress == ElectionStandard.deployerAddress) && 
+            (ElectionStandard.deployerAddress == VoteBoxStandard.deployerAddress) && 
+            (VoteBoxStandard.deployerAddress == self.deployerAddress) 
+            ) {
+                return true
+            }
+            else {
+                return false
+            }
+    }
     // ---------------------------------------------------------------- BALLOT BEGIN ---------------------------------------------------------------------------
     // ---------------------------------------------------------------- BALLOT END -----------------------------------------------------------------------------
 
@@ -32,7 +58,6 @@ access(all) contract VoteBooth {
         access(all) view fun getElectionStoragePath(electionId: UInt64): StoragePath?
         access(all) view fun getElectionPublicPath(electionId: UInt64): PublicPath?
     }
-
 
     /**
         I need a way to keep track of all Election resources created and saved in this account. The obvious strategy would be to create another collection-type resource, but this goes against Cadence good programming practices, which strongly discourages collections of collections, since Elections are Ballot-type collections themselves already. I also want to ensure that only the contract deployer can play around with this data, so the most secure approach is to encode all this into a new, admin-type resource.
@@ -127,6 +152,15 @@ access(all) contract VoteBooth {
                 // Return the one value
                 return electionEntry!.values[0]
             }
+        }
+
+        /**
+            Simple function to return the array of keys used in the ElectionIndex dictionary, which essentially returns the array of keys for the electionIndex internal structure.
+
+            @returns ([UInt64]) If successful, this function returns the array of active electionIds from the electionIndex internal dictionary.
+        **/
+        access(all) view fun getActiveElectionIds(): [UInt64] {
+            return self.electionIndex.keys
         }
 
         /**
@@ -275,7 +309,13 @@ access(all) contract VoteBooth {
 
         **/
         access(all) fun removeElectionIndexEntry(deployer: auth(Storage) &Account, electionId: UInt64): {StoragePath: PublicPath}? {
-            let electionIndexRef: auth(Storage) &VoteBooth.ElectionIndex = deployer.storage.borrow<auth(Storage) &VoteBooth.ElectionIndex>(from: VoteBooth.electionIndexStoragePath) ?? panic("Ooops")
+            let electionIndexRef: auth(Storage) &VoteBooth.ElectionIndex = deployer.storage.borrow<auth(Storage) &VoteBooth.ElectionIndex>(from: VoteBooth.electionIndexStoragePath) ?? 
+            panic(
+                "Unable to retrieve a valid auth(Storage) &VoteBooth.ElectionIndex at "
+                .concat(VoteBooth.electionIndexStoragePath.toString())
+                .concat(" from account ")
+                .concat(deployer.address.toString())
+            )
 
             return electionIndexRef.removeElectionFromIndex(electionId: electionId)
         }
@@ -302,10 +342,27 @@ access(all) contract VoteBooth {
         }
 
         /**
+            This function accesses the ElectionIndex resource and returns a list of electionIds for active Elections.
+
+            @returns [UInt64] If successful, this function returns an array of UInt64 with the electionIds for all active Elections.
+        **/
+        access(all) view fun getAllActiveElections(deployer: auth(BorrowValue) &Account): [UInt64] {
+            let electionIndexRef: &VoteBooth.ElectionIndex = deployer.storage.borrow<&VoteBooth.ElectionIndex>(from: VoteBooth.electionIndexStoragePath) ??
+            panic(
+                "Unable to retrieve a valid &VoteBooth.ElectionIndex at "
+                .concat(VoteBooth.electionIndexStoragePath.toString())
+                .concat(" from account at ")
+                .concat(self.owner!.address.toString())
+            )
+
+            return electionIndexRef.getActiveElectionIds()
+        }
+
+        /**
             Function to create new Election resources by tapping the respective contract. This function is a simple wrapper for the ElectionStandard contract function.
 
             @param newElectionName (String) The name for the Election resource.
-            @param newElectionBallot (String) The question that this Elections wants to answer.
+            @param newElectionBallot (String) The question that this Election wants to answer.
             @param newElectionOptions ({UInt8: String}) The set of options that the voter must chose from.
             @param newPublicKey ([UInt8]) A [UInt8] representing the public encryption key that is to be used to encrypt the Ballot option from the frontend side.
             @param newElectionStoragePath (StoragePath) A StoragePath-type item to where this Election resource is going to be stored into the voter's own account.
@@ -375,20 +432,20 @@ access(all) contract VoteBooth {
             // All done. Return the electionId from the new resource at the end of this
             return newElectionId
         }
-
-        access(all) fun createVoteBox(newVoteBoxOwner: Address): @VoteBoxStandard.VoteBox {
-            return <- VoteBoxStandard.createVoteBox(newVoteBoxOwner: newVoteBoxOwner)
-        }
     }
     // ---------------------------------------------------------------- BALLOT PRINTER ADMIN END ---------------------------------------------------------------
 
     // ---------------------------------------------------------------- VOTEBOOTH BEGIN ------------------------------------------------------------------------
     // VoteBooth Contract constructor
     init() {
+        // Set the debug flag to true for now
+        self.verbose = true
+        
         self.voteBoothPrinterAdminStoragePath = /storage/VoteBoothPrinterAdmin
         self.electionIndexStoragePath = /storage/ElectionIndex
         self.electionIndexPublicPath = /public/ElectionIndex
 
+        self.deployerAddress = self.account.address
 
         // Clean up the usual storage slot and re-create the BallotPrinterAdmin
         let oldPrinter: @AnyResource? <- self.account.storage.load<@VoteBoothPrinterAdmin>(from: self.voteBoothPrinterAdminStoragePath)

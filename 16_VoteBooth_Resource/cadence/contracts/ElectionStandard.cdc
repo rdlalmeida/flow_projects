@@ -34,6 +34,8 @@ access(all) contract ElectionStandard {
 
     // Standard event to emit when a resource of an unexpected type is obtained at some point
     access(all) event NonNilResourceReturned(_resourceType: Type)
+    
+    access(all) let deployerAddress: Address
 
     // This interface is used to expose the public version of the Election resource, i.e., which parameters and functions are available
     // to a third party user.
@@ -271,6 +273,20 @@ access(all) contract ElectionStandard {
             }
 
             self.totalBallotsSubmitted = self.totalBallotsSubmitted - ballots
+        }
+
+        /**
+            Internal function to determine the contract consistency so far, namely if this contract and all dependencies are deployed into the same account.
+
+            @returns (Bool) If the deployer address of this contract and all its dependencies have the same deployerAddress, this returns true. Otherwise a false is returned instead.
+        **/
+        access(self) view fun validateContract(): Bool {
+            if (ElectionStandard.deployerAddress == BallotStandard.deployerAddress) {
+                return true
+            }
+            else {
+                return false
+            }
         }
 
         /**
@@ -548,6 +564,6 @@ access(all) contract ElectionStandard {
 
     // ElectionStandard contract constructor
     init() {
-
+        self.deployerAddress = self.account.address
     }
 }

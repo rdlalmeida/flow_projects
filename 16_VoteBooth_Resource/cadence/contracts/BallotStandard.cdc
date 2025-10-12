@@ -16,6 +16,10 @@ access(all) contract BallotStandard {
     // CUSTOM EVENTS
     access(all) event BallotBurned(_ballotId: UInt64, _linkedElectionId:UInt64)
 
+    // I'm setting up a deployerAddress parameter in each of this project's contracts to allow voters to check that all contracts are deployed under the same,
+    // ElectionAdministrator account, to ensure they are not getting Ballots and Elections from someone else.
+    access(all) let deployerAddress: Address
+
     // The public interface applied to the BallotStandard.Ballot resource. These parameter and functions is what a voter has access when he/she grabs a public
     // reference to an Election resource through the Ballot-based election capability. 
     access(all) resource interface BallotPublic {
@@ -131,6 +135,7 @@ access(all) contract BallotStandard {
         BallotStandard contract constructor. I'm not setting anything relevant at the contract level, hence the empty constructor.
     **/
     init() {
-
+        // Set the address of the contract deployer as an internal parameter for future comparison.
+        self.deployerAddress = self.account.address
     }
 }
