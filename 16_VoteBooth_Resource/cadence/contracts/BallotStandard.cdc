@@ -26,6 +26,7 @@ access(all) contract BallotStandard {
         access(all) let ballotId: UInt64
         access(all) let linkedElectionId: UInt64
         access(all) view fun getElectionCapability(): Capability
+        access(all) view fun getOption(): String
     }
 
     // The Ballot resource standard definition.
@@ -55,7 +56,7 @@ access(all) contract BallotStandard {
 
             @returns (String) The option currently set in this Ballot resource.
         **/
-        access(BallotStandard.BallotAdmin) view fun getOption(): String {
+        access(all) view fun getOption(): String {
             return self.option
         }
 

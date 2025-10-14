@@ -57,6 +57,9 @@ access(all) contract VoteBooth {
         access(all) view fun electionExists(electionId: UInt64): Bool
         access(all) view fun getElectionStoragePath(electionId: UInt64): StoragePath?
         access(all) view fun getElectionPublicPath(electionId: UInt64): PublicPath?
+        access(all) view fun getActiveElectionIds(): [UInt64]
+        access(all) fun listActiveElections(): {UInt64: String}
+        access(all) view fun getPublicElectionReference(_electionId: UInt64): &{ElectionStandard.ElectionPublic}?
     }
 
     /**
@@ -161,6 +164,95 @@ access(all) contract VoteBooth {
         **/
         access(all) view fun getActiveElectionIds(): [UInt64] {
             return self.electionIndex.keys
+        }
+
+        /**
+            This function returns a dictionary in the format {electionId: electionName} to provide a more intuitive pairing between the id of the Election resource and its name.
+
+            @returns {UInt64: String} A dictionary in the format {UInt64: electionName}
+        **/
+        access(all) fun listActiveElections(): {UInt64: String} {
+            // Grab a list of all active electionIds
+            let activeElectionIds: [UInt64] = self.getActiveElectionIds()
+
+            // I need a reference to the VoteBooth deployer account. Does not need to be an authorized one
+            let deployerAccount: &Account = getAccount(VoteBooth.deployerAddress)
+            // Use it to get a public reference to the ElectionIndex
+            let electionIndexRef: &{VoteBooth.ElectionIndexPublic} = deployerAccount.capabilities.borrow<&{VoteBooth.ElectionIndexPublic}>(VoteBooth.electionIndexPublicPath) ??
+            panic(
+                "Unable to retrieve a valid &{VoteBooth.ElectionIndexPublic} at "
+                .concat(VoteBooth.electionIndexPublicPath.toString())
+                .concat(" from account ")
+                .concat(deployerAccount.address.toString())
+            )
+
+            var electionInfo: {UInt64: String} = {}
+
+            // Compose the return dictionary in a loop
+            for activeElectionId in activeElectionIds {
+                let electionPublicPath: PublicPath = electionIndexRef.getElectionPublicPath(electionId: activeElectionId) ??
+                panic(
+                    "Unable to get a valid PublicPath from the ElectionIndex for electionId "
+                    .concat(activeElectionId.toString())
+                    .concat(" in account ")
+                    .concat(deployerAccount.address.toString())
+                )
+
+                let electionRef: &{ElectionStandard.ElectionPublic} = deployerAccount.capabilities.borrow<&{ElectionStandard.ElectionPublic}>(electionPublicPath) ??
+                panic(
+                    "Unable to get a valid &{ElectionStandard.ElectionPublic} at "
+                    .concat(electionPublicPath.toString())
+                    .concat(" for account ")
+                    .concat(deployerAccount.address.toString())
+                )
+
+                let electionName: String = electionRef.getElectionName()
+
+                electionInfo[activeElectionId] = electionName
+            }
+
+            return electionInfo
+        }
+        
+        /**
+            This function abstracts a lot of the logic required to retrieve a public reference to a given Election resource in store. Because of the convoluted way in which I have to store Elections in this project, I need to do a lot to get a public reference to one, hence why I abstracted the whole process with a simple function.
+
+            @param _electionId (UInt64) The election identifier for the Election whose reference is to be returned.
+
+            @returns (&{ElectionStandard.ElectionPublic}) If an Election exists in store in the VoteBooth contract deployer account, this function returns the public reference to it. If anything happens that makes this reference retrieval impossible, the relevant panic is thrown instead.
+        **/
+        access(all) view fun getPublicElectionReference(_electionId: UInt64): &{ElectionStandard.ElectionPublic} {
+            // Set up the account where all the Election are stored in
+            let deployerAccount: &Account = getAccount(VoteBooth.deployerAddress)
+
+            // Start by making sure that the Election does exist
+            if (!self.electionExists(electionId: _electionId)) {
+                panic(
+                    "ERROR: There are no Elections in storage with id "
+                    .concat(_electionId.toString())
+                    .concat(" for account ")
+                    .concat(deployerAccount.address.toString())
+                )
+            }
+            
+
+            // The Election exists. Retrieve the PublicPath where its public reference should have been published to
+            let electionPublicPath: PublicPath = self.getElectionPublicPath(electionId: _electionId) ??
+            panic(
+                "Unable to retrieve a valid PublicPath from the ElectionIndex in account "
+                .concat(deployerAccount.address.toString())
+            )
+
+
+            let electionRef: &{ElectionStandard.ElectionPublic} = deployerAccount.capabilities.borrow<&{ElectionStandard.ElectionPublic}>(electionPublicPath) ??
+            panic(
+                "Unable to retrieve a valid &{ElectionStandard.ElectionPublic} at "
+                .concat(electionPublicPath.toString())
+                .concat(" from account ")
+                .concat(deployerAccount.address.toString())
+            )
+
+            return electionRef
         }
 
         /**
@@ -437,9 +529,9 @@ access(all) contract VoteBooth {
 
     // ---------------------------------------------------------------- VOTEBOOTH BEGIN ------------------------------------------------------------------------
     // VoteBooth Contract constructor
-    init() {
+    init(_verbose: Bool) {
         // Set the debug flag to true for now
-        self.verbose = true
+        self.verbose = _verbose
         
         self.voteBoothPrinterAdminStoragePath = /storage/VoteBoothPrinterAdmin
         self.electionIndexStoragePath = /storage/ElectionIndex
