@@ -86,6 +86,7 @@ access(all) let getElectionCapabilitySc: String = "../scripts/08_get_election_ca
 access(all) let getElectionTotalsSc: String = "../scripts/09_get_election_totals.cdc"
 access(all) let getElectionStoragePathSc: String = "../scripts/10_get_election_storage_path.cdc"
 access(all) let getElectionPublicPathSc: String = "../scripts/11_get_election_public_path.cdc"
+access(all) let getElectionsListSc: String = "../scripts/12_get_elections_list.cdc"
 
 // PATHS
 // VoteBoxStandard.cdc
@@ -159,7 +160,10 @@ access(all) let accounts: [Test.TestAccount] = [account01, account02, account03,
 access(all) let verbose: Bool = true
 
 // Simple array to keep the electionIds of the active Election resources
-access(all) var activeElections: [UInt64] = []
+access(all) var activeElectionIds: [UInt64] = []
+
+// And this dictionary keeps a list of open Elections in a {electionId:String} format.
+access(all) var electionList: {UInt64: String} = {}
 
 access(all) fun setup() {
     var err: Test.Error? = Test.deployContract(
@@ -266,12 +270,34 @@ access(all) fun testCreateElection() {
     // Grab all the electionIds for the active Elections created above
     var scResult: Test.ScriptResult = executeScript(
         getActiveElectionsSc,
+        [nil]
+    )
+
+    Test.expect(scResult, Test.beSucceeded())
+
+    // Fill out the activeElectionIds array
+    activeElectionIds = scResult.returnValue as! [UInt64]
+
+    scResult = executeScript(
+        getElectionsListSc,
         []
     )
 
     Test.expect(scResult, Test.beSucceeded())
 
-    let activeElectionIds: [UInt64] = scResult.returnValue as! [UInt64]
+    // And now for the election list
+    electionList = scResult.returnValue as! {UInt64: String}
+
+    // Validate that this dictionary is consistent
+    Test.assert(electionList.length == electionNames.length)
+
+    for electionId in electionList.keys {
+        // Test that the electionIds returned as keys are in the activeElectionIds set
+        Test.assert(activeElectionIds.contains(electionId))
+
+        // And test that the names returned are also inside the array used to create them.
+        Test.assert(electionNames.contains(electionList[electionId]!))
+    }
 
     // Check that we got the same number of electionIds back
     Test.assertEqual(activeElectionIds.length, electionNames.length)
@@ -291,7 +317,7 @@ access(all) fun testCreateElection() {
         // Start with the election names
         scResult = executeScript(
             getElectionNameSc,
-            [activeElectionId]
+            [activeElectionId, nil]
         )
 
         Test.expect(scResult, Test.beSucceeded())
@@ -307,7 +333,7 @@ access(all) fun testCreateElection() {
         // Election Ballot
         scResult = executeScript(
             getElectionBallotSc,
-            [activeElectionId]
+            [activeElectionId, nil]
         )
 
         Test.expect(scResult, Test.beSucceeded())
@@ -319,7 +345,7 @@ access(all) fun testCreateElection() {
         // Election Options
         scResult = executeScript(
             getElectionOptionsSc,
-            [activeElectionId]
+            [activeElectionId, nil]
         )
         Test.expect(scResult, Test.beSucceeded())
         electionOption = scResult.returnValue as! {UInt8: String}
@@ -328,7 +354,7 @@ access(all) fun testCreateElection() {
         // Election Id
         scResult = executeScript(
             getElectionIdSc,
-            [activeElectionId]
+            [activeElectionId, nil]
         )
         Test.expect(scResult, Test.beSucceeded())
         electionId = scResult.returnValue as! UInt64
@@ -337,7 +363,7 @@ access(all) fun testCreateElection() {
         // Public Encryption Key
         scResult = executeScript(
             getElectionPublicEncryptionKeySc,
-            [activeElectionId]
+            [activeElectionId, nil]
         )
         Test.expect(scResult, Test.beSucceeded())
         electionPublicKey = scResult.returnValue as! [UInt8]
@@ -346,7 +372,7 @@ access(all) fun testCreateElection() {
         // Election Capability
         scResult = executeScript(
             getElectionCapabilitySc,
-            [activeElectionId]
+            [activeElectionId, nil]
         )
         Test.expect(scResult, Test.beSucceeded())
         // If the next force cast succeeds, thats test enough
@@ -355,7 +381,7 @@ access(all) fun testCreateElection() {
         // Election Ballot totals
         scResult = executeScript(
             getElectionTotalsSc,
-            [activeElectionId]
+            [activeElectionId, nil]
         )
         Test.expect(scResult, Test.beSucceeded())
         electionTotals = scResult.returnValue as! {String: UInt}
@@ -386,3 +412,67 @@ access(all) fun testCreateElection() {
 /**
     Test the creation of a new VoteBox resource into each of the 5 test accounts
 **/
+access(all) fun testCreateVoteBox() {
+    var txResult: Test.TransactionResult? = nil
+    var scResult: Test.ScriptResult? = nil
+
+    for account in accounts {
+        // Create a new VoteBox resource in each of the user accounts
+        txResult = executeTransaction(
+            createVoteBoxTx,
+            [],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+    }
+
+    var activeBallots: Int = 0
+    // For each voter, grab the list of activeBallots out of their VoteBoxes. Each should be empty
+    for account in accounts {
+        scResult = executeScript(
+            getActiveElectionsSc,
+            [account.address]
+        )
+
+        Test.expect(scResult, Test.beSucceeded())
+
+        // Get the active number of elections for each VoteBox and each account
+        activeBallots = (scResult!.returnValue as! [UInt64]).length
+
+        // Each should be empty still
+        Test.assert(activeBallots == 0)
+    }
+}
+
+/**
+    This test function tries to print a brand new Ballot for Election #1 into each VoteBox in each test account.
+**/
+access(all) fun testPrintBallotIntoVoteBox() {
+    
+    var txResult: Test.TransactionResult? = nil
+    var scResult: Test.ScriptResult? = nil
+    let electionIndex: Int = 0
+    let electionId: UInt64 = activeElectionIds[electionIndex]
+
+    log(
+        "Printing "
+        .concat(accounts.length.toString())
+        .concat(" Ballots for Election ")
+        .concat(activeElectionIds[electionIndex].toString())
+        .concat(": ")
+        .concat(electionList[electionId]!)
+    )
+    for account in accounts {
+        txResult = executeTransaction(
+            createBallotTx,
+            [electionId, account.address],
+            deployer
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+    }
+
+    // TODO: Validate the VoteBoxes via electionId, electionName, electionBallot, etc...
+    // TODO: Validate the Election totals for Ballots minted
+}

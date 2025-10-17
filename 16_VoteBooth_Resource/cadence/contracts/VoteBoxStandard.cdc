@@ -30,10 +30,13 @@ access(all) contract VoteBoxStandard {
     access(all) resource interface VoteBoxPublic {
         access(all) let voteBoxId: UInt64
         access(all) fun depositBallot(ballot: @BallotStandard.Ballot): Void
+        access(all) view fun getActiveElectionIds(): [UInt64]
         access(all) view fun getElectionName(electionId: UInt64): String?
         access(all) view fun getElectionBallot(electionId: UInt64): String?
         access(all) view fun getElectionOptions(electionId: UInt64): {UInt8: String}?
+        access(all) view fun getElectionId(electionId: UInt64): UInt64?
         access(all) view fun getElectionPublicKey(electionId: UInt64): [UInt8]?
+        access(all) view fun getElectionCapability(electionId: UInt64): Capability?
         access(all) view fun getElectionTotalBallotsMinted(electionId: UInt64): UInt?
         access(all) view fun getElectionTotalBallotsSubmitted(electionId: UInt64): UInt?
     }
@@ -54,6 +57,15 @@ access(all) contract VoteBoxStandard {
         // point the address of the account storage differs from the one set with the resource constructor, the voter is prevented from accessing and
         // invoking functions.
         access(self) let voteBoxOwner: Address
+
+        /**
+            This simple function returns the array of electionId corresponding to all the Ballots in storage that are considered active, i.e., they can be cast onto an Election resource.
+
+            @returns ([UInt64]) This function returns an UInt64 array with the electionIds of all active Ballots for this VoteBox resource.
+        **/
+        access(all) view fun getActiveElectionIds(): [UInt64] {
+            return self.activeBallots.keys
+        }
 
         /**
             Function to abstract the validation step hat also retrieves a reference to the Ballot in storage, for the provided electionId, and grabs a public reference to the Election resource associated to the Ballot.
@@ -142,6 +154,24 @@ access(all) contract VoteBoxStandard {
         }
 
         /**
+            Function to retrieve the electionId set in the Election resource referred by the Ballot in question. This function seems a bit redundant but it serves to validate resource consistency between the various resources involved in this process.
+
+            @param electionId (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
+
+             @returns (UInt64?) If a Ballot exists under the provided electionId, this function returns a UInt64 corresponding to the electionId associated. Otherwise, it returns a nil.
+        **/
+        access(all) view fun getElectionId(electionId: UInt64): UInt64? {
+            let electionRef: &{ElectionStandard.ElectionPublic}? = self.getPublicElectionReference(electionId: electionId)
+
+            if (electionRef == nil) {
+                return nil
+            }
+            else {
+                return electionRef!.getElectionId()
+            }
+        }
+
+        /**
             Function to retrieve the public encryption key, as an array of UInt8 values, for the Election associated to the Ballot retrieved with the input argument.
 
             @param electionId (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
@@ -156,6 +186,37 @@ access(all) contract VoteBoxStandard {
             }
             else {
                 return electionRef!.getPublicEncryptionKey()
+            }
+        }
+
+        /**
+            Function to retrieve the public capability value associated to the Election indicated by the electionId provided.
+
+            @param electionId: (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
+
+            @returns (Capability?) If a Ballot exists under the provided electionId, this function returns the capability value, if one is set to the Ballot in question. If the Ballot does not exist or the capability is not set to it, the function returns nil.
+        **/
+        access(all) view fun getElectionCapability(electionId: UInt64): Capability? {
+            let electionRef: &{ElectionStandard.ElectionPublic}? = self.getPublicElectionReference(electionId: electionId)
+
+            // There are no Ballots with the provided electionId
+            if (electionRef == nil) {
+                // Return nil
+                return nil
+            }
+            else {
+                // There is a Ballot for the provided electionId, but I'm not yet sure if the Capability is properly set in it. So, grab it to a variable first
+                let electionCap: Capability? = electionRef!.getElectionCapability()
+
+                // And test it
+                if (electionCap == nil) {
+                    // If it is still nil,  return this value
+                    return nil
+                }
+                else {
+                    // Else, force cast it to the proper type and return it
+                    return electionCap as! Capability<&{ElectionStandard.ElectionPublic}>
+                }
             }
         }
 
