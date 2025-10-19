@@ -14,6 +14,7 @@ access(all) contract BallotStandard {
     access(all) entitlement BallotAdmin
 
     // CUSTOM EVENTS
+    access(all) event BallotCreated(_ballotId: UInt64, _linkedElectionId: UInt64)
     access(all) event BallotBurned(_ballotId: UInt64, _linkedElectionId:UInt64)
 
     // I'm setting up a deployerAddress parameter in each of this project's contracts to allow voters to check that all contracts are deployed under the same,
@@ -27,6 +28,7 @@ access(all) contract BallotStandard {
         access(all) let linkedElectionId: UInt64
         access(all) view fun getElectionCapability(): Capability
         access(all) view fun getOption(): String
+        access(all) view fun getVoterAddress(): Address?
     }
 
     // The Ballot resource standard definition.
@@ -46,8 +48,9 @@ access(all) contract BallotStandard {
         /**
             I need a pair of parameter to prevent an adversary from taking advantage of this system. I need a "voterAddress" as well as a "ballotIndex" parameter that is derived from the initial one. The idea is to use this to ensure that this Ballot is either inside of an account that matches the "voterAddress" parameter, be it by itself or while in a VoteBox, or inside an Election resource. To restrict the Ballot to these two states only, I need to be creative with this aspect.
             For now, I'm setting the ballotIndex as H(voterAddress) = ballotIndex, i.e., the ballotIndex is the hash digest for the address of the voter.
+            Also, to preserve the privacy of the voter, the voter address can be set to nil during the submission of the Ballot
         **/
-        access(all) let voterAddress: Address
+        access(BallotStandard.BallotAdmin) var voterAddress: Address?
         access(all) let ballotIndex: String
 
 
@@ -80,6 +83,22 @@ access(all) contract BallotStandard {
         }
 
         /**
+            Simple getter for the voterAddress parameter set in the Ballot
+
+            @returns (Address?) Returns whatever is set currently in the voterAddress parameter, which can be an address or a nil
+        **/
+        access(all) view fun getVoterAddress(): Address? {
+            return self.voterAddress
+        }
+
+        /**
+            This function abstracts the operation to set this Ballot to be anonymous by setting the current voterAddress parameter to a nil.
+        **/
+        access(BallotStandard.BallotAdmin) fun anonymizeBallot(): Void {
+            self.voterAddress = nil
+        }
+
+        /**
             Standard "burnCallback" function as defined by the Burner contract. This function is automatically invoked when a Ballot resource is burned using the "Burner.burn()" function.
         **/
         access(contract) fun burnCallback(): Void {
@@ -108,14 +127,77 @@ access(all) contract BallotStandard {
             // The voterAddress is achieved directly
             self.voterAddress = _voterAddress
 
-            // But the ballotIndex needs more processing. First, cast the voterAddress to a String and then convert that String to a [UInt8]. Finally, 
-            // apply the SHA3_256 hashing algorithm to the [UInt8] with the hash digest of the address String.  
-            let addressDigest: [UInt8] = HashAlgorithm.SHA3_256.hash(self.voterAddress.toString().utf8)
+            /**
+                The original idea was to simply hash the voterAddress and use this as key to store this Ballot in an Election. But... by some weird reason, the String -> [UInt8] -> String circuit in Cadence is a bit weird and needs fixing to be usable.
+                The main problem is that, in Cadence, a UInt8 is a number between 0 and 255 (The 'U' means unsigned, which implies that all 8 of the bits are used for the representation, i.e., the range is 0 - (2⁸ - 1) = 0 - 255). But the String.fromUTF8, by some stupid reason, does not recognizes any encoding 7 bits and above, i.e., any array element 2⁷ - 1 = 127 and higher. Also, not all characters in that 0-127 range are printable or usable on a String. But the hashing algorithm produces a [UInt8] result in which each element can go from 0 to 255. This means that reverting the hashed output back to a String creates all sorts of problems as soon as a value >= 128 is found.
+                Fortunately, I don't really care about how the digest looks like, as long as it is produced deterministically from an input. As such, I'm going to use this function to address this limitation: any values found in the original digest that are 128 or above get subtracted and added to bring them back to the decodable range, which is going to be the set of printable UTF8 characters in the 65-90; 97-126 range, and thus producing a fairly deterministic encoding algorithm.
 
-            // To make things much easier, I'm converting the hash digest, currently set as [UInt8], back to a String to use as a dictionary key.
-            self.ballotIndex = String.fromUTF8(addressDigest)!
-            // Set any new Ballots to a default option, which for now is just a String saying that. Obviously, this is not a valid option for any election.
+                NOTE: This is a one way process, therefore I only need to ensure determinism in one direction. I'm hashing a piece of information to start this, so it is impossible for me to reverse this operation at a future point.
+
+            **/            
+            // Grab the voterAddress into a encodable format
+            let voterAddressToEncode: [UInt8] = self.voterAddress!.toString().utf8
+
+
+            // Use the [UInt8] input to get the hash digest of the address String
+            let hashedVoterAddress: [UInt8] = Crypto.hash(voterAddressToEncode, algorithm: HashAlgorithm.SHA3_256)
+            var normalisedHashedVoterAddress: [UInt8] = []
+            var elementToNormalise: UInt8 = 0
+
+            // Go though each element of the hash output and subtract 122 out of every element >= 122
+            for index, hashElement in hashedVoterAddress {
+                // Set the element to normalise
+                elementToNormalise = hashElement
+
+                // Repeat this while the element is outside of the allowed ranges
+                while ((elementToNormalise < 65 || elementToNormalise > 90) && (elementToNormalise < 97 || elementToNormalise > 122)) {
+                    if (elementToNormalise < 65) {
+                        // Bring the hash element to within the uppercase letter range of [65-90]. The range is 26 positions long, so the easiest approach is
+                        // to add 26 until the element gets in that range. I'm doing this inside a while loop, therefore it is OK if the first increment
+                        // does not bring the elementToNormalise to within the desired range. The next loop or the one after that will do it.
+                        elementToNormalise = elementToNormalise + 26
+
+                    }
+                    // In this case I just want the element out of this 6 slot range. As such, I'm adding or subtracting 6 to the element depending on where in
+                    // the range it sits.
+                    else if (elementToNormalise > 90 && elementToNormalise < 97) {
+                        if (elementToNormalise <= 93) {
+                            // Push it towards the uppercase letter range
+                            elementToNormalise = elementToNormalise - 6
+                        }
+                        else{
+                            // And this one into the lowercase letter range
+                            elementToNormalise = elementToNormalise + 6
+                        }
+                    }
+                    else{
+                        // And anything above the upper limit, simply subtract half of the upper range limit each time until it falls into one of the valid ranges
+                        elementToNormalise = elementToNormalise - 122
+                    }
+                }
+
+                // Once an element gets out of this while loop, it is within the desired range. Add it to the final array to encode back to a String
+                normalisedHashedVoterAddress.append(elementToNormalise)
+            }
+
+            // All done. It should be possible to covert this array back to a String
+            let hashDigest: String? = String.fromUTF8(normalisedHashedVoterAddress)
+
+            if (hashDigest == nil) {
+                panic(
+                    "ERROR: Unable to decode hashed address "
+                    .concat(self.voterAddress!.toString())
+                    .concat(" back to a String...")
+                )
+            }
+            else {
+                self.ballotIndex = hashDigest!
+            }
+
             self.option = "default"
+
+            // All done. Finish by emitting the BallotCreated event
+            emit BallotStandard.BallotCreated(_ballotId: self.ballotId, _linkedElectionId: _linkedElectionId)
         }
     }
 

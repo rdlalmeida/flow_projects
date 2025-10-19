@@ -53,6 +53,7 @@ access(all) contract ElectionStandard {
         access(all) view fun getTotalBallotsSubmitted(): UInt
         access(all) view fun getElectionCapability(): Capability?
         access(all) fun submitBallot(ballot: @BallotStandard.Ballot): Void
+        access(all) view fun isBallotValid(ballotId: UInt64): Bool
     }
 
     // The definition of the ElectionStandard.Election resource
@@ -97,6 +98,17 @@ access(all) contract ElectionStandard {
         // store this value once the Election is ready to produce it. The Election needs to be constructed first, then saved somewhere
         // to allow this capability to be created
         access(ElectionStandard.ElectionAdmin) var electionCapability: Capability<&{ElectionStandard.ElectionPublic}>?
+
+        /**
+            This function validates if a given ballotId is valid for the given Election. In other words, this function validates if the provided ballotId is in the "mintedBallots" internal array.
+
+            @param ballotId (UInt64) The Ballot identifier to check for.
+
+            @returns (Bool) The function returns true if the ballotId provided is in the "mintedBallots" array. Otherwise it returns a false.
+        **/
+        access(all) view fun isBallotValid(ballotId: UInt64): Bool {
+            return self.mintedBallots.contains(ballotId)
+        }
 
         // Set of simple Getters for the Election parameters
         /**
@@ -366,6 +378,9 @@ access(all) contract ElectionStandard {
             pre {
                 // Check if the Ballot submitted was minted into this Election first. The BallotPrinterAdmin should have done that
                 self.mintedBallots.contains(ballot.ballotId): "The Ballot submitted was not minted for this Election!"
+
+                // And check that the Ballot is already anonymous. Reject it if that is not the case
+                ballot.getVoterAddress() == nil: "The Ballot submitted is not yet anonymous. Cannot continue!"
             }
 
             // Store the ballotId from the Ballot to store for Event emission purposes
@@ -428,8 +443,34 @@ access(all) contract ElectionStandard {
                 self.increaseBallotsSubmitted(ballots: 1)
             }
 
-            // Remove this ballotId from the list of mintedBallot. This is independent from the branch executed above
-            let ballotId: UInt64 = self.mintedBallots.remove(at: newBallotId)
+            /*
+                Remove this ballotId from the list of mintedBallot. This is independent from the branch executed above. Unfortunately, Cadence has made this process significantly harder from older versions of the language. Arrays used to have a "removeAll" default function to remove all occurrences of a given element from the array. This function is now gone. As such, I have no other recourse other than cycle through all the array elements, check which ones matches the element to remove, take note of its index in the array, and finally use the Array.remove(at: <elementPosition>) to get rid of it
+            */
+            var indexToRemove: Int? = nil
+
+            for index, mintedBallot in self.mintedBallots {
+                if (mintedBallot == newBallotId) {
+                    // Found a match. Save its index
+                    indexToRemove = index
+                    // And stop the cycle.
+                    break
+                }
+            }
+
+            // Validate that the indexToRemove was set (is not nil anymore)
+            if (indexToRemove == nil) {
+                panic(
+                    "ERROR: Unable to remove ballotId "
+                    .concat(newBallotId.toString())
+                    .concat(" from the mintedBallots array for Election ")
+                    .concat(self.electionId.toString())
+                    .concat(" in account ")
+                    .concat(self.owner!.address.toString())
+                )
+            }
+
+            // All good. If the previous panic was not triggered, I have a valid indexToRemove in store. Get rid of the element
+            let removedBallotId: UInt64 = self.mintedBallots.remove(at: indexToRemove!)
         }
 
         /**

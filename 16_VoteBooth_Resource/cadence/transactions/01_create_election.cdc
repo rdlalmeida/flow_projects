@@ -46,7 +46,7 @@ transaction(
         )
 
         if (VoteBooth.verbose) {
-            log("Created a new Election with electionId ".concat(self.newElectionId.toString()))
+            log("Created a new Election with electionId ".concat(self.newElectionId.toString()).concat(" => ").concat(_electionName))
         }
     }
 

@@ -19,6 +19,8 @@ access(all) contract VoteBoxStandard {
     access(all) entitlement VoteBoxAdmin
 
     // CUSTOM EVENTS
+    // Typical event to be emitted when a new VoteBox resource gets created
+    access(all) event VoteBoxCreated(_voterAddress: Address)
     // This event emits when a VoteBox is burned using the Burner contract. The idea is to reveal only the electionIds that this VoteBox has been used to 
     // submit Ballots (the _electionsVoted array), as well as the list of active Ballots, or better, the electionIds for the Elections that this VoteBox
     // has an active Ballot in it
@@ -39,6 +41,7 @@ access(all) contract VoteBoxStandard {
         access(all) view fun getElectionCapability(electionId: UInt64): Capability?
         access(all) view fun getElectionTotalBallotsMinted(electionId: UInt64): UInt?
         access(all) view fun getElectionTotalBallotsSubmitted(electionId: UInt64): UInt?
+        access(all) view fun getVote(electionId: UInt64): String?
     }
     
     access(all) resource VoteBox: Burner.Burnable, VoteBoxPublic {
@@ -290,7 +293,7 @@ access(all) contract VoteBoxStandard {
 
             @returns String The current option set in the Ballot resource identified by the electionId provided. Returns nil if there no Ballot for the electionId supplied.
         **/
-        access(BallotStandard.BallotAdmin) view fun getVote(electionId: UInt64): String? {
+        access(all) view fun getVote(electionId: UInt64): String? {
             let ballotRef: auth(BallotStandard.BallotAdmin) &BallotStandard.Ballot? = &self.activeBallots[electionId]
 
             if (ballotRef == nil) {
@@ -353,7 +356,7 @@ access(all) contract VoteBoxStandard {
 
             // Got a valid Ballot. Use its PublicElection reference electionCapability to get a reference to the Election to submit this thing to
             // TODO: Not sure if this shit works... an authorized reference to a public capability? Seems fishy... this needs testing ASAP
-            let electionReference: auth(BallotStandard.BallotAdmin) &{ElectionStandard.ElectionPublic} = ballotToSubmit.electionCapability.borrow<auth(BallotStandard.BallotAdmin) &{ElectionStandard.ElectionPublic}>() ??
+            let electionPublicRef: &{ElectionStandard.ElectionPublic} = ballotToSubmit.electionCapability.borrow<&{ElectionStandard.ElectionPublic}>() ??
             panic(
                 "Unable to retrieve a valid &{ElectionStandard.ElectionPublic} from the electionCapability from Ballot "
                 .concat(ballotToSubmit.ballotId.toString())
@@ -361,8 +364,11 @@ access(all) contract VoteBoxStandard {
                 .concat(electionId.toString())
             )
 
+            // Anonymize the Ballot right before submitting it, since I have the necessary entitlements at this stage
+            ballotToSubmit.anonymizeBallot()
+
             // Use the reference to access the "submitBallot" function and send the Ballot to the Election where it belongs
-            electionReference.submitBallot(ballot: <- ballotToSubmit)
+            electionPublicRef.submitBallot(ballot: <- ballotToSubmit)
 
             // Add the electionId provided to the votedElections array
             self.electionsVoted.append(electionId)
@@ -396,7 +402,7 @@ access(all) contract VoteBoxStandard {
             pre {
                 self.activeBallots[ballot.linkedElectionId] == nil: "The VoteBox in account ".concat(self.owner!.address.toString()).concat(" already has a Ballot under electionId ").concat(ballot.linkedElectionId.toString())
                 // Validate that the Ballot being deposited has the same owner as this VoteBox resource
-                ballot.voterAddress == self.owner!.address: "ERROR: Ballot with owner ".concat(ballot.voterAddress.toString()).concat(" is trying to be deposited onto voter ").concat(self.owner!.address.toString()).concat(" account. These addresses must match!")
+                ballot.voterAddress == self.owner!.address: "ERROR: Ballot with owner ".concat(ballot.voterAddress!.toString()).concat(" is trying to be deposited onto voter ").concat(self.owner!.address.toString()).concat(" account. These addresses must match!")
                 self.validateContracts(): "ERROR: Contract inconsistencies detected! VoteBoxStandard, BallotStandard, and the ElectionStandard contracts are not deployed to the same account."
             }
 
@@ -432,6 +438,9 @@ access(all) contract VoteBoxStandard {
             self.activeBallots <- {}
             self.electionsVoted = []
             self.voteBoxOwner = _voteBoxOwner
+
+            // Finish by emitting the VoteBoxCreated event
+            emit VoteBoxCreated(_voterAddress: self.voteBoxOwner)
         }
     }
 
