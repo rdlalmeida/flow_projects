@@ -17,7 +17,7 @@ access(all) let ballotRevokedEventType: Type = Type<ElectionStandard.BallotRevok
 access(all) let ballotsWithdrawnEventType: Type = Type<ElectionStandard.BallotsWithdrawn>()
 access(all) let electionCreatedEventType: Type = Type<ElectionStandard.ElectionCreated>()
 access(all) let electionDestroyedEventType: Type = Type<ElectionStandard.ElectionDestroyed>()
-access(all) let nonNilResourceDestroyedEventType: Type = Type<ElectionStandard.NonNilResourceReturned>()
+access(all) let nonNilResourceReturnedEventType: Type = Type<ElectionStandard.NonNilResourceReturned>()
 
 // VoteBoxStandard.cdc
 access(all) let voteBoxCreatedEventType: Type = Type<VoteBoxStandard.VoteBoxCreated>()
@@ -34,7 +34,7 @@ access(all) var eventNumberCount: {Type: Int} = {
     ballotsWithdrawnEventType: 0,
     electionCreatedEventType: 0,
     electionDestroyedEventType: 0,
-    nonNilResourceDestroyedEventType: 0,
+    nonNilResourceReturnedEventType: 0,
     voteBoxCreatedEventType: 0,
     voteBoxDestroyedEventType: 0,
     electionsDestroyedEventType: 0
@@ -60,22 +60,87 @@ access(all) fun validateEvents() {
     ballotsWithdrawnEvents = Test.eventsOfType(ballotsWithdrawnEventType)
     electionCreatedEvents = Test.eventsOfType(electionCreatedEventType)
     electionDestroyedEvents = Test.eventsOfType(electionDestroyedEventType)
-    nonNilResourceReturnedEvents = Test.eventsOfType(nonNilResourceDestroyedEventType)
+    nonNilResourceReturnedEvents = Test.eventsOfType(nonNilResourceReturnedEventType)
     voteBoxCreatedEvents = Test.eventsOfType(voteBoxCreatedEventType)
     voteBoxDestroyedEvents = Test.eventsOfType(voteBoxDestroyedEventType)
     electionsDestroyedEvents = Test.eventsOfType(electionsDestroyedEventType)
 
-    Test.assertEqual(ballotCreatedEvents.length, eventNumberCount[ballotCreatedEventType]!)
-    Test.assertEqual(ballotBurnedEvents.length, eventNumberCount[ballotBurnedEventType]!)
-    Test.assertEqual(ballotSubmittedEvents.length, eventNumberCount[ballotSubmittedEventType]!)
-    Test.assertEqual(ballotReplacedEvents.length, eventNumberCount[ballotReplacedEventType]!)
-    Test.assertEqual(ballotsWithdrawnEvents.length, eventNumberCount[ballotsWithdrawnEventType]!)
-    Test.assertEqual(electionCreatedEvents.length, eventNumberCount[electionCreatedEventType]!)
-    Test.assertEqual(electionDestroyedEvents.length, eventNumberCount[electionDestroyedEventType]!)
-    Test.assertEqual(nonNilResourceReturnedEvents.length, eventNumberCount[nonNilResourceDestroyedEventType]!)
-    Test.assertEqual(voteBoxCreatedEvents.length, eventNumberCount[voteBoxCreatedEventType]!)
-    Test.assertEqual(voteBoxDestroyedEvents.length, eventNumberCount[voteBoxDestroyedEventType]!)
-    Test.assertEqual(electionsDestroyedEvents.length, eventNumberCount[electionsDestroyedEventType]!)
+    Test.assert(ballotCreatedEvents.length == eventNumberCount[ballotCreatedEventType]!,
+        message: "ERROR: Mismatch between ballotCreatedEvents.length = "
+        .concat(ballotCreatedEvents.length.toString())
+        .concat(" and eventNumberCount[ballotCreatedEventType] = ")
+        .concat(eventNumberCount[ballotCreatedEventType]!.toString())
+    )
+
+    Test.assert(ballotBurnedEvents.length == eventNumberCount[ballotBurnedEventType]!,
+        message: "ERROR: Mismatch between ballotBurnedEvents.length = "
+        .concat(ballotBurnedEvents.length.toString())
+        .concat(" and eventNumberCount[ballotBurnedEventType] = ")
+        .concat(eventNumberCount[ballotBurnedEventType]!.toString())
+    )
+
+    Test.assert(ballotSubmittedEvents.length == eventNumberCount[ballotSubmittedEventType]!,
+        message: "ERROR: Mismatch between ballotSubmittedEvents.length = "
+        .concat(ballotSubmittedEvents.length.toString())
+        .concat(" and eventNumberCount[ballotSubmittedEventType] = ")
+        .concat(eventNumberCount[ballotSubmittedEventType]!.toString())
+    )
+
+    Test.assert(ballotReplacedEvents.length == eventNumberCount[ballotReplacedEventType]!,
+        message: "ERROR: Mismatch between ballotReplacedEvents.length = "
+        .concat(ballotReplacedEvents.length.toString())
+        .concat(" and eventNumberCount[ballotReplacedEventType] = ")
+        .concat(eventNumberCount[ballotReplacedEventType]!.toString())
+    )
+    
+    Test.assert(ballotsWithdrawnEvents.length == eventNumberCount[ballotsWithdrawnEventType]!,
+        message: "ERROR: Mismatch between ballotsWithdrawnEvents.length = "
+        .concat(ballotsWithdrawnEvents.length.toString())
+        .concat(" and eventNumberCount[ballotsWithdrawnEventType] = ")
+        .concat(eventNumberCount[ballotsWithdrawnEventType]!.toString())
+    )
+
+    Test.assert(electionCreatedEvents.length == eventNumberCount[electionCreatedEventType]!,
+        message: "ERROR: Mismatch between electionCreatedEvents.length = "
+        .concat(electionCreatedEvents.length.toString())
+        .concat(" and eventNumberCount[electionCreatedEventType] = ")
+        .concat(eventNumberCount[electionCreatedEventType]!.toString())
+    )
+
+    Test.assert(electionDestroyedEvents.length == eventNumberCount[electionDestroyedEventType]!,
+        message: "ERROR: Mismatch between electionDestroyedEvents.length = "
+        .concat(electionDestroyedEvents.length.toString())
+        .concat(" and eventNumberCount[electionDestroyedEventType] = ")
+        .concat(eventNumberCount[electionDestroyedEventType]!.toString())
+    )
+    
+    Test.assert(nonNilResourceReturnedEvents.length == eventNumberCount[nonNilResourceReturnedEventType]!,
+        message: "ERROR: Mismatch between nonNilResourceReturnedEvents.length = "
+        .concat(nonNilResourceReturnedEvents.length.toString())
+        .concat(" and eventNumberCount[nonNilResourceReturnedEventType] = ")
+        .concat(eventNumberCount[nonNilResourceReturnedEventType]!.toString())
+    )
+    
+    Test.assert(voteBoxCreatedEvents.length == eventNumberCount[voteBoxCreatedEventType]!,
+        message: "ERROR: Mismatch between voteBoxCreatedEvents.length = "
+        .concat(voteBoxCreatedEvents.length.toString())
+        .concat(" and eventNumberCount[voteBoxCreatedEventType] = ")
+        .concat(eventNumberCount[voteBoxCreatedEventType]!.toString())
+    )
+
+    Test.assert(voteBoxDestroyedEvents.length == eventNumberCount[voteBoxDestroyedEventType]!,
+        message: "ERROR: Mismatch between voteBoxDestroyedEvents.length = "
+        .concat(voteBoxDestroyedEvents.length.toString())
+        .concat(" and eventNumberCount[voteBoxDestroyedEventType] = ")
+        .concat(eventNumberCount[voteBoxDestroyedEventType]!.toString())
+    )
+
+    Test.assert(electionsDestroyedEvents.length == eventNumberCount[electionsDestroyedEventType]!,
+        message: "ERROR: Mismatch between electionDestroyedEvents.length = "
+        .concat(electionsDestroyedEvents.length.toString())
+        .concat(" and eventNumberCount[electionsDestroyedEventType] = ")
+        .concat(eventNumberCount[electionsDestroyedEventType]!.toString())
+    )
 }
 
 // TRANSACTIONS
@@ -99,6 +164,7 @@ access(all) let getElectionStoragePathSc: String = "../scripts/10_get_election_s
 access(all) let getElectionPublicPathSc: String = "../scripts/11_get_election_public_path.cdc"
 access(all) let getElectionsListSc: String = "../scripts/12_get_elections_list.cdc"
 access(all) let getBallotOptionSc: String = "../scripts/13_get_ballot_option.cdc"
+access(all) let getBallotIdSc: String = "../scripts/14_get_ballot_id.cdc"
 
 // PATHS
 // VoteBoxStandard.cdc
@@ -168,11 +234,24 @@ access(all) let account04: Test.TestAccount = Test.createAccount()
 access(all) let account05: Test.TestAccount = Test.createAccount()
 
 access(all) let accounts: [Test.TestAccount] = [account01, account02, account03, account04, account05]
+access(all) let accountAddresses: [Address] = [account01.address, account02.address, account03.address, account04.address, account05.address]
 
 access(all) let verbose: Bool = true
 
 // Simple array to keep the electionIds of the active Election resources
 access(all) var activeElectionIds: [UInt64] = []
+
+// And another simple dictionary to store the ballotIds for the Ballots given to the accounts
+access(all) var voterBallotIds: {Address: [UInt64]} = {
+    account01.address: [],
+    account02.address: [],
+    account03.address: [],
+    account04.address: [],
+    account05.address: []
+}
+
+// And this one just a simple array to keep all the ballotIds for easier retrieval
+access(all) var activeBallotIds: [UInt64] = []
 
 // And this dictionary keeps a list of open Elections in a {electionId:String} format.
 access(all) var electionList: {UInt64: String} = {}
@@ -275,18 +354,49 @@ access(all) fun testDeployerAddress() {
 
     let contractConsistency: Bool = scResult.returnValue as! Bool
 
-    Test.assert(contractConsistency)
+    Test.assert(contractConsistency,
+        message: "ERROR: Contracts inside the project are not consistent!"
+    )
 }
 
 /**
     Test that the storage and public paths defined at the contract levels are as expected.
 **/
 access(all) fun testContractPaths() {
-    Test.assertEqual(expectedElectionIndexStoragePath, VoteBooth.electionIndexStoragePath)
-    Test.assertEqual(expectedElectionIndexPublicPath, VoteBooth.electionIndexPublicPath)
-    Test.assertEqual(expectedVoteBoothPrinterAdminStoragePath, VoteBooth.voteBoothPrinterAdminStoragePath)
-    Test.assertEqual(expectedVoteBoxStoragePath, VoteBoxStandard.voteBoxStoragePath)
-    Test.assertEqual(expectedVoteBoxPublicPath, VoteBoxStandard.voteBoxPublicPath)
+    Test.assert(expectedElectionIndexStoragePath == VoteBooth.electionIndexStoragePath,
+        message: "ERROR: Expected ElectionIndexStoragePath = "
+        .concat(expectedElectionIndexStoragePath.toString())
+        .concat(" but got this instead ")
+        .concat(VoteBooth.electionIndexStoragePath.toString())
+    )
+    
+    Test.assert(expectedElectionIndexPublicPath == VoteBooth.electionIndexPublicPath,
+        message: "ERROR: Expected ElectionIndexPublicPath = "
+        .concat(expectedElectionIndexPublicPath.toString())
+        .concat(" but got this instead ")
+        .concat(VoteBooth.electionIndexPublicPath.toString())
+    )
+    
+    Test.assert(expectedVoteBoothPrinterAdminStoragePath == VoteBooth.voteBoothPrinterAdminStoragePath,
+        message: "ERROR: Expected VoteBoothPrinterAdminStoragePath = "
+        .concat(expectedVoteBoothPrinterAdminStoragePath.toString())
+        .concat(" but got this instead ")
+        .concat(VoteBooth.voteBoothPrinterAdminStoragePath.toString())
+    )
+    
+    Test.assert(expectedVoteBoxStoragePath == VoteBoxStandard.voteBoxStoragePath,
+        message: "ERROR: Expected VoteBoxStoragePath = "
+        .concat(expectedVoteBoxStoragePath.toString())
+        .concat(" but got this instead ")
+        .concat(VoteBoxStandard.voteBoxStoragePath.toString())
+    )
+    
+    Test.assert(expectedVoteBoxPublicPath == VoteBoxStandard.voteBoxPublicPath,
+        message: "ERROR: Expected VoteBoxPublicPath = "
+        .concat(expectedVoteBoxPublicPath.toString())
+        .concat(" but got this instead ")
+        .concat(VoteBoxStandard.voteBoxPublicPath.toString())
+    )
 }
 
 /**
@@ -333,7 +443,6 @@ access(all) fun testCreateElection() {
     var eventElectionId: UInt64 = 0
     var eventElectionName: String = ""
 
-    // TODO: REPEAT THIS ANALYSIS FOR THE REST OF THE EVENT LOGIC
     // Limit the analysis of the electionCreatedEvents to the last ones only
     for electionCreatedEvent in electionCreatedEvents.slice(from: (electionCreatedEvents.length - electionNames.length), upTo: (electionCreatedEvents.length)) {
         let normalisedEvent:ElectionStandard.ElectionCreated = electionCreatedEvent as! ElectionStandard.ElectionCreated
@@ -365,18 +474,37 @@ access(all) fun testCreateElection() {
     electionList = scResult.returnValue as! {UInt64: String}
 
     // Validate that this dictionary is consistent
-    Test.assert(electionList.length == electionNames.length)
+    Test.assert(electionList.length == electionNames.length,
+        message: "ERROR: Expected "
+        .concat(electionNames.length.toString())
+        .concat(" got ")
+        .concat(electionList.length.toString())
+        .concat(" instead. ")
+    )
 
     for electionId in electionList.keys {
         // Test that the electionIds returned as keys are in the activeElectionIds set
-        Test.assert(activeElectionIds.contains(electionId))
+        Test.assert(activeElectionIds.contains(electionId),
+            message: "ERROR: The electionId retrieved "
+            .concat(electionId.toString())
+            .concat(" is not among the ones in the activeElectionIds!")
+        )
 
         // And test that the names returned are also inside the array used to create them.
-        Test.assert(electionNames.contains(electionList[electionId]!))
+        Test.assert(electionNames.contains(electionList[electionId]!),
+            message: "ERROR: The electionName retrieved "
+            .concat(electionList[electionId]!)
+            .concat(" is not among the ones in electionNames!")
+        )
     }
 
     // Check that we got the same number of electionIds back
-    Test.assertEqual(activeElectionIds.length, electionNames.length)
+    Test.assert(activeElectionIds.length == electionNames.length,
+        message: "ERROR: Got"
+        .concat(activeElectionIds.length.toString())
+        .concat(" active Elections but expected ")
+        .concat(electionNames.length.toString())
+    )
 
     // Use a loop to validate each parameter set in the createElection transaction
     var electionName: String = ""
@@ -406,7 +534,11 @@ access(all) fun testCreateElection() {
 
         // Because Cadence does not guarantees the order in which the electionIds were returned, I cannot compare these based on indexes.
         // The next best thing is to ensure that the item returned exits in the set used to construct the Election in the first place.
-        Test.assert(electionNames.contains(electionName))
+        Test.assert(electionNames.contains(electionName),
+            message: "ERROR: electionName for activeElectionId "
+            .concat(activeElectionId.toString())
+            .concat(" is not among the ones in electionNames!")
+        )
 
         // Repeat for the rest
         // Election Ballot
@@ -419,7 +551,11 @@ access(all) fun testCreateElection() {
 
         electionBallot = scResult.returnValue as! String
 
-        Test.assert(electionBallots.contains(electionBallot))
+        Test.assert(electionBallots.contains(electionBallot),
+            message: "ERROR: electionBallot for activeElectionId "
+            .concat(activeElectionId.toString())
+            .concat(" is not among the ones in electionBallots!")
+        )
 
         // Election Options
         scResult = executeScript(
@@ -428,7 +564,12 @@ access(all) fun testCreateElection() {
         )
         Test.expect(scResult, Test.beSucceeded())
         electionOption = scResult.returnValue as! {UInt8: String}
-        Test.assert(electionOptions.contains(electionOption))
+        
+        Test.assert(electionOptions.contains(electionOption),
+            message: "ERROR: electionOptions for activeElectionId "
+            .concat(activeElectionId.toString())
+            .concat(" is not among the ones in electionOptions!")
+        )
 
         // Election Id
         scResult = executeScript(
@@ -437,7 +578,11 @@ access(all) fun testCreateElection() {
         )
         Test.expect(scResult, Test.beSucceeded())
         electionId = scResult.returnValue as! UInt64
-        Test.assert(activeElectionIds.contains(electionId))
+        Test.assert(activeElectionIds.contains(electionId),
+            message: "ERROR: electionId for activeElectionId "
+            .concat(activeElectionId.toString())
+            .concat(" is not among the ones in activeElectionIds!")
+        )
 
         // Public Encryption Key
         scResult = executeScript(
@@ -446,7 +591,11 @@ access(all) fun testCreateElection() {
         )
         Test.expect(scResult, Test.beSucceeded())
         electionPublicKey = scResult.returnValue as! [UInt8]
-        Test.assert(electionPublicEncryptionKeys.contains(electionPublicKey))
+        Test.assert(electionPublicEncryptionKeys.contains(electionPublicKey),
+            message: "ERROR: electionPublicKey for activeElectionId "
+            .concat(activeElectionId.toString())
+            .concat(" is not among the ones in electionPublicEncryptionKeys!")
+        )
 
         // Election Capability
         scResult = executeScript(
@@ -464,8 +613,19 @@ access(all) fun testCreateElection() {
         )
         Test.expect(scResult, Test.beSucceeded())
         electionTotals = scResult.returnValue as! {String: UInt}
-        Test.assert(electionTotals["totalBallotsMinted"] == 0)
-        Test.assert(electionTotals["totalBallotsSubmitted"] == 0)
+        Test.assert(electionTotals["totalBallotsMinted"] == 0,
+            message: "ERROR: Election with id "
+            .concat(activeElectionId.toString())
+            .concat(" has a non-zero totalBallotsMinted: ")
+            .concat(electionTotals["totalBallotsMinted"]!.toString())
+        )
+
+        Test.assert(electionTotals["totalBallotsSubmitted"] == 0,
+            message: "ERROR: Election with id "
+            .concat(activeElectionId.toString())
+            .concat(" has a non-zero totalBallotsSubmitted: ")
+            .concat(electionTotals["totalBallotsSubmitted"]!.toString())
+        )
 
         // Election Storage Path
         scResult = executeScript(
@@ -474,7 +634,11 @@ access(all) fun testCreateElection() {
         )
         Test.expect(scResult, Test.beSucceeded())
         electionStoragePath = scResult.returnValue as! StoragePath
-        Test.assert(electionStoragePaths.contains(electionStoragePath!))
+        Test.assert(electionStoragePaths.contains(electionStoragePath!),
+            message: "The electionStoragePath for activeElectionId "
+            .concat(activeElectionId.toString())
+            .concat(" is not among the ones in electionStoragePaths!")
+        )
 
         // Election Public Path
         scResult = executeScript(
@@ -483,7 +647,11 @@ access(all) fun testCreateElection() {
         )
         Test.expect(scResult, Test.beSucceeded())
         electionPublicPath = scResult.returnValue as! PublicPath
-        Test.assert(electionPublicPaths.contains(electionPublicPath!))
+        Test.assert(electionPublicPaths.contains(electionPublicPath!),
+            message: "The electionPublicPath for activeElectionId "
+            .concat(activeElectionId.toString())
+            .concat(" is not among the ones in electionPublicPaths!")
+        )
 
         // At the end of this cycle, check if the activeElectionId matches the selectedElectionId and, if so, set the selected set of parameters
         if (selectedElectionId == activeElectionId) {
@@ -520,6 +688,17 @@ access(all) fun testCreateVoteBox() {
     eventNumberCount[voteBoxCreatedEventType] = eventNumberCount[voteBoxCreatedEventType]! + accounts.length
     validateEvents()
 
+    var eventVoterAddress: Address? = nil
+    for voteBoxCreatedEvent in voteBoxCreatedEvents.slice(from: (voteBoxCreatedEvents.length - accounts.length), upTo: (voteBoxCreatedEvents.length)) {
+        let normalisedEvent: VoteBoxStandard.VoteBoxCreated = voteBoxCreatedEvent as! VoteBoxStandard.VoteBoxCreated
+
+        eventVoterAddress = normalisedEvent._voterAddress
+
+        Test.assert(accountAddresses.contains(eventVoterAddress!),
+            message: "ERROR: VoteBox created for address ".concat(eventVoterAddress!.toString()).concat(" but the address is not among the defined ones!")
+        )
+    }
+
     var activeBallots: Int = 0
     // For each voter, grab the list of activeBallots out of their VoteBoxes. Each should be empty
     for account in accounts {
@@ -534,7 +713,12 @@ access(all) fun testCreateVoteBox() {
         activeBallots = (scResult!.returnValue as! [UInt64]).length
 
         // Each should be empty still
-        Test.assert(activeBallots == 0)
+        Test.assert(activeBallots == 0,
+            message: "ERROR: The VoteBox created for account "
+            .concat(account.address.toString())
+            .concat(" has a non-zero count for activeBallots: ")
+            .concat(activeBallots.toString())
+        )
     }
 }
 
@@ -575,9 +759,57 @@ access(all) fun testPrintBallotIntoVoteBox() {
         Test.expect(txResult, Test.beSucceeded())
     }
 
+    // Fetch the ballotIds of each Ballot minted into the proper dictionary
+    for account in accounts {
+        scResult = executeScript(
+            getBallotIdSc,
+            [account.address, selectedElectionId]
+        )
+
+        Test.expect(scResult, Test.beSucceeded())
+
+        let newBallotId: UInt64? = scResult!.returnValue as! UInt64?
+
+        if (newBallotId == nil) {
+            panic(
+                "ERROR: Unable to get a valid ballotId for the VoteBox in account "
+                .concat(account.address.toString())
+                .concat(" for electionId ")
+                .concat(selectedElectionId.toString())
+            )
+        }
+        else {
+            voterBallotIds[account.address]!.append(newBallotId!)
+            activeBallotIds.append(newBallotId!)
+        }
+    }
+
     // Validate BallotCreated events. I should have one per account used
     eventNumberCount[ballotCreatedEventType] = eventNumberCount[ballotCreatedEventType]! + accounts.length
     validateEvents()
+
+    var eventBallotId: UInt64 = 0
+    var eventLinkedElectionId: UInt64 = 0
+
+    for ballotCreatedEvent in ballotCreatedEvents.slice(from: (ballotCreatedEvents.length - accounts.length), upTo: (ballotCreatedEvents.length)) {
+        let normalisedEvent: BallotStandard.BallotCreated = ballotCreatedEvent as! BallotStandard.BallotCreated
+
+        eventBallotId = normalisedEvent._ballotId
+        eventLinkedElectionId = normalisedEvent._linkedElectionId
+
+        Test.assert(activeBallotIds.contains(eventBallotId),
+            message: "ERROR: Got a BallotCreated event with ballotId "
+            .concat(eventBallotId.toString())
+            .concat(" but this ballotId does not exist in the activeBallotIds list!")
+        )
+
+        Test.assert(eventLinkedElectionId == selectedElectionId,
+            message: "ERROR: Got a BallotCreated event with a linkedElectionId "
+            .concat(eventLinkedElectionId.toString())
+            .concat(" but expected this one: ")
+            .concat(selectedElectionId.toString())
+        )
+    }
 
     // Do another cycle and check, for each account, if the electionName, electionBallot, etc. matches the selected ones
     // Run the getter scripts of before but providing the account address as inputs to trigger the VoteBox retrieval circuit
@@ -591,7 +823,13 @@ access(all) fun testPrintBallotIntoVoteBox() {
 
         electionName = scResult!.returnValue as! String
 
-        Test.assertEqual(electionName, selectedElectionName)
+        Test.assert(electionName == selectedElectionName,
+            message: "ERROR: The electionName for election "
+            .concat(selectedElectionId.toString())
+            .concat(" from a Ballot in account ")
+            .concat(account.address.toString())
+            .concat(" does not matches the selected one!")
+        )
 
         scResult = executeScript(
             getElectionBallotSc,
@@ -602,7 +840,13 @@ access(all) fun testPrintBallotIntoVoteBox() {
 
         electionBallot = scResult!.returnValue as! String
 
-        Test.assertEqual(electionBallot, selectedElectionBallot)
+        Test.assert(electionBallot == selectedElectionBallot,
+            message: "ERROR: The electionBallot for election "
+            .concat(selectedElectionId.toString())
+            .concat(" from a Ballot in account ")
+            .concat(account.address.toString())
+            .concat(" does not matches the selected one!")
+        )
 
         scResult = executeScript(
             getElectionOptionsSc,
@@ -613,7 +857,13 @@ access(all) fun testPrintBallotIntoVoteBox() {
 
         electionOptions = scResult!.returnValue as! {UInt8: String}
 
-        Test.assertEqual(electionOptions, selectedElectionOptions)
+        Test.assert(electionOptions == selectedElectionOptions,
+            message: "ERROR: electionOptions for election "
+            .concat(selectedElectionId.toString())
+            .concat(" from a Ballot in account ")
+            .concat(account.address.toString())
+            .concat(" does not matches the selected ones!")
+        )
 
         scResult = executeScript(
             getElectionIdSc,
@@ -624,7 +874,13 @@ access(all) fun testPrintBallotIntoVoteBox() {
 
         electionId = scResult!.returnValue as! UInt64
 
-        Test.assertEqual(electionId, selectedElectionId)
+        Test.assert(electionId == selectedElectionId,
+            message: "ERROR: electionId for election "
+            .concat(selectedElectionId.toString())
+            .concat(" from a Ballot in account ")
+            .concat(account.address.toString())
+            .concat(" does not match the selected one!")
+        )
 
         scResult = executeScript(
             getElectionPublicEncryptionKeySc,
@@ -635,7 +891,13 @@ access(all) fun testPrintBallotIntoVoteBox() {
 
         electionPublicEncryptionKey = scResult!.returnValue as! [UInt8]
 
-        Test.assertEqual(electionPublicEncryptionKey, selectedElectionPublicEncryptionKey)
+        Test.assert(electionPublicEncryptionKey == selectedElectionPublicEncryptionKey,
+            message: "ERROR: electionPublicEncryptionKey for election "
+            .concat(selectedElectionId.toString())
+            .concat(" from a Ballot in account ")
+            .concat(account.address.toString())
+            .concat(" does not match the selected one!")
+        )
 
         scResult = executeScript(
             getElectionCapabilitySc,
@@ -662,10 +924,23 @@ access(all) fun testPrintBallotIntoVoteBox() {
         electionTotalBallotsSubmitted = electionTotals["totalBallotsSubmitted"]!
 
         // The Election should have a totalBallotsMinted equal to the number of accounts
-        Test.assertEqual(Int(electionTotalBallotsMinted), accounts.length)
+        Test.assert(Int(electionTotalBallotsMinted) == accounts.length,
+            message: "ERROR: The totalBallotsMinted for election "
+            .concat(selectedElectionId.toString())
+            .concat(" is set at ")
+            .concat(electionTotalBallotsMinted.toString())
+            .concat(" but expected ")
+            .concat(accounts.length.toString())
+        )
 
         // But not the submitted totals, at least not yet. These should still be 0
-        Test.assertEqual(Int(electionTotalBallotsSubmitted), 0)
+        Test.assert(Int(electionTotalBallotsSubmitted) == 0,
+            message: "ERROR: The totalBallotsSubmitted for election "
+            .concat(selectedElectionId.toString())
+            .concat(" is set at ")
+            .concat(electionTotalBallotsSubmitted.toString())
+            .concat(" but expected 0!")
+        )
 
         // Repeat the call, but from the VoteBox reference side
         scResult = executeScript(
@@ -681,8 +956,36 @@ access(all) fun testPrintBallotIntoVoteBox() {
         electionTotalBallotsSubmitted = electionTotals["totalBallotsSubmitted"]!
 
         // And test that the same results are consistent from the ones obtained directly from the Election reference.
-        Test.assertEqual(Int(electionTotalBallotsMinted), accounts.length)
-        Test.assertEqual(Int(electionTotalBallotsSubmitted), 0)
+        Test.assert(Int(electionTotalBallotsMinted) == accounts.length,
+            message: "ERROR: The totalBallotsMinted for election "
+            .concat(selectedElectionId.toString())
+            .concat(" from a Ballot in account ")
+            .concat(account.address.toString())
+            .concat(" counts at ")
+            .concat(electionTotalBallotsMinted.toString())
+            .concat(" but expected ")
+            .concat(accounts.length.toString())
+        )
+        Test.assert(Int(electionTotalBallotsSubmitted) == 0,
+            message: "ERROR: The totalBallotsSubmitted for election "
+            .concat(selectedElectionId.toString())
+            .concat(" from a Ballot in account ")
+            .concat(account.address.toString())
+            .concat(" counts at ")
+            .concat(electionTotalBallotsSubmitted.toString())
+            .concat(" but expected 0!")
+        )
+    }
+
+    // Try to re-deposit a new Ballot for the same election into each account and check that the transaction fails.
+    for account in accounts {
+        txResult = executeTransaction(
+            createBallotTx,
+            [selectedElectionId, account.address],
+            deployer
+        )
+
+        Test.expect(txResult, Test.beFailed())
     }
 }
 
@@ -783,7 +1086,181 @@ access(all) fun testCastBallot() {
 access(all) fun testSubmitBallot() {
     var txResult: Test.TransactionResult? = nil
     var scResult: Test.ScriptResult? = nil
+    var eventBallotId: UInt64 = 0
+    var eventElectionId: UInt64 = 0
 
+    for account in accounts {
+        txResult = executeTransaction(
+            submitBallotTx,
+            [selectedElectionId],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+        // If the transaction was successful, grab the event emitted and retrieve the ballotId of the Ballot submitted from it
+        // Increment the event count for the BallotSubmitted event
+        eventNumberCount[ballotSubmittedEventType] = eventNumberCount[ballotSubmittedEventType]! + 1
+        validateEvents()
+
+        // Update the ballot and electionIds from the captured event
+        let normalisedEvent: ElectionStandard.BallotSubmitted = ballotSubmittedEvents[ballotSubmittedEvents.length - 1] as! ElectionStandard.BallotSubmitted
+        eventBallotId = normalisedEvent._ballotId
+        eventElectionId = normalisedEvent._electionId
+
+        Test.assert(activeBallotIds.contains(eventBallotId),
+            message: "ERROR: Got an BallotSubmitted event with ballotId "
+            .concat(eventBallotId.toString())
+            .concat(" but this Id is not among the activeBallotIds!")
+        )
+
+        Test.assert(selectedElectionId == eventElectionId,
+            message: "ERROR: Got a BallotSubmitted event for Election with id "
+            .concat(eventElectionId.toString())
+            .concat(" but the Ballot was minted for a selected electionId of ")
+            .concat(selectedElectionId.toString())
+        )
+    }
+
+    // Check that the Election totals are consistent as well. The totalBallotsSubmitted should have been incremented by the number of
+    // accounts considered.
+    scResult = executeScript(
+        getElectionTotalsSc,
+        [selectedElectionId, nil]
+    )
+
+    Test.expect(scResult, Test.beSucceeded())
+
+    let electionTotals: {String: UInt} = scResult!.returnValue as! {String: UInt}
+    
+    Test.assert(electionTotals["totalBallotsMinted"]! == UInt(accounts.length),
+        message: "ERROR: Election "
+        .concat(selectedElectionId.toString())
+        .concat(" has ")
+        .concat(electionTotals["totalBallotsMinted"]!.toString())
+        .concat(" ballots minted, but these should be ")
+        .concat(accounts.length.toString())
+    )
+
+    Test.assert(electionTotals["totalBallotsSubmitted"]! == UInt(accounts.length),
+        message: "ERROR: Election "
+        .concat(selectedElectionId.toString())
+        .concat(" has ")
+        .concat(electionTotals["totalBallotsSubmitted"]!.toString())
+        .concat(" ballots submitted, but these should be ")
+        .concat(accounts.length.toString())
+    )
+}
+
+/**
+    Mint, cast and re-submit another round of Ballots to each of the test accounts to test the re-submit circuit.
+**/
+access(all) fun testReSubmitBallots() {
+    var txResult: Test.TransactionResult? = nil
+    var scResult: Test.ScriptResult? = nil
+    var eventBallotId: UInt64 = 0
+    var eventLinkedElectionId: UInt64 = 0
+
+    // Start by printing a new Ballot into each of the test accounts. It should be OK now because the old Ballot was submitted already
+    for account in accounts {
+        txResult = executeTransaction(
+            createBallotTx,
+            [selectedElectionId, account.address],
+            deployer
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+        // Grab the ballotId from the respective BallotCreated event and append it to the required variables. There's no need to validate every aspect of 
+        // this event since this logic was already run before.
+        ballotCreatedEvents = Test.eventsOfType(ballotCreatedEventType)
+
+        let ballotCreatedEvent: BallotStandard.BallotCreated = ballotCreatedEvents[ballotCreatedEvents.length - 1] as! BallotStandard.BallotCreated
+
+        eventBallotId = ballotCreatedEvent._ballotId
+        eventLinkedElectionId = ballotCreatedEvent._linkedElectionId
+
+        // Validate the electionId retrieved
+        Test.assert(eventLinkedElectionId == selectedElectionId,
+            message: "ERROR: Got a BallotCreated event with a linkedElectionId "
+            .concat(eventLinkedElectionId.toString())
+            .concat(" but expected this one: ")
+            .concat(selectedElectionId.toString())
+        )
+
+        // Append the ballotId obtained to both the activeBallotIds and voterBallotIds
+        activeBallotIds.append(eventBallotId)
+    }
+
+    // Validate the election totals after this step. The total ballots minted should have been increased by the number of test accounts
+    scResult = executeScript(
+        getElectionTotalsSc,
+        [selectedElectionId, nil]
+    )
+
+    Test.expect(scResult, Test.beSucceeded())
+
+    var electionTotals: {String: UInt} = scResult!.returnValue as! {String: UInt}
+    var electionTotalBallotsMinted: UInt = electionTotals["totalBallotsMinted"]!
+    var electionTotalBallotsSubmitted: UInt = electionTotals["totalBallotsSubmitted"]!
+
+    // I should have twice as many Ballots Minted than before
+    Test.assert(Int(electionTotalBallotsMinted) == (accounts.length*2),
+        message: "ERROR: Mismatch between the totalBallotsMinted for election "
+        .concat(selectedElectionId.toString())
+        .concat(". Expected ")
+        .concat((accounts.length*2).toString())
+        .concat(" totalBallotsMinted, got ")
+        .concat(electionTotalBallotsMinted.toString())
+    )
+
+    // But only one accounts.length worth of totalBallotsSubmitted
+    Test.assert(Int(electionTotalBallotsSubmitted) == accounts.length,
+        message: "ERROR: Mismatch between the totalBallotsSubmitted for election "
+        .concat(selectedElectionId.toString())
+        .concat(". Expected ")
+        .concat(accounts.length.toString())
+        .concat(" totalBallotsSubmitted, got ")
+        .concat(electionTotalBallotsSubmitted.toString())
+    )
+
+    var newOption: String = ""
+
+    // Cast the new Ballot for each test account. Use the first set of options
+    for account in accounts {
+        txResult = executeTransaction(
+            castBallotTx,
+            [selectedElectionId, voterOptions[account.address]!],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+        // This time around, run the script to return the option set in the Ballot and validate that it matches the expected one.
+        scResult = executeScript(
+            getBallotOptionSc,
+            [selectedElectionId, account.address]
+        )
+
+        Test.expect(scResult, Test.beSucceeded())
+
+        newOption = scResult!.returnValue as! String
+
+        Test.assert(newOption == voterOptions[account.address],
+            message: "ERROR: Ballot "
+            .concat(voterBallotIds[account.address]![0].toString())
+            .concat(" cast for election ")
+            .concat(selectedElectionId.toString())
+            .concat(" and for voter ")
+            .concat(account.address.toString())
+            .concat(" was set with option ")
+            .concat(moreVoterOptions[account.address]!)
+            .concat(" but the Ballot returned ")
+            .concat(newOption)
+        )
+    }
+
+    // Done. Submit the Ballots in storage
     for account in accounts {
         txResult = executeTransaction(
             submitBallotTx,
@@ -794,19 +1271,50 @@ access(all) fun testSubmitBallot() {
         Test.expect(txResult, Test.beSucceeded())
     }
 
-    // Validate that all BallotSubmitted events match the expected number and parameters
+    // Validate the election totals. I should have accounts.length*2 totalBallotsMinted since this is the second round of voting.
+    // And I should still have accounts.length totalBallotsSubmitted since the ones in this round are going to replace the old ones,
+    // and so the total count should remain the same.
+    scResult = executeScript(
+        getElectionTotalsSc,
+        [selectedElectionId, nil]
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    electionTotals = scResult!.returnValue as! {String: UInt}
+    electionTotalBallotsMinted = electionTotals["totalBallotsMinted"]!
+    electionTotalBallotsSubmitted = electionTotals["totalBallotsSubmitted"]!
+
+    Test.assert(Int(electionTotalBallotsMinted) == (accounts.length*2),
+        message: "ERROR: Mismatch between the totalBallotsMinted for election "
+        .concat(selectedElectionId.toString())
+        .concat(". Expected ")
+        .concat((accounts.length*2).toString())
+        .concat(" totalBallotsMinted, got ")
+        .concat(electionTotalBallotsMinted.toString())
+    )
+
+    Test.assert(Int(electionTotalBallotsSubmitted) == (accounts.length),
+        message: "ERROR: Mismatch between the totalBallotsSubmitted for election "
+        .concat(selectedElectionId.toString())
+        .concat(". Expected ")
+        .concat((accounts.length*2).toString())
+        .concat(" totalBallotsSubmitted, got ")
+        .concat(electionTotalBallotsSubmitted.toString())
+    )
+    // Done!
 }
 
 /**
     This test finalises the base process by withdrawing the Ballots from the Election set in the selectedElectionId 
 **/
 access(all) fun _testWithdrawBallots() {
-
+    // TODO: THIS TOO
 }
 
 /**
     This test destroys the remaining process structures created during the voting process just to test that the account storage does gets cleaned and all the relevant events are emitted as expected.
 **/
 access(all) fun _testCleanEnvironment() {
-
+    // TODO: ONE MORE!
 }

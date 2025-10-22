@@ -42,6 +42,7 @@ access(all) contract VoteBoxStandard {
         access(all) view fun getElectionTotalBallotsMinted(electionId: UInt64): UInt?
         access(all) view fun getElectionTotalBallotsSubmitted(electionId: UInt64): UInt?
         access(all) view fun getVote(electionId: UInt64): String?
+        access(all) view fun getBallotId(electionId: UInt64): UInt64?
     }
     
     access(all) resource VoteBox: Burner.Burnable, VoteBoxPublic {
@@ -60,6 +61,24 @@ access(all) contract VoteBoxStandard {
         // point the address of the account storage differs from the one set with the resource constructor, the voter is prevented from accessing and
         // invoking functions.
         access(self) let voteBoxOwner: Address
+
+        /**
+            Getter function to return the ballotId for the a Ballot stored in this VoteBox under the electionId provided as input argument.
+
+            @param electionId (UInt64) The election identifier for the Ballot to retrieve.
+
+            @returns UInt64? If a Ballot exists for the electionId provided, this function returns its ballotId. Otherwise this returns nil.
+        **/
+        access(all) view fun getBallotId(electionId: UInt64): UInt64? {
+            let ballotRef: &{BallotStandard.BallotPublic}? = &self.activeBallots[electionId]
+
+            if (ballotRef == nil) {
+                return nil
+            }
+            else {
+                return ballotRef!.ballotId
+            }
+        }
 
         /**
             This simple function returns the array of electionId corresponding to all the Ballots in storage that are considered active, i.e., they can be cast onto an Election resource.

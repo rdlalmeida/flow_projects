@@ -471,6 +471,20 @@ access(all) contract ElectionStandard {
 
             // All good. If the previous panic was not triggered, I have a valid indexToRemove in store. Get rid of the element
             let removedBallotId: UInt64 = self.mintedBallots.remove(at: indexToRemove!)
+
+            // Also, at any given point, the total ballot submitted need to be equal to the number of Ballots stored in this Election. Check this and panic if
+            // any inconsistencies are found.
+            if (self.getTotalBallotsSubmitted() != UInt(self.storedBallots.length)) {
+                panic(
+                    "ERROR: Contract inconsistency detected: Election "
+                    .concat(self.electionId.toString())
+                    .concat(" has a totalBallotsSubmitted of ")
+                    .concat(self.getTotalBallotsSubmitted().toString())
+                    .concat(" Ballots, but the internal storedBallots dictionary has ")
+                    .concat(self.storedBallots.length.toString())
+                    .concat(" Ballots in it! These parameters need to match!")
+                )
+            }
         }
 
         /**
