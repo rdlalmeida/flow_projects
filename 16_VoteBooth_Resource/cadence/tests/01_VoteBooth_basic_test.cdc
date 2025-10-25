@@ -149,6 +149,7 @@ access(all) let createVoteBoxTx: String = "../transactions/02_create_vote_box.cd
 access(all) let createBallotTx: String = "../transactions/03_create_ballot.cdc"
 access(all) let castBallotTx: String = "../transactions/04_cast_ballot.cdc"
 access(all) let submitBallotTx: String = "../transactions/05_submit_ballot.cdc"
+access(all) let tallyElectionTx: String = "../transactions/06_tally_election.cdc"
 
 // SCRIPTS
 access(all) let testContractConsistencySc: String = "../scripts/01_test_contract_consistency.cdc"
@@ -165,6 +166,8 @@ access(all) let getElectionPublicPathSc: String = "../scripts/11_get_election_pu
 access(all) let getElectionsListSc: String = "../scripts/12_get_elections_list.cdc"
 access(all) let getBallotOptionSc: String = "../scripts/13_get_ballot_option.cdc"
 access(all) let getBallotIdSc: String = "../scripts/14_get_ballot_id.cdc"
+access(all) let getElectionResultsSc: String = "../scripts/15_get_election_results.cdc"
+access(all) let isElectionFinishedSc: String = "../scripts/16_is_election_finished.cdc"
 
 // PATHS
 // VoteBoxStandard.cdc
@@ -1308,8 +1311,66 @@ access(all) fun testReSubmitBallots() {
 /**
     This test finalises the base process by withdrawing the Ballots from the Election set in the selectedElectionId 
 **/
-access(all) fun _testWithdrawBallots() {
-    // TODO: THIS TOO
+access(all) fun testTallyElection() {
+    // Confirm that the Election state (electionFinished) is still at false
+    var scResult: Test.ScriptResult = executeScript(
+        isElectionFinishedSc,
+        [selectedElectionId]
+    )
+
+    Test.expect(scResult, Test.beSucceeded())
+
+    var electionFinished: Bool = scResult.returnValue as! Bool
+
+    Test.assert(!electionFinished, 
+        message: "ERROR: Election "
+        .concat(selectedElectionId.toString())
+        .concat(" is not running any more! ")
+    )
+
+    // All logic is already encapsulated in the transaction in question. Run it.
+    let txResult: Test.TransactionResult = executeTransaction(
+        tallyElectionTx,
+        [selectedElectionId],
+        deployer
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    // Validate that the election state changed for true
+    scResult = executeScript(
+        isElectionFinishedSc,
+        [selectedElectionId]
+    )
+
+    electionFinished = scResult.returnValue as! Bool
+
+    Test.assert(electionFinished, 
+        message: "ERROR: Election "
+        .concat(selectedElectionId.toString())
+        .concat(" is still running! ")
+    )
+
+    // Grab the winningOption from the election
+    scResult = executeScript(
+        getElectionResultsSc,
+        [selectedElectionId]
+    )
+
+    Test.expect(scResult, Test.beSucceeded())
+
+    var winningOptions: {String: Int} = scResult.returnValue as! {String: Int}
+
+    // Check that something was indeed returned
+    Test.assert(winningOptions != {},
+        message: "ERROR: Election "
+        .concat(selectedElectionId.toString())
+        .concat(" did not produced any results!")
+    )
+
+    // Log out the Election results
+    log("Election ".concat(selectedElectionId.toString()).concat(" voting statistics: "))
+    log(winningOptions)
 }
 
 /**

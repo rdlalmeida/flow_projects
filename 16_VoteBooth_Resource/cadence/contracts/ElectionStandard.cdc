@@ -35,6 +35,8 @@ access(all) contract ElectionStandard {
     // Standard event to emit when a resource of an unexpected type is obtained at some point
     access(all) event NonNilResourceReturned(_resourceType: Type)
     
+    // This parameter stores the address that deployed this contract. This is useful to retrieve unauthorized references to the deployer
+    // account and to ensure contract consistency, i.e., that all contracts in this process are deployed in the same account.
     access(all) let deployerAddress: Address
 
     // This interface is used to expose the public version of the Election resource, i.e., which parameters and functions are available
@@ -44,6 +46,8 @@ access(all) contract ElectionStandard {
         access(all) let electionStoragePath: StoragePath
         access(all) let electionPublicPath: PublicPath
         
+        access(all) view fun getTalliedBallotsNumber(): Int
+        access(all) view fun isElectionFinished(): Bool
         access(all) view fun getElectionName(): String
         access(all) view fun getElectionBallot(): String
         access(all) view fun getElectionOptions(): {UInt8: String}
@@ -54,6 +58,7 @@ access(all) contract ElectionStandard {
         access(all) view fun getElectionCapability(): Capability?
         access(all) fun submitBallot(ballot: @BallotStandard.Ballot): Void
         access(all) view fun isBallotValid(ballotId: UInt64): Bool
+        access(all) view fun getElectionTally(): {String: Int}
     }
 
     // The definition of the ElectionStandard.Election resource
@@ -81,8 +86,8 @@ access(all) contract ElectionStandard {
 
         // Use these parameters to keep track of how many Ballots were printed and submitted for this particular Election instance
         // I set these as "access(ElectionAdmin)" because I want my BallotPrinterAdmin resource to operate on them and no one else.
-        access(ElectionAdmin) var totalBallotsMinted: UInt
-        access(ElectionAdmin) var totalBallotsSubmitted: UInt
+        access(ElectionStandard.ElectionAdmin) var totalBallotsMinted: UInt
+        access(ElectionStandard.ElectionAdmin) var totalBallotsSubmitted: UInt
 
         // The main structure to store the Ballots in this resource. Ballots are stored using a key that is derived from the voters
         // personal information, but anonymized through an hash digest or something of the sort. For now, keep it as a String to
@@ -91,13 +96,237 @@ access(all) contract ElectionStandard {
         // This array is used by the Election Administrator to store the ballotId of every Ballot
         // issued to be used in this particular Election. If a Ballot submitted is not in this list,
         // it cannot be accepted. If the Ballot is submitted successfully, remove it from this list
-        access(ElectionAdmin) var mintedBallots: [UInt64]
+        access(ElectionStandard.ElectionAdmin) var mintedBallots: [UInt64]
 
         // I also want to minimize the number of times I need to build the Capability to access this Election (the one that needs to 
         // be added to the Ballot resources), therefore I'm creating an internal, ElectionAdmin protected field in each Election to
         // store this value once the Election is ready to produce it. The Election needs to be constructed first, then saved somewhere
         // to allow this capability to be created
         access(ElectionStandard.ElectionAdmin) var electionCapability: Capability<&{ElectionStandard.ElectionPublic}>?
+
+        // Because I'm using Election both to manage the voting process and to store the final results, this flag is used to determine in
+        // which state the process is.
+        access(self) var electionFinished: Bool
+
+        // This array is going to be used to store the Ballots after tallying, just to keep them around just in case
+        access(self) var talliedBallots: @[BallotStandard.Ballot]
+
+        // And this dictionary is the one that contains the results, using a {electionBallot: count} format, where each ballot option 
+        // is used as key and the number of votes with that option as value.
+        access(self) var electionResults: {String: Int}
+
+        /**
+            Simple getter function for the electionResults dictionary.
+        **/
+        access(all) view fun getElectionTally(): {String: Int} {
+            return self.electionResults
+        }
+
+        /**
+            Function to calculate the final tally for this Election. This function receives an array of @BallotStandard.Ballot on purpose. This is because Cadence does not guarantee any order for the Ballots in this structure, which I'm using to increase the entropy among these ballots. Also, I'm making this function purposely more complex that in needs to be, but that's because I need an encryption/decryption step in this process that needs to happen off chain on purpose. As such, I have a function to withdraw the Ballots from an Election and another one to tally them. The idea is for this Ballots to be processed off chain, namely, their option decrypted outside of the smart contract process.
+
+            @param _ballotsToTally @[BallotStandard.Ballot]
+
+            @returns [{UInt8: String}] If successful, this function returns the ballot(s) that wins the Election, using the same format as these were set as ballotOptions. The reason why I'm returning an array instead of just a single element is that I want to cover cases where there are ties among the winning options. In that scenario, the function returns all the winning options in an array. Check the internal electionResults dictionary for detailed election results. This should be extremely rare, but there is a non-zero probability of this happening, so as the excellent programmer that I am, I'm going to cover it as well. And this is why people pay me the big bucks.
+        **/
+        access(ElectionStandard.ElectionAdmin) fun tallyElection(_ballotsToTally: @[BallotStandard.Ballot]): {String: Int} {
+            // Validate that there are no Ballots stored in this resource, both at the beginning and at the end.
+            pre {
+                self.storedBallots.length == 0: "ERROR: Unable to tally Election ".concat(self.electionId.toString()).concat(". This one still has stored Ballots in it!")
+                self.talliedBallots.length == 0: "ERROR: Election ".concat(self.electionId.toString()).concat(" talliedBallots array is not empty! There are ").concat(self.talliedBallots.length.toString()).concat(" Ballots in it already!")
+                !self.electionFinished: "ERROR: Election ".concat(self.electionId.toString()).concat(" is set as finished already!")
+            }
+
+            post {
+                self.storedBallots.length == 0: "ERROR: That tallying process for Election ".concat(self.electionId.toString()).concat(" still has ").concat(self.storedBallots.length.toString()).concat(" in storage still!")
+                self.electionFinished: "ERROR: Election ".concat(self.electionId.toString()).concat(" has finished tallying but is not yet set as finished.")
+                self.talliedBallots.length == before(_ballotsToTally.length): "ERROR: Not all Ballots were processed for Election ".concat(self.electionId.toString()).concat(": the length of self.talliedBallots does not match with the number of initial Ballots received as input.")
+            }
+
+            // Set this dictionary to return the result, in the format {winningBallot: ballotCount}. I'm returning this in an array to cover the (hopefully
+            // rare) possibility of the election ending in a tie between two options
+            var winningOptions: {String: Int} = {}
+
+            /**
+                The process from this point forward is simple: Process the received Ballot array inside a while loop since I cannot change resources within a for loop that uses part of that resource to regulate the loop.
+                Essentially:
+                1. Extract a Ballot from the input array.
+                2. Validate that the option set in it is among the available ones or set to "default" . If not, count the Ballot as "invalid"
+                3. Increment the respective element in the self.electionResults dictionary.
+                4. Move this Ballot into the self.talliedBallots internal array. Repeat steps 1--4 until the input array is empty.
+                5. Set the self.electionFinished flag to true once done.
+                6. Validate that the input array is empty and destroy it.
+                7. Analyse the self.electionResults dictionary and copy the entry(s) with the highest count to the "winningOptions" return dictionary.
+                8. Return the winningOptions return array to finish this process.
+            **/
+
+            // Set the available options, plus the "default" one, in an extra array for easier comparison.
+            var availableBallotOptions: [String] = self.getElectionOptions().values
+            availableBallotOptions.append("default")
+
+            var currentOption: String = ""
+
+            // Do this while there are Ballots still left in the input array
+            while (_ballotsToTally.length > 0) {
+                // 1, Extract a Ballot from the input array. Extract the head of the array so that the self.talliedBallots array maintains the same Ballot order
+                // as the input argument
+                let ballotToProcess: @BallotStandard.Ballot <- _ballotsToTally.removeFirst()
+
+                // 2. Validate the Ballot Option
+                currentOption = ballotToProcess.getOption()
+                if (availableBallotOptions.contains(currentOption)) {
+                    // 3. Increment the respective element in the self.electionResults dictionary
+                    self.electionResults[currentOption] = self.electionResults[currentOption]! + 1
+                }
+                else {
+                    self.electionResults["invalid"] = self.electionResults["invalid"]! + 1
+                }
+
+                // 4. Move this Ballot to the self.talliedBallots internal array
+                self.talliedBallots.append(<- ballotToProcess)
+            }
+
+            // 5. Set the self.electionFinished flag to true
+            self.electionFinished = true
+
+            // 6. Validate that the input array is empty and destroy it
+            if (_ballotsToTally.length != 0) {
+                panic(
+                    "ERROR: The input _ballotsToTally array for election "
+                    .concat(self.electionId.toString())
+                    .concat(" was not completely processed. The input array still has ")
+                    .concat(_ballotsToTally.length.toString())
+                    .concat(" elements in it!")
+                )
+            }
+            else {
+                destroy _ballotsToTally
+            }
+
+            // 7. Analyse the self.electionResults dictionary and copy the entry(s) with the highest count to the winningOptions return dictionary
+            // First, run the usual algorithm to find the max value
+            var currentBallot: String = ""
+            var currentCount: Int = 0
+
+
+            for electionResultKey in self.electionResults.keys {
+                if (currentBallot == "" || self.electionResults[electionResultKey]! > currentCount) {
+                    // In this, update the max value to the current one
+                    currentBallot = electionResultKey
+                    currentCount = self.electionResults[electionResultKey]!
+                }
+            }
+
+            // Validate that, at least, one max value was found
+            if (currentBallot == "" && currentCount == 0) {
+                panic(
+                    "ERROR: Unable to find a winning option for Election ".concat(self.electionId.toString())
+                )
+            }
+
+            // Add the winning option to the return dictionary
+            winningOptions[currentBallot] = currentCount
+
+
+            // Do another pass by the election results and append any entry with the same ballot count as the current winning one
+            for electionResultKey in self.electionResults.keys {
+                // If there are any electionResults has the same ballot count as the current max
+                if (self.electionResults[electionResultKey]! == currentCount) {
+                    // Add the other "winning" option to the return array as well
+                    winningOptions[electionResultKey] = self.electionResults[electionResultKey]!
+                }
+            }
+
+            // 8. Return the winningOptions return array to finish this process.
+            return winningOptions
+        }
+
+        /**
+            Function to retrieve the array of tallied Ballots
+
+            @returns (@[BallotStandard.Ballot]) The array of Ballots that should be already tallied.
+        **/
+        access(ElectionStandard.ElectionAdmin) fun getTalliedBallots(): @[BallotStandard.Ballot] {
+            // Remove the talliedBallots from the Election and replace it by an empty array
+            let talliedBallotsToReturn: @[BallotStandard.Ballot] <- self.talliedBallots <- []
+            
+            return <- talliedBallotsToReturn
+        }
+
+        /**
+            Function to retrieve the number of Ballots in the talliedBallots array.
+
+            @returns (Int) The number of Ballots currently stored in the talliedBallots array in this Election.
+        **/
+        access(all) view fun getTalliedBallotsNumber(): Int {
+            return self.talliedBallots.length
+        }
+
+        /**
+            Function to set the whole talliedBallots array all at once. This function replaces the existing talliedBallots array by the provided input and burns every Ballot from the old one. If all goes well, I should never get a non-empty existing talliedBallots array
+
+            @param _talliedBallots (@[BallotStandard.Ballot]) The array of @BallotStandard.Ballot to set this Election to the talliedBallots array.
+        **/
+        access(ElectionStandard.ElectionAdmin) fun setTalliedBallots(_talliedBallots: @[BallotStandard.Ballot]): Void {
+            let oldTalliedBallots: @[BallotStandard.Ballot] <- self.talliedBallots <- _talliedBallots
+
+            while (oldTalliedBallots.length != 0) {
+                // Keep removing Ballots from the tail end of the array while supplies last
+                let ballotToBurn: @BallotStandard.Ballot <- oldTalliedBallots.removeLast()
+
+                // Burn this Ballot using the Burner contract to trigger the burnCallback function
+                Burner.burn(<- ballotToBurn)
+            }
+
+            // Once I got here, the oldTalliedBallots should be empty, but I still need to get rid of it
+            Burner.burn(<- oldTalliedBallots)
+
+            // Done
+        }
+
+
+        /**
+            Function to add one @BallotStandard.Ballot to the talliedBallots internal array for this Election.
+
+            @param talliedBallot @BallotStandard.Ballot The Ballot resource to append at the end of the talliedBallots array.
+        **/
+        access(ElectionStandard.ElectionAdmin) fun addBallotToTalliedBallots(talliedBallot: @BallotStandard.Ballot): Void {
+            // This one is easy
+            self.talliedBallots.append(<- talliedBallot)
+        }
+
+        /**
+            Function to retrieve the last @BallotStandard.Ballot from the talliedBallots array.
+
+            @returns (@BallotStandard.Ballot?) Returns the @BallotStandard.Ballot at the tail of the internal talliedBallots, nil if the array is empty.
+        **/
+        access(ElectionStandard.ElectionAdmin) fun removeLastTalliedBallot(): @BallotStandard.Ballot? {
+            if (self.talliedBallots.length == 0) {
+                // The array is still empty. Return a nil back
+                return nil
+            }
+            else {
+                return <- self.talliedBallots.removeLast()
+            }
+        }
+
+        /**
+            The usual getter for the electionFinished parameter. The getter is an access(all) function because I want everyone to be able to check if this Election is finished or not.
+
+            @return (Bool) Returns the state of the electionFinished flag
+        **/
+        access(all) view fun isElectionFinished(): Bool {
+            return self.electionFinished
+        }
+
+        /**
+            The setter for the electionFinished parameter. This one is protected with an ElectionStandard.ElectionAdmin entitlement because I want only authorized accesses to to set this parameter.
+
+            @param electionStatus (Bool): The new status to set the electionFinished parameter of this Election to.
+        **/
+        access(ElectionStandard.ElectionAdmin) fun finishElection(newStatus: Bool): Void{
+            self.electionFinished = newStatus
+        }
 
         /**
             This function validates if a given ballotId is valid for the given Election. In other words, this function validates if the provided ballotId is in the "mintedBallots" internal array.
@@ -308,7 +537,7 @@ access(all) contract ElectionStandard {
 
             @returns (Bool) If the Ballot in question was minted for this Election, this function returns a true. Otherwise a false is returned.
         **/
-        access(ElectionAdmin) view fun isBallotMinted(ballotId: UInt64): Bool {
+        access(ElectionStandard.ElectionAdmin) view fun isBallotMinted(ballotId: UInt64): Bool {
             return self.mintedBallots.contains(ballotId)
         }
         
@@ -319,7 +548,7 @@ access(all) contract ElectionStandard {
 
             @returns UInt64? If the Ballot in question exists, this function returns the ballotId provided as argument. But this ballotId was removed from the internal mintedBallots array to be returned. Otherwise this function returns a nil.
         **/
-        access(ElectionAdmin) fun removeMintedBallot(ballotId: UInt64): UInt64? {
+        access(ElectionStandard.ElectionAdmin) fun removeMintedBallot(ballotId: UInt64): UInt64? {
             let ballotIndex: Int? = self.mintedBallots.firstIndex(of: ballotId)
 
             // If I got a non-nil index, the ballotId is in the array
@@ -351,7 +580,7 @@ access(all) contract ElectionStandard {
 
             @param ballotId (UInt64) The Ballot identifier value to add to the internal dictionary.
         **/
-        access(ElectionAdmin) fun addMintedBallot(ballotId: UInt64): Void {
+        access(ElectionStandard.ElectionAdmin) fun addMintedBallot(ballotId: UInt64): Void {
             if (self.mintedBallots.contains(ballotId)) {
                 panic(
                     "ERROR: ballotId #"
@@ -492,7 +721,7 @@ access(all) contract ElectionStandard {
 
             @return: @[BallotInterface.Ballot] Returns an array with all the Ballots in no specific order, as stipulated by the Cadence documentation.
         **/
-        access(ElectionAdmin) fun withdrawBallots(): @[BallotStandard.Ballot] {
+        access(ElectionStandard.ElectionAdmin) fun withdrawBallots(): @[BallotStandard.Ballot] {
             // Cadence is super picky when dealing with resources. There is no direct way to retrieve all the values from a dictionary as an array, for example, if these values are resources. As such, I need to do this "manually", i.e., one by one
             var ballotsToTally: @[BallotStandard.Ballot] <- []
 
@@ -517,7 +746,7 @@ access(all) contract ElectionStandard {
 
             @param electionCapability Capability<&{ElectionStandard.ElectionPublic}> This function expects a capability that points to a valid &{ElectionStandard.ElectionPublic} in storage
         **/
-        access(ElectionAdmin) fun setElectionCapability(capability: Capability<&{ElectionStandard.ElectionPublic}>): Void {
+        access(ElectionStandard.ElectionAdmin) fun setElectionCapability(capability: Capability<&{ElectionStandard.ElectionPublic}>): Void {
             self.electionCapability = capability
         }
 
@@ -579,6 +808,27 @@ access(all) contract ElectionStandard {
 
             // The electionCapability is initially set to nil
             self.electionCapability = nil
+
+            // Set the parameters for finished Elections
+            self.electionFinished = false
+            self.talliedBallots <- []
+
+            // Since I have access to the array of available options for this particular Election, I'm taking this opportunity to set the electionResults 
+            // dictionary to the proper format, i.e., setting the ballot options as keys and all values to 0
+            self.electionResults = {}
+
+            for ballotOption in self.options.values {
+                // Create a new entry for the electionResults dictionary for each ballotOption considered and set it to 0
+                self.electionResults[ballotOption] = 0
+            }
+
+            // Add the "default" option as well, which is used in this context to count revoked/invalid Ballots
+            self.electionResults["default"] = 0
+
+            // Finish by adding one last "invalid" entry to account for any non-default Ballots that have some weird option that does not fit under any of the
+            // expected ones. I have this process well oiled, so much so that it should be impossible for a voter to select an option outside "default" and
+            // the ones available for this Election.
+            self.electionResults["invalid"] = 0
         }
     }
 

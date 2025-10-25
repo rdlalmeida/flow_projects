@@ -48,6 +48,52 @@ access(all) contract VoteBooth {
                 return false
             }
     }
+
+    /**
+        This function abstracts the logic of retrieving a &{ElectionStandard.ElectionPublic}. To avoid storing collections inside other collections, I had to come up with a slightly convoluted process that requires retrieving a bunch of references from all over the place. This function simplifies this process by receiving just the electionId and returning the public reference, if the Election exists, or nil if not.
+
+        @param electionId (UInt64) The election identifier for the Election whose reference are to be retrieved from.
+
+        @returns &{ElectionStandard.ElectionPublic}? If an Election for the electionId provided exists, this function returns it. Otherwise a nil is returned instead.
+    **/
+    access(all) view fun getElectionPublicReference(electionId: UInt64): &{ElectionStandard.ElectionPublic}? {
+        // Start by getting the unauthorized account reference to the account where the ElectionIndex is stored in
+        let deployerAccount: &Account = getAccount(VoteBooth.deployerAddress)
+
+        let electionIndexRef: &{VoteBooth.ElectionIndexPublic} = deployerAccount.capabilities.borrow<&{VoteBooth.ElectionIndexPublic}>(VoteBooth.electionIndexPublicPath) ??
+        panic(
+            "Unable to retrieve a valid &{VoteBooth.ElectionIndexPublic} at "
+            .concat(VoteBooth.electionIndexPublicPath.toString())
+            .concat(" from account ")
+            .concat(deployerAccount.address.toString())
+        )
+
+        // At this point, check if the electionId is among the active ones. Continue only if so, return a nil if not
+        if (!electionIndexRef.electionExists(electionId: electionId)) {
+            return nil
+        }
+
+        // The election exists. Get the public path for the election in question from the election index reference
+        let electionPublicPath: PublicPath = electionIndexRef.getElectionPublicPath(electionId: electionId) ??
+        panic(
+            "Unable to retrieve a valid PublicPath for election "
+            .concat(electionId.toString())
+            .concat(" for the Election Index from account ")
+            .concat(deployerAccount.address.toString())
+        )
+
+        // Get the public reference to the election from here
+        let electionPublicRef: &{ElectionStandard.ElectionPublic} = deployerAccount.capabilities.borrow<&{ElectionStandard.ElectionPublic}>(electionPublicPath) ??
+        panic(
+            "Unable to retrieve a &{ElectionStandard.ElectionPublic} at "
+            .concat(electionPublicPath.toString())
+            .concat(" from account ")
+            .concat(deployerAccount.address.toString())
+        )
+
+        return electionPublicRef
+    }
+
     // ---------------------------------------------------------------- BALLOT BEGIN ---------------------------------------------------------------------------
     // ---------------------------------------------------------------- BALLOT END -----------------------------------------------------------------------------
 
