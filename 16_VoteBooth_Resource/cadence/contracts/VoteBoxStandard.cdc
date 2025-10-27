@@ -443,6 +443,9 @@ access(all) contract VoteBoxStandard {
                 // Destroy every Ballot individually
                 Burner.burn(<- ballotToBurn)
             }
+
+            // Emit the respective event before finishing
+            emit VoteBoxDestroyed(_electionsVoted: self.electionsVoted, _activeBallots: ballotsBurned, _voterAddress: self.voteBoxOwner)
         }
 
         /**

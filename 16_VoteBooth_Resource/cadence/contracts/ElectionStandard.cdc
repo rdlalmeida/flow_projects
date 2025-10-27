@@ -57,7 +57,7 @@ access(all) contract ElectionStandard {
         access(all) view fun getTotalBallotsSubmitted(): UInt
         access(all) view fun getElectionCapability(): Capability?
         access(all) fun submitBallot(ballot: @BallotStandard.Ballot): Void
-        access(all) view fun isBallotValid(ballotId: UInt64): Bool
+        access(all) view fun isBallotMinted(ballotId: UInt64): Bool
         access(all) view fun getElectionTally(): {String: Int}
     }
 
@@ -328,17 +328,6 @@ access(all) contract ElectionStandard {
             self.electionFinished = newStatus
         }
 
-        /**
-            This function validates if a given ballotId is valid for the given Election. In other words, this function validates if the provided ballotId is in the "mintedBallots" internal array.
-
-            @param ballotId (UInt64) The Ballot identifier to check for.
-
-            @returns (Bool) The function returns true if the ballotId provided is in the "mintedBallots" array. Otherwise it returns a false.
-        **/
-        access(all) view fun isBallotValid(ballotId: UInt64): Bool {
-            return self.mintedBallots.contains(ballotId)
-        }
-
         // Set of simple Getters for the Election parameters
         /**
             Function to retrieve the name of the Election
@@ -537,7 +526,7 @@ access(all) contract ElectionStandard {
 
             @returns (Bool) If the Ballot in question was minted for this Election, this function returns a true. Otherwise a false is returned.
         **/
-        access(ElectionStandard.ElectionAdmin) view fun isBallotMinted(ballotId: UInt64): Bool {
+        access(all) view fun isBallotMinted(ballotId: UInt64): Bool {
             return self.mintedBallots.contains(ballotId)
         }
         
@@ -548,7 +537,7 @@ access(all) contract ElectionStandard {
 
             @returns UInt64? If the Ballot in question exists, this function returns the ballotId provided as argument. But this ballotId was removed from the internal mintedBallots array to be returned. Otherwise this function returns a nil.
         **/
-        access(ElectionStandard.ElectionAdmin) fun removeMintedBallot(ballotId: UInt64): UInt64? {
+        access(self) fun removeMintedBallot(ballotId: UInt64): UInt64? {
             let ballotIndex: Int? = self.mintedBallots.firstIndex(of: ballotId)
 
             // If I got a non-nil index, the ballotId is in the array
@@ -762,11 +751,30 @@ access(all) contract ElectionStandard {
             let totalBallotsStored: UInt = UInt(self.storedBallots.length)
 
             for storedBallotIndex in storedBallotsIndexes {
-                let ballotToBurn: @BallotStandard.Ballot? <- self.storedBallots.remove(key: storedBallotIndex)
+                let ballotToBurn: @BallotStandard.Ballot <- self.storedBallots.remove(key: storedBallotIndex)!
+
+                // Decrement the total ballots minted to account with this burn
+                self.decreaseBallotsMinted(ballots: 1)
+
+                // And remove it from the mintedBallots array as well
+                let removedBallotId: UInt64? = self.removeMintedBallot(ballotId: ballotToBurn.ballotId)
 
                 // Destroy it using the Burner contract
                 Burner.burn(<- ballotToBurn)
             }
+
+            // Check that the Election is "empty" from the storedBallots and mintedBallots point of view. Panic if this burn process is not completely clean.
+            if(self.storedBallots.length != 0) {
+                panic(
+                    "ERROR: Election "
+                    .concat(self.electionId.toString())
+                    .concat(" is about to be destroyed but it still has ")
+                    .concat(self.storedBallots.length.toString())
+                    .concat(" Ballots stored in it yet! Cannot destroy this until its empty! ")
+                )
+            }
+
+            // Don't bother checking if the list of mintedBallots since this one is not as well kept as the storedBallots one.
 
             // Emit the respective event before finishing
             emit ElectionDestroyed(_electionId: self.electionId, _ballotsStored: totalBallotsStored)

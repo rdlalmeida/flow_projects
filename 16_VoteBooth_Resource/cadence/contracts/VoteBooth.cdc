@@ -20,8 +20,11 @@ access(all) contract VoteBooth {
     access(all) entitlement VoteBoothAdmin
 
     // CUSTOM EVENTS
-    // Emit this event when the function to clean all storage from existing Election resources
-    access(all) event ElectionsDestroyed(_electionsDestroyed: Int, _accountAddress: Address)
+    access(all) event ElectionIndexCreated(_accountAddress: Address)
+    // Event for when the ElectionIndex is destroyed. The activeElections parameter is the number of elections in the main index still active/existing.
+    access(all) event ElectionIndexDestroyed(_accountAddress: Address)
+    access(all) event VoteBoothPrinterAdminCreated(_accountAddress: Address)
+    access(all) event VoteBoothPrinterAdminDestroyed(_accountAddress: Address)
 
     // Use this parameter to validate the process structure by ensuring that all contracts in the project were deployed by the same address, i.e., to the same account.
     access(all) let deployerAddress: Address
@@ -111,7 +114,7 @@ access(all) contract VoteBooth {
     /**
         I need a way to keep track of all Election resources created and saved in this account. The obvious strategy would be to create another collection-type resource, but this goes against Cadence good programming practices, which strongly discourages collections of collections, since Elections are Ballot-type collections themselves already. I also want to ensure that only the contract deployer can play around with this data, so the most secure approach is to encode all this into a new, admin-type resource.
     **/
-    access(all) resource ElectionIndex: ElectionIndexPublic {
+    access(all) resource ElectionIndex: ElectionIndexPublic, Burner.Burnable {
         // Use this dictionary to keep track of any issued Elections. This dictionary uses the format {electionId: {ElectionStoragePath: ElectionPublicPath}}
         access(self) var electionIndex: {UInt64: {StoragePath: PublicPath}}
 
@@ -331,8 +334,19 @@ access(all) contract VoteBooth {
             }
         }
 
+        /**
+            burnCallback function, as requested from the Burner.Burnable interface.
+        **/
+        access(contract) fun burnCallback(): Void {
+            // Not a lot to do but to emit the ElectionIndexDestroyed event
+            emit ElectionIndexDestroyed(_accountAddress: VoteBooth.deployerAddress)
+        }
+
         init() {
             self.electionIndex = {}
+
+            // Emit the ElectionIndexCreated event
+            emit ElectionIndexCreated(_accountAddress: VoteBooth.deployerAddress)
         }
     }
     // ---------------------------------------------------------------- ELECTION END ---------------------------------------------------------------------------
@@ -341,7 +355,7 @@ access(all) contract VoteBooth {
     // ---------------------------------------------------------------- VOTEBOX END ----------------------------------------------------------------------------
 
     // ---------------------------------------------------------------- BALLOT PRINTER ADMIN BEGIN -------------------------------------------------------------
-    access(all) resource VoteBoothPrinterAdmin {
+    access(all) resource VoteBoothPrinterAdmin: Burner.Burnable {
         /**
             This function is the only process to create new Ballots in this context. I've made the BallotStandard contract such that anyone can import it and use the resource in their own version of this election platform. But for this instance in particular, the only entry point to create a new Ballot is through one of these BallotPrinterAdmin resources.
 
@@ -569,6 +583,17 @@ access(all) contract VoteBooth {
 
             // All done. Return the electionId from the new resource at the end of this
             return newElectionId
+        }
+
+        access(contract) fun burnCallback() {
+            // All I can do from here is to emit the respective event and move on
+            emit VoteBoothPrinterAdminDestroyed(_accountAddress: VoteBooth.deployerAddress)
+        }
+
+        // VoteBoothBallotPrinterAdmin constructor
+        init() {
+            // Nothing more to do but to emit the VoteBoothBallotPrinterAdminCreated event
+            emit VoteBoothPrinterAdminCreated(_accountAddress: VoteBooth.deployerAddress)
         }
     }
     // ---------------------------------------------------------------- BALLOT PRINTER ADMIN END ---------------------------------------------------------------

@@ -24,7 +24,10 @@ access(all) let voteBoxCreatedEventType: Type = Type<VoteBoxStandard.VoteBoxCrea
 access(all) let voteBoxDestroyedEventType: Type = Type<VoteBoxStandard.VoteBoxDestroyed>()
 
 // VoteBooth.cdc
-access(all) let electionsDestroyedEventType: Type = Type<VoteBooth.ElectionsDestroyed>()
+access(all) let electionIndexCreatedEventType: Type = Type<VoteBooth.ElectionIndexCreated>()
+access(all) let electionIndexDestroyedEventType: Type = Type<VoteBooth.ElectionIndexDestroyed>()
+access(all) let voteBoothPrinterAdminCreatedEventType: Type = Type<VoteBooth.VoteBoothPrinterAdminCreated>()
+access(all) let voteBoothPrinterAdminDestroyedEventType: Type = Type<VoteBooth.VoteBoothPrinterAdminDestroyed>()
 
 access(all) var eventNumberCount: {Type: Int} = {
     ballotCreatedEventType: 0,
@@ -37,7 +40,10 @@ access(all) var eventNumberCount: {Type: Int} = {
     nonNilResourceReturnedEventType: 0,
     voteBoxCreatedEventType: 0,
     voteBoxDestroyedEventType: 0,
-    electionsDestroyedEventType: 0
+    electionIndexCreatedEventType: 0,
+    electionIndexDestroyedEventType: 0,
+    voteBoothPrinterAdminCreatedEventType: 0,
+    voteBoothPrinterAdminDestroyedEventType: 0
 }
 
 access(all) var ballotCreatedEvents: [AnyStruct] = []
@@ -50,7 +56,10 @@ access(all) var electionDestroyedEvents: [AnyStruct] = []
 access(all) var nonNilResourceReturnedEvents: [AnyStruct] = []
 access(all) var voteBoxCreatedEvents: [AnyStruct] = []
 access(all) var voteBoxDestroyedEvents: [AnyStruct] = []
-access(all) var electionsDestroyedEvents: [AnyStruct] = []
+access(all) var electionIndexCreatedEvents: [AnyStruct] = []
+access(all) var electionIndexDestroyedEvents: [AnyStruct] = []
+access(all) var voteBoothPrinterAdminCreatedEvents: [AnyStruct] = []
+access(all) var voteBoothPrinterAdminDestroyedEvents: [AnyStruct] = []
 
 access(all) fun validateEvents() {
     ballotCreatedEvents = Test.eventsOfType(ballotCreatedEventType)
@@ -63,7 +72,10 @@ access(all) fun validateEvents() {
     nonNilResourceReturnedEvents = Test.eventsOfType(nonNilResourceReturnedEventType)
     voteBoxCreatedEvents = Test.eventsOfType(voteBoxCreatedEventType)
     voteBoxDestroyedEvents = Test.eventsOfType(voteBoxDestroyedEventType)
-    electionsDestroyedEvents = Test.eventsOfType(electionsDestroyedEventType)
+    electionIndexCreatedEvents = Test.eventsOfType(electionIndexCreatedEventType)
+    electionIndexDestroyedEvents = Test.eventsOfType(electionIndexDestroyedEventType)
+    voteBoothPrinterAdminCreatedEvents = Test.eventsOfType(voteBoothPrinterAdminCreatedEventType)
+    voteBoothPrinterAdminDestroyedEvents = Test.eventsOfType(voteBoothPrinterAdminDestroyedEventType)
 
     Test.assert(ballotCreatedEvents.length == eventNumberCount[ballotCreatedEventType]!,
         message: "ERROR: Mismatch between ballotCreatedEvents.length = "
@@ -135,11 +147,32 @@ access(all) fun validateEvents() {
         .concat(eventNumberCount[voteBoxDestroyedEventType]!.toString())
     )
 
-    Test.assert(electionsDestroyedEvents.length == eventNumberCount[electionsDestroyedEventType]!,
-        message: "ERROR: Mismatch between electionDestroyedEvents.length = "
-        .concat(electionsDestroyedEvents.length.toString())
-        .concat(" and eventNumberCount[electionsDestroyedEventType] = ")
-        .concat(eventNumberCount[electionsDestroyedEventType]!.toString())
+    Test.assert(electionIndexCreatedEvents.length == eventNumberCount[electionIndexCreatedEventType]!,
+        message: "ERROR: Mismatch between electionIndexCreatedEvents.length = "
+        .concat(electionIndexCreatedEvents.length.toString())
+        .concat(" and eventNumberCount[electionIndexCreatedEventType] = ")
+        .concat(eventNumberCount[electionIndexCreatedEventType]!.toString())
+    )
+
+    Test.assert(electionIndexDestroyedEvents.length == eventNumberCount[electionIndexDestroyedEventType]!,
+        message: "ERROR: Mismatch between electionIndexDestroyedEvents.length = "
+        .concat(electionIndexDestroyedEvents.length.toString())
+        .concat(" and eventNumberCount[electionIndexDestroyedEventType] = ")
+        .concat(eventNumberCount[electionIndexDestroyedEventType]!.toString())
+    )
+
+    Test.assert(voteBoothPrinterAdminCreatedEvents.length == eventNumberCount[voteBoothPrinterAdminCreatedEventType]!,
+        message: "ERROR: Mismatch between voteBoothPrinterAdminCreatedEvents.length = "
+        .concat(voteBoothPrinterAdminCreatedEvents.length.toString())
+        .concat(" and eventNumberCount[voteBoothPrinterAdminCreatedEventType] = ")
+        .concat(eventNumberCount[voteBoothPrinterAdminCreatedEventType]!.toString())
+    )
+
+    Test.assert(voteBoothPrinterAdminDestroyedEvents.length == eventNumberCount[voteBoothPrinterAdminDestroyedEventType]!,
+        message: "ERROR: Mismatch between voteBoothPrinterAdminDestroyedEvents.length = "
+        .concat(voteBoothPrinterAdminDestroyedEvents.length.toString())
+        .concat(" and eventNumberCount[voteBoothPrinterAdminDestroyedEventType] = ")
+        .concat(eventNumberCount[voteBoothPrinterAdminDestroyedEventType]!.toString())
     )
 }
 
@@ -150,6 +183,9 @@ access(all) let createBallotTx: String = "../transactions/03_create_ballot.cdc"
 access(all) let castBallotTx: String = "../transactions/04_cast_ballot.cdc"
 access(all) let submitBallotTx: String = "../transactions/05_submit_ballot.cdc"
 access(all) let tallyElectionTx: String = "../transactions/06_tally_election.cdc"
+access(all) let destroyElectionTx: String = "../transactions/07_destroy_election.cdc"
+access(all) let destroyVoteBoxTx: String = "../transactions/08_destroy_votebox.cdc"
+access(all) let cleanupVoteBoothTx: String = "../transactions/09_cleanup_votebooth.cdc"
 
 // SCRIPTS
 access(all) let testContractConsistencySc: String = "../scripts/01_test_contract_consistency.cdc"
@@ -275,7 +311,7 @@ access(all) var selectedElectionCapability: Capability<&{ElectionStandard.Electi
 
 // This is just a handy way to have the voters represented by each of the test account easily
 // This set represents the first round of voting
-access(all) let voterOptions: {Address: String} = {
+access(all) let voterOptions1: {Address: String} = {
     account01.address: electionOptions[selectedElectionIndex][3]!,
     account02.address: electionOptions[selectedElectionIndex][5]!,
     account03.address: electionOptions[selectedElectionIndex][2]!,
@@ -285,12 +321,21 @@ access(all) let voterOptions: {Address: String} = {
 
 // And this similar set is used to change the options on already cast Ballots, just to confirm that it works. I'm essentially inverting the order from 
 // initial set
-access(all) let moreVoterOptions: {Address: String} = {
+access(all) let voterOptions2: {Address: String} = {
     account01.address: electionOptions[selectedElectionIndex][1]! ,
     account02.address: electionOptions[selectedElectionIndex][3]!,
     account03.address: electionOptions[selectedElectionIndex][2]!,
     account04.address: electionOptions[selectedElectionIndex][5]!,
     account05.address: electionOptions[selectedElectionIndex][3]!
+}
+
+// This one makes option #4 the clear favourite
+access(all) let voterOptions3: {Address: String} = {
+    account01.address: electionOptions[selectedElectionIndex][4]!,
+    account02.address: electionOptions[selectedElectionIndex][1]!,
+    account03.address: electionOptions[selectedElectionIndex][4]!,
+    account04.address: electionOptions[selectedElectionIndex][4]!,
+    account05.address: electionOptions[selectedElectionIndex][4]!
 }
 
 access(all) fun setup() {
@@ -325,6 +370,11 @@ access(all) fun setup() {
     )
 
     Test.expect(err, Test.beNil())
+
+    // The deployment of the VoteBooth contract should emit one ElectionIndexCreated and one VoteBoothPrinterAdminCreated events. Check that
+    eventNumberCount[electionIndexCreatedEventType] = eventNumberCount[electionIndexCreatedEventType]! + 1
+    eventNumberCount[voteBoothPrinterAdminCreatedEventType] = eventNumberCount[voteBoothPrinterAdminCreatedEventType]! + 1
+    validateEvents()
 
     // Printout the addresses of the test accounts for reference
     if (verbose) {
@@ -1023,7 +1073,7 @@ access(all) fun testCastBallot() {
         // Set the new option according to what is set in the voterOptions dictionary
         txResult = executeTransaction(
             castBallotTx,
-            [selectedElectionId, voterOptions[account.address]!],
+            [selectedElectionId, voterOptions1[account.address]!],
             account
         )
 
@@ -1041,11 +1091,11 @@ access(all) fun testCastBallot() {
 
         newOption = scResult!.returnValue as! String
 
-        Test.assert(newOption == voterOptions[account.address], 
+        Test.assert(newOption == voterOptions1[account.address], 
             message: "Ballot for Election "
             .concat(selectedElectionId.toString())
             .concat(" does not have the desired option set: ")
-            .concat(voterOptions[account.address]!)
+            .concat(voterOptions1[account.address]!)
             .concat(". Instead it has ")
             .concat(newOption)
         )
@@ -1055,7 +1105,7 @@ access(all) fun testCastBallot() {
     for account in accounts {
         txResult = executeTransaction(
             castBallotTx,
-            [selectedElectionId, moreVoterOptions[account.address]!],
+            [selectedElectionId, voterOptions2[account.address]!],
             account
         )
 
@@ -1072,11 +1122,11 @@ access(all) fun testCastBallot() {
 
         newOption = scResult!.returnValue as! String
 
-        Test.assert(newOption == moreVoterOptions[account.address],
+        Test.assert(newOption == voterOptions2[account.address],
             message: "Ballot for Election "
             .concat(selectedElectionId.toString())
             .concat(" does not have the desired option set: ")
-            .concat(moreVoterOptions[account.address]!)
+            .concat(voterOptions2[account.address]!)
             .concat(". Instead it has ")
             .concat(newOption)
         )
@@ -1195,6 +1245,10 @@ access(all) fun testReSubmitBallots() {
         activeBallotIds.append(eventBallotId)
     }
 
+    // Created accounts.length more Ballots, so I should have +accounts.length more BallotCreated events. Adjust and validate
+    eventNumberCount[ballotCreatedEventType] = eventNumberCount[ballotCreatedEventType]! + accounts.length
+    validateEvents()
+
     // Validate the election totals after this step. The total ballots minted should have been increased by the number of test accounts
     scResult = executeScript(
         getElectionTotalsSc,
@@ -1233,7 +1287,7 @@ access(all) fun testReSubmitBallots() {
     for account in accounts {
         txResult = executeTransaction(
             castBallotTx,
-            [selectedElectionId, voterOptions[account.address]!],
+            [selectedElectionId, voterOptions1[account.address]!],
             account
         )
 
@@ -1249,7 +1303,7 @@ access(all) fun testReSubmitBallots() {
 
         newOption = scResult!.returnValue as! String
 
-        Test.assert(newOption == voterOptions[account.address],
+        Test.assert(newOption == voterOptions1[account.address],
             message: "ERROR: Ballot "
             .concat(voterBallotIds[account.address]![0].toString())
             .concat(" cast for election ")
@@ -1257,7 +1311,7 @@ access(all) fun testReSubmitBallots() {
             .concat(" and for voter ")
             .concat(account.address.toString())
             .concat(" was set with option ")
-            .concat(moreVoterOptions[account.address]!)
+            .concat(voterOptions2[account.address]!)
             .concat(" but the Ballot returned ")
             .concat(newOption)
         )
@@ -1273,6 +1327,42 @@ access(all) fun testReSubmitBallots() {
 
         Test.expect(txResult, Test.beSucceeded())
     }
+
+    // This re-submission process does not emit any BallotSubmitted events because these Ballots replace existing ones. Instead, I should have BallotReplace
+    // events emitted instead. Validate and test these events as well
+    eventNumberCount[ballotReplacedEventType] = eventNumberCount[ballotReplacedEventType]! + accounts.length
+    validateEvents()
+
+    var oldBallotId: UInt64 = 0
+    var newBallotId: UInt64 = 0
+    var electionId: UInt64 = 0
+
+    for ballotReplacedEvent in ballotReplacedEvents.slice(from: ballotReplacedEvents.length - accounts.length, upTo: ballotReplacedEvents.length) {
+        let normalisedEvent: ElectionStandard.BallotReplaced = ballotReplacedEvent as! ElectionStandard.BallotReplaced
+        oldBallotId = normalisedEvent._oldBallotId
+        newBallotId = normalisedEvent._newBallotId
+        electionId = normalisedEvent._electionId
+
+        Test.assert(activeBallotIds.contains(oldBallotId),
+            message: "ERROR: Got a BallotReplaced event with a oldBallotId "
+            .concat(oldBallotId.toString())
+            .concat(" but this ballotId does not exist in the activeBallotIds list!")
+        )
+
+        Test.assert(activeBallotIds.contains(newBallotId),
+            message: "ERROR: Got a BallotReplaced event with a newBallotId "
+            .concat(newBallotId.toString())
+            .concat(" but this ballotId does not exits in the activeBallotIds list!")
+        )
+
+        Test.assert(selectedElectionId == electionId,
+            message: "ERROR: Got a BallotReplaced event with an electionId "
+            .concat(electionId.toString())
+            .concat(" but expected electionId: ")
+            .concat(selectedElectionId.toString())
+        )
+    }
+
 
     // Validate the election totals. I should have accounts.length*2 totalBallotsMinted since this is the second round of voting.
     // And I should still have accounts.length totalBallotsSubmitted since the ones in this round are going to replace the old ones,
@@ -1328,6 +1418,18 @@ access(all) fun testTallyElection() {
         .concat(" is not running any more! ")
     )
 
+    // Before tallying the election, grab the totalBallotsSubmitted for this Election to compare with the total ballots withdrawn
+    // from the BallotsWithdrawn event to be emitted during the tally operation
+    scResult = executeScript(
+        getElectionTotalsSc,
+        [selectedElectionId, nil]
+    )
+
+    Test.expect(scResult, Test.beSucceeded())
+
+    let electionTotals: {String: UInt} = scResult.returnValue as! {String: UInt}
+    let electionTotalBallotsSubmitted: UInt = electionTotals["totalBallotsSubmitted"]!
+
     // All logic is already encapsulated in the transaction in question. Run it.
     let txResult: Test.TransactionResult = executeTransaction(
         tallyElectionTx,
@@ -1336,6 +1438,33 @@ access(all) fun testTallyElection() {
     )
 
     Test.expect(txResult, Test.beSucceeded())
+
+    // The tally election transaction should've emit the BallotsWithdrawn event. Test and capture it
+    eventNumberCount[ballotsWithdrawnEventType] = eventNumberCount[ballotsWithdrawnEventType]! + 1
+    validateEvents()
+
+    let ballotsWithdrawnEvent: ElectionStandard.BallotsWithdrawn = ballotsWithdrawnEvents[ballotsWithdrawnEvents.length - 1] as! ElectionStandard.BallotsWithdrawn
+
+    let eventTotalBallots: UInt = ballotsWithdrawnEvent._ballotsWithdrawn
+    let eventElectionId: UInt64 = ballotsWithdrawnEvent._electionId
+
+    Test.assert(eventElectionId == selectedElectionId,
+        message: "ERROR: Got a BallotsWithdrawn event with an electionId "
+        .concat(eventElectionId.toString())
+        .concat(" but expected electionId: ")
+        .concat(selectedElectionId.toString())
+    )
+
+    // Compare the totalBallotsSubmitted from the Election with the total ballots withdrawn from the BallotsWithdrawn event
+    Test.assert(electionTotalBallotsSubmitted == eventTotalBallots,
+        message: "ERROR: Got a BallotsWithdrawn event for election "
+        .concat(eventElectionId.toString())
+        .concat(" with ")
+        .concat(eventTotalBallots.toString())
+        .concat(" ballots withdrawn from it, but the Election was reporting ")
+        .concat(electionTotalBallotsSubmitted.toString())
+        .concat(" total ballots submitted!")
+    )
 
     // Validate that the election state changed for true
     scResult = executeScript(
@@ -1375,7 +1504,141 @@ access(all) fun testTallyElection() {
 
 /**
     This test destroys the remaining process structures created during the voting process just to test that the account storage does gets cleaned and all the relevant events are emitted as expected.
+    1. Load the VoteBoxes and some of the Elections with some Ballots. Take note of the numbers
+    2. Run the burn transactions for the VoteBoxes and VoteBooth
+    3. Validate that the events emitted through the process match with the expected numbers
 **/
-access(all) fun _testCleanEnvironment() {
-    // TODO: ONE MORE!
+access(all) fun testCleanEnvironment() {
+    // Start by populating another Election and the VoteBoxes in each test account with some Ballots before cleaning the environment, just to be sure that
+    // each resource is properly deleted and all the expected events are emitted
+    // Change the selectedElectionIndex and update the selectedElectionId accordingly to set this environment on a new Election
+    selectedElectionIndex = 0
+    selectedElectionId = activeElectionIds[selectedElectionIndex]
+
+    var txResult: Test.TransactionResult? = nil
+    var scResult: Test.ScriptResult? = nil
+
+    // Load another set of Ballots into the test account's VoteBoxes
+    for account in accounts{
+        txResult = executeTransaction(
+            createBallotTx,
+            [selectedElectionId, account.address],
+            deployer
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+    }
+
+    // Cast each of these Ballots according to the voterOption3
+    for account in accounts {
+        txResult = executeTransaction(
+            castBallotTx,
+            [selectedElectionId, voterOptions3[account.address]!],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+
+        // And submit it right away
+        txResult = executeTransaction(
+            submitBallotTx,
+            [selectedElectionId],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+    }
+
+    // Validate that this action emitted accounts.length BallotCreated events
+    eventNumberCount[ballotCreatedEventType] = eventNumberCount[ballotCreatedEventType]! + accounts.length
+
+    // And the BallotSubmitted ones as well
+    eventNumberCount[ballotSubmittedEventType] = eventNumberCount[ballotSubmittedEventType]! + accounts.length
+    validateEvents()
+
+    // Run another cycle to populate the VoteBoxes with another round of Ballots
+    for account in accounts {
+        txResult = executeTransaction(
+            createBallotTx,
+            [selectedElectionId, account.address],
+            deployer
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+
+        // And cast them just in case as well
+        txResult = executeTransaction(
+            castBallotTx,
+            [selectedElectionId, voterOptions2[account.address]!],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+    }
+
+    // The BallotCreated events should have been increased by account.length and nothing more
+    eventNumberCount[ballotCreatedEventType] = eventNumberCount[ballotCreatedEventType]! + accounts.length
+    validateEvents()
+
+    // All good. Proceed with the deletion of all test account VoteBoxes.
+    for account in accounts {
+        txResult = executeTransaction(
+            destroyVoteBoxTx,
+            [],
+            account
+        )
+
+        Test.expect(txResult, Test.beSucceeded())
+    }
+
+    // After this one, I expect to have accounts.length VoteBoxDestroyed events and as many BallotDestroyed events as well
+    eventNumberCount[voteBoxDestroyedEventType] = eventNumberCount[voteBoxDestroyedEventType]! + accounts.length
+    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + accounts.length
+    validateEvents()
+
+    // All good. Proceed with the destruction of all active Elections, the ElectionIndex and the VoteBoothPrinterAdmin resource as well
+    let activeElections: Int = activeElectionIds.length
+
+    txResult = executeTransaction(
+        cleanupVoteBoothTx,
+        [],
+        deployer
+    )
+
+    Test.expect(txResult, Test.beSucceeded())
+
+    // Test if the expected events were emitted
+    // I shall have activeElections ElectionDestroyed events
+    eventNumberCount[electionDestroyedEventType] = eventNumberCount[electionDestroyedEventType]! + activeElections
+    // Also, because one of the Elections had accounts.length Ballots submitted into it when it was destroyed, I should also have
+    // accounts.length BallotBurned extra events
+    eventNumberCount[ballotBurnedEventType] = eventNumberCount[ballotBurnedEventType]! + accounts.length
+
+    // Validate the ElectionIndexDestroyed and VoteBoothBallotPrinterAdminDestroyed events also
+    eventNumberCount[electionIndexDestroyedEventType] = eventNumberCount[electionIndexDestroyedEventType]! + 1
+    eventNumberCount[voteBoothPrinterAdminDestroyedEventType] = eventNumberCount[voteBoothPrinterAdminDestroyedEventType]! + 1
+    validateEvents()
+
+    // Check also that the electionId of each destroyed Election matches with one of the ones in activeElectionIds
+    var electionId: UInt64 = 0
+    var ballotsStored: UInt = 0
+
+    for electionDestroyedEvent in electionDestroyedEvents.slice(from: electionDestroyedEvents.length - activeElections, upTo:electionDestroyedEvents.length) {
+        let normalisedEvent: ElectionStandard.ElectionDestroyed = electionDestroyedEvent as! ElectionStandard.ElectionDestroyed
+
+        electionId = normalisedEvent._electionId
+        ballotsStored = normalisedEvent._ballotsStored
+
+        Test.assert(activeElectionIds.contains(electionId),
+            message: "ERROR: Got an ElectionDestroyed event with an electionId "
+            .concat(electionId.toString())
+            .concat(" but this id is not among the ones in the activeElectionIds!|")
+        )
+
+        // Don't bother testing the ballotsStored since one of these elections had some when it got destroyed and the others didn't.
+        // It is hard to determine which ones are, but given how non-vital this parameter is, ignore it for now
+    }
+
+    // And that's about it!
 }
