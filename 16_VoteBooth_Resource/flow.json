@@ -153,42 +153,42 @@
             "address": "179b6b1cb6755e31",
             "key": {
                 "type": "file",
-                "location": "account01.pkey"
+                "location": "./keys/account01.pkey"
             }
         },
         "account02": {
             "address": "f3fcd2c1a78f5eee",
             "key": {
                 "type": "file",
-                "location": "account02.pkey"
+                "location": "./keys/account02.pkey"
             }
         },
         "account03": {
             "address": "e03daebed8ca0615",
             "key": {
                 "type": "file",
-                "location": "account03.pkey"
+                "location": "./keys/account03.pkey"
             }
         },
         "account04": {
             "address": "045a1763c93006ca",
             "key": {
                 "type": "file",
-                "location": "account04.pkey"
+                "location": "./keys/account04.pkey"
             }
         },
         "account05": {
             "address": "120e725050340cab",
             "key": {
                 "type": "file",
-                "location": "account05.pkey"
+                "location": "./keys/account05.pkey"
             }
         },
         "emulator-account": {
             "address": "f8d6e0586b0a20c7",
             "key": {
                 "type": "file",
-                "location": "emulator-account.pkey"
+                "location": "./keys/emulator-account.pkey"
             }
         }
     },
