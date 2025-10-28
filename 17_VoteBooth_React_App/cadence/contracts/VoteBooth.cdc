@@ -397,6 +397,16 @@ access(all) contract VoteBooth {
                 .concat(deployer.address.toString())
             )
 
+            // Before moving any further, check if the Election in question is already finished. If so, panic. I don't want new Ballots submitted into an
+            // already tallied Election
+            if (electionRef.isElectionFinished()) {
+                panic(
+                    "ERROR: Election "
+                    .concat(newLinkedElectionId.toString())
+                    .concat(" was tallied already! Unable to print new Ballots to a closed Election!")
+                )
+            }
+
             // 3. Validate and get a reference to a valid VoteBox in the account identified by the voterAddress parameter provided.
             let voterAccount: &Account = getAccount(voterAddress)
 

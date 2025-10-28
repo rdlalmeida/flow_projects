@@ -599,6 +599,9 @@ access(all) contract ElectionStandard {
 
                 // And check that the Ballot is already anonymous. Reject it if that is not the case
                 ballot.getVoterAddress() == nil: "The Ballot submitted is not yet anonymous. Cannot continue!"
+
+                // Prevent Ballots from being submitted into a finished (tallied) if the election has been closed
+                !self.electionFinished: "Election ".concat(self.electionId.toString()).concat(" is already tallied! Cannot accept any more Ballots!")
             }
 
             // Store the ballotId from the Ballot to store for Event emission purposes

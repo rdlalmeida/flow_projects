@@ -1509,6 +1509,22 @@ access(all) fun testCleanEnvironment() {
     var txResult: Test.TransactionResult? = nil
     var scResult: Test.ScriptResult? = nil
 
+    // Before anything else, the election set with the current selectedElectionId is already finished. Trying to cast new Ballots into it
+    // should fail. Test it
+    for account in accounts {
+        txResult = executeTransaction(
+            createBallotTx,
+            [selectedElectionId, account.address],
+            deployer
+        )
+
+        Test.expect(txResult, Test.beFailed())
+    }
+
+    // All good. Switch the electionIndexer to the next available value and repeat the process
+    selectedElectionIndex = (selectedElectionIndex + 1) % activeElectionIds.length
+    selectedElectionId = activeElectionIds[selectedElectionIndex]
+
     // Load another set of Ballots into the test account's VoteBoxes
     for account in accounts{
         txResult = executeTransaction(
