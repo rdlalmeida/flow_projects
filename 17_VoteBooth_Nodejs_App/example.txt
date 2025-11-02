@@ -1,0 +1,1 @@
+Simple text file to test my javascript command line application.
