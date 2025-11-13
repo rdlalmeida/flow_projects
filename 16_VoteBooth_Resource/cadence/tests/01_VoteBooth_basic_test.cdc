@@ -204,6 +204,8 @@ access(all) let getBallotOptionSc: String = "../scripts/13_get_ballot_option.cdc
 access(all) let getBallotIdSc: String = "../scripts/14_get_ballot_id.cdc"
 access(all) let getElectionResultsSc: String = "../scripts/15_get_election_results.cdc"
 access(all) let isElectionFinishedSc: String = "../scripts/16_is_election_finished.cdc"
+access(all) let getAccountBalanceSc: String = "../scripts/17_get_account_balance.cdc"
+access(all) let getElectionWinnerSc: String = "../scripts/18_get_election_winner.cdc"
 
 // PATHS
 // VoteBoxStandard.cdc
@@ -1500,6 +1502,25 @@ access(all) fun testTallyElection() {
     // Log out the Election results
     log("Election ".concat(selectedElectionId.toString()).concat(" voting statistics: "))
     log(winningOptions)
+
+    // Grab the same results but from the dedicated script and compare with the current winningOptions
+    scResult = executeScript(
+        getElectionWinnerSc,
+        [selectedElectionId]
+    )
+
+    Test.expect(scResult, Test.beSucceeded())
+
+    let scriptWinningOptions: {String: Int} = scResult.returnValue as! {String: Int}
+
+    Test.assert(scriptWinningOptions != {},
+        message: "ERROR: Election "
+        .concat(selectedElectionId.toString())
+        .concat(" did not returned any script results!")
+    )
+
+    log("Election ".concat(selectedElectionId.toString()).concat(" winning options from 'getElectionWinner' script: "))
+    log(scriptWinningOptions)
 }
 
 /**
