@@ -59,6 +59,7 @@ access(all) contract ElectionStandard {
         access(all) fun submitBallot(ballot: @BallotStandard.Ballot): Void
         access(all) view fun isBallotMinted(ballotId: UInt64): Bool
         access(all) view fun getElectionTally(): {String: Int}
+        access(all) view fun getEncryptedOptions(): [String]
     }
 
     // The definition of the ElectionStandard.Election resource
@@ -111,6 +112,10 @@ access(all) contract ElectionStandard {
         // This array is going to be used to store the Ballots after tallying, just to keep them around just in case
         access(self) var talliedBallots: @[BallotStandard.Ballot]
 
+        // This array is used to keep the Ballot options while still encrypted. Since transactions cannot return values, I need to keep these somewhere and
+        // retrieved with a script
+        access(self) var encryptedOptions: [String]
+
         // And this dictionary is the one that contains the results, using a {electionBallot: count} format, where each ballot option 
         // is used as key and the number of votes with that option as value.
         access(self) var electionResults: {String: Int}
@@ -123,11 +128,97 @@ access(all) contract ElectionStandard {
         }
 
         /**
+            Another simple getter for the array of encrypted ballot options.
+        **/
+        access(all) view fun getEncryptedOptions(): [String] {
+            return self.encryptedOptions
+        }
+
+        /**
+            This function works similarly to the tallyElection one, but this one returns an array of the encrypted Ballot.options from the Ballots processed so far in this election. The idea is for these to be decrypted and tallied off-chain. This function returns the results in a way where they can be processed more easily from a frontend application. Though it would be possible to operate on complex Ballot resources from outside of this contract due to the similarities in this paradigm with the regular object oriented one, this step is actually easier to do from here.
+            NOTE: This function does not sets the electionFinished flag. That's the job for the final function that does set the winning options.
+
+            @param _ballotsToTally @[BallotStandard.Ballot] An array of Ballots, already anonymized in their array format, from the internal storage area.
+
+            @returns [String] Returns an also unordered array with all the input Ballot's option fields.
+        **/
+        access(ElectionStandard.ElectionAdmin) fun setEncryptedOptions(_ballotsToTally: @[BallotStandard.Ballot]): Void {
+            pre{
+                self.storedBallots.length == 0: "ERROR: Unable to tally Election ".concat(self.electionId.toString()).concat(". This one still has stored Ballots in it!")
+                self.talliedBallots.length == 0: "ERROR: Election ".concat(self.electionId.toString()).concat(" talliedBallots array is not empty! There are ".concat(self.talliedBallots.length.toString()).concat(" Ballots in it already!"))
+                !self.electionFinished: "ERROR: Election ".concat(self.electionId.toString()).concat(" is set as finished already!")
+                self.encryptedOptions.length == 0: "ERROR: Election ".concat(self.electionId.toString()).concat(" has encrypted options set already!")
+            }
+
+            post {
+                self.storedBallots.length == 0: "ERROR: The tallying process for Election ".concat(self.electionId.toString()).concat(" still has ").concat(self.storedBallots.length.toString()).concat(" in storage still!")
+                !self.electionFinished: "ERROR: Election ".concat(self.electionId.toString()).concat(" was set as finished!")
+                self.talliedBallots.length == before(_ballotsToTally.length): "ERROR: Not all Ballots were processed for Election ".concat(self.electionId.toString()).concat(": the number of tallied Ballots does not match the number of Ballots received!")
+                self.encryptedOptions.length > 0: "ERROR: Election ".concat(self.electionId.toString()).concat(" did not set any encrypted options!")
+            }
+
+            // The idea here is to move the input Ballots to the internal talliedBallots array and extract the options to another array in the process.
+            // No Ballots were destroyed in the process!
+            // I need to do this in a while loop because, weirdly, Cadence is iffy about looping through an array of resources with a for loop... but not
+            // with a while... because of... reason...
+
+            while (_ballotsToTally.length > 0) {
+                // Take the first Ballot from the input queue
+                let ballotToProcess: @BallotStandard.Ballot <- _ballotsToTally.removeFirst()
+
+                // Extract the option to the return array
+                self.encryptedOptions.append(ballotToProcess.getOption())
+
+                // And move the input Ballot to the internal tallied array
+                self.talliedBallots.append(<- ballotToProcess)
+            }
+
+            // The input array should be empty by now. Test it just in case because the container still needs to be destroyed
+            if (_ballotsToTally.length > 0) {
+                panic(
+                    "ERROR: The input _ballotsToTally array for election "
+                    .concat(self.electionId.toString())
+                    .concat(" was not completely processed. The input array still has ")
+                    .concat(_ballotsToTally.length.toString())
+                    .concat(" Ballots in it left!")
+                )
+            }
+            else{
+                // The container is empty. Destroy it
+                destroy _ballotsToTally
+            }
+        }
+
+        /**
+            Function to set this Election with the computed election results and the final tally, as the winningOption, or Options in the case of a tie.
+
+            @param electionResults ({String: Int}) A dictionary with all the election options as keys, and the number of votes obtained, as values.
+        **/
+        access(ElectionStandard.ElectionAdmin) fun setElectionResults(_electionResults: {String: Int}): Void {
+            pre {
+                !self.electionFinished: "ERROR: Election ".concat(self.electionId.toString()).concat(" is set as finished already!")
+                self.electionResults.length == 0: "ERROR: Election ".concat(self.electionId.toString()).concat(" already has some election results set in!")
+            }
+
+            post {
+                self.electionFinished: "ERROR: Election ".concat(self.electionId.toString()).concat(" is not yet set as finished!")
+                self.electionResults.length > 0: "ERROR: Election ".concat(self.electionId.toString()).concat(" did not got its election results set!")
+            }
+
+            // Set the election results internally
+            self.electionResults = _electionResults
+            // And set the electionFinished flag as well
+            self.electionFinished = true
+        }
+
+        /**
             Function to calculate the final tally for this Election. This function receives an array of @BallotStandard.Ballot on purpose. This is because Cadence does not guarantee any order for the Ballots in this structure, which I'm using to increase the entropy among these ballots. Also, I'm making this function purposely more complex that in needs to be, but that's because I need an encryption/decryption step in this process that needs to happen off chain on purpose. As such, I have a function to withdraw the Ballots from an Election and another one to tally them. The idea is for this Ballots to be processed off chain, namely, their option decrypted outside of the smart contract process.
 
             @param _ballotsToTally @[BallotStandard.Ballot]
 
             @returns [{UInt8: String}] If successful, this function returns the ballot(s) that wins the Election, using the same format as these were set as ballotOptions. The reason why I'm returning an array instead of just a single element is that I want to cover cases where there are ties among the winning options. In that scenario, the function returns all the winning options in an array. Check the internal electionResults dictionary for detailed election results. This should be extremely rare, but there is a non-zero probability of this happening, so as the excellent programmer that I am, I'm going to cover it as well. And this is why people pay me the big bucks.
+
+            NOTE: DEPRECATED - This function was a just a shortcut to get the main system working before adding the encryption layer to the Ballot.option. With encryption activated, it is no longer possible to operate on the Ballot options because data is not (should not) decrypted on-chain. The correct approach is to extract the Ballot.option to an array of String and return this to be decrypted, and tallied, off-chain.
         **/
         access(ElectionStandard.ElectionAdmin) fun tallyElection(_ballotsToTally: @[BallotStandard.Ballot]): {String: Int} {
             // Validate that there are no Ballots stored in this resource, both at the beginning and at the end.
@@ -820,6 +911,7 @@ access(all) contract ElectionStandard {
             // Set the parameters for finished Elections
             self.electionFinished = false
             self.talliedBallots <- []
+            self.encryptedOptions = []
 
             // Since I have access to the array of available options for this particular Election, I'm taking this opportunity to set the electionResults 
             // dictionary to the proper format, i.e., setting the ballot options as keys and all values to 0
