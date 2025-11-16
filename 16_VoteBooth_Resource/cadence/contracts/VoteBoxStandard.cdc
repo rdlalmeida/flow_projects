@@ -37,7 +37,7 @@ access(all) contract VoteBoxStandard {
         access(all) view fun getElectionBallot(electionId: UInt64): String?
         access(all) view fun getElectionOptions(electionId: UInt64): {UInt8: String}?
         access(all) view fun getElectionId(electionId: UInt64): UInt64?
-        access(all) view fun getElectionPublicKey(electionId: UInt64): [UInt8]?
+        access(all) view fun getElectionPublicKey(electionId: UInt64): String?
         access(all) view fun getElectionCapability(electionId: UInt64): Capability?
         access(all) view fun getElectionTotalBallotsMinted(electionId: UInt64): UInt?
         access(all) view fun getElectionTotalBallotsSubmitted(electionId: UInt64): UInt?
@@ -122,6 +122,36 @@ access(all) contract VoteBoxStandard {
         }
 
         /**
+            Function to delete a Ballot from this VoteBox resource, for the electionId provided given that VoteBoxes index stored Ballots using the linkedElectionId as key. If the Ballot exists and its destroyed, the function returns the ballotId (not the linkedElectionId) of the destroyed Ballot. Otherwise returns nil.
+
+            @param electionId (UInt64) The election identifier to use as key to retrieve the Ballot to destroy.
+
+            @return UInt64? If the Ballot exists in the current VoteBox and it is destroyed, the function returns the ballotId of the destroyed Ballot. Otherwise a nil is returned instead.
+        **/
+        access(VoteBoxStandard.VoteBoxAdmin) fun deleteBallot(electionId: UInt64): UInt64? {
+            // Use the internal "getBallotId" function to retrieve a ballotId from the electionId provided. If a valid UInt64 is returned, the Ballot exists
+            // and I can proceed with its destruction. Otherwise, a nil is propagated to the function return
+            let ballotIdToReturn: UInt64? = self.getBallotId(electionId: electionId)
+
+            if (ballotIdToReturn != nil) {
+                // Deal only with the case where I got a valid ballotId back
+                // Load the ballot
+                let ballotToDestroy: @BallotStandard.Ballot <- self.activeBallots.remove(key: electionId) ??
+                panic(
+                    "Unable to retrieve a valid @BallotStandard.Ballot for electionId "
+                    .concat(electionId.toString())
+                    .concat(" from the VoteBox in account ")
+                    .concat(self.owner!.address.toString())
+                )
+
+                // All good. Burn the Ballot
+                Burner.burn(<- ballotToDestroy)
+            }
+
+            return ballotIdToReturn
+        }
+
+        /**
             Function to retrieve the name of the Election associated to the Ballot retrieved with the input argument.
 
             @param electionId (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
@@ -198,9 +228,9 @@ access(all) contract VoteBoxStandard {
 
             @param electionId (UInt64) The electionId used to retrieve a reference to the Ballot from the internal activeBallots dictionary.
 
-            @returns ([UInt8]) If a Ballot exists under the provided electionId, this function returns an array of UInt8 values encoding the public encryption key of the Election associated to it. Otherwise, it returns a nil.
+            @returns (String) If a Ballot exists under the provided electionId, this function the public encryption key of the Election associated to it. Otherwise, it returns a nil.
         **/
-        access(all) view fun getElectionPublicKey(electionId: UInt64): [UInt8]? {
+        access(all) view fun getElectionPublicKey(electionId: UInt64): String? {
             let electionRef: &{ElectionStandard.ElectionPublic}? = self.getPublicElectionReference(electionId: electionId)
 
             if (electionRef == nil) {

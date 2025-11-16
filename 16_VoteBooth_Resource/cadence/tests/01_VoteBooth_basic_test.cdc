@@ -248,10 +248,10 @@ access(all) let electionOptions: [{UInt8: String}] = [
     }
 ]
 
-access(all) let electionPublicEncryptionKeys: [[UInt8]] = [
-    [87, 174, 84, 18, 106, 155, 246, 129, 83, 78, 24, 168, 183, 53, 39, 121, 60, 186, 137, 156, 247, 185, 9, 137, 100, 151, 208, 113, 59, 191, 26, 118],
-    [51, 171, 190, 97, 148, 77, 139, 219, 238, 108, 187, 103, 11, 17, 101, 98, 82, 99, 198, 155, 229, 236, 199, 71, 83, 213, 183, 240, 193, 220, 78, 239],
-    [2, 164, 77, 118, 115, 138, 60, 142, 115, 146, 41, 115, 4, 36, 56, 23, 183, 225, 212, 85, 28, 203, 62, 60, 162, 113, 133, 116, 215, 163, 53, 79]
+access(all) let electionPublicEncryptionKeys: [String] = [
+    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1JOYQDWcTOwa97QsTsoym37sdf/gdtx0PqSnp5SzkLB5DpJrt9v4PbppttRlU3gbRrjkrlQH6fWnEOkm2pIkvxpqr2mVWMogpHw8HLU82SRjWDM5mh0WykRJGqOUt7x1b3+HEMynGHCjTY+OzhqcrnylhtH4qAp7fnwIyRAfPxks5c2zICELa667ZhAuKQp2Teyy7WAW/CCaPVUOzJdHeuLmHMep3rhNKcxyKgi/UZHoyNGzJTFApkLBpFlNU0K+ztENBJEy2jrBm9/TEqH+0o3yzYy1SSijBHk7e63QjfQZF4L/TnWQjTLHRW3MSTFmCr5YaPG1Tzdv7ZX8iU1siwIDAQAB",
+    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwWrbT+BiU6f2uYSGPVJULflcKpqp/Lj75nuLoMUsOepoAVQGeV1zY+3aOjyJafOfig5f5TN+Kp5rdpqmAJ/PLwYdbI0sqd1/Dp2DgsxpHTbVZngIpEgvSmROqx7w5SN7qxRabsgujXcw3DUmaOfbQwFzS1jvXIXmxSX+WJIM7QwqW864gMsfV2AVYonWsghGaSCOaQ96sceBKWKvvhaMz0byD2LGiY+dpqYs/5OM+V5O+O0JXRsRHcStpqluNzTKDJEdfg5DACIgmQzvohNd2m29+pUCJ3xJavwlUuFRx7pad2iXYLpOqZr4ASv+Oi+OD8JCPLsIwB7S9CpE1Jz61QIDAQAB",
+    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyGtcxOs8yvE140S1ytC3A04Cb8gtbOlPNuydnL6aoRIUaLMZh6cuxFCmWlFTDEkMPMTQ8RqUEV7y63xTGj6QWc41gAbWhGXZ+3kNhz5ycI/5T4zAXSLuR/ouYmN8FV3DkaZ0Rf9vbgElMf15Wg6r+JI7lF4NRZiPHDlohpVLSRa+FGOMFWz0gF5PLJx2bsTvLz4nghnGJa800QHFwcPtpc3msy58WEUKoEKp/6nf0lK2kWpLOmhfjw6TaYUEHAPcCf0fh4NmXN3lwv0pThma00QhEFuikukiWrZ4tOS9dk25RgQqtXK5zELJ1lo83NMyiz8NZpfnFku59kgTzSDKXwIDAQAB"
 ]
 
 access(all) let electionStoragePaths: [StoragePath] = [
@@ -308,7 +308,7 @@ access(all) let defaultBallotOption: String = "default"
 access(all) var selectedElectionName: String = ""
 access(all) var selectedElectionBallot: String = ""
 access(all) var selectedElectionOptions: {UInt8: String} = {}
-access(all) var selectedElectionPublicEncryptionKey: [UInt8] = []
+access(all) var selectedElectionPublicEncryptionKey: String = ""
 access(all) var selectedElectionCapability: Capability<&{ElectionStandard.ElectionPublic}>? = nil
 
 // This is just a handy way to have the voters represented by each of the test account easily
@@ -566,7 +566,7 @@ access(all) fun testCreateElection() {
     var electionBallot: String = ""
     var electionOption: {UInt8: String} = {}
     var electionId: UInt64 = 0
-    var electionPublicKey: [UInt8] = []
+    var electionPublicKey: String = ""
     var electionCapability: Capability? = nil
     var electionTotals: {String: UInt} = {}
     var electionStoragePath: StoragePath? = nil
@@ -645,7 +645,7 @@ access(all) fun testCreateElection() {
             [activeElectionId, nil]
         )
         Test.expect(scResult, Test.beSucceeded())
-        electionPublicKey = scResult.returnValue as! [UInt8]
+        electionPublicKey = scResult.returnValue as! String
         Test.assert(electionPublicEncryptionKeys.contains(electionPublicKey),
             message: "ERROR: electionPublicKey for activeElectionId "
             .concat(activeElectionId.toString())
@@ -790,7 +790,7 @@ access(all) fun testPrintBallotIntoVoteBox() {
     var electionBallot: String = ""
     var electionOptions: {UInt8: String} = {}
     var electionId: UInt64 = 0
-    var electionPublicEncryptionKey: [UInt8] = []
+    var electionPublicEncryptionKey: String = ""
     var electionCapability: Capability? = nil
     var electionTotals: {String: UInt} = {}
     var electionTotalBallotsMinted: UInt = 0
@@ -944,7 +944,7 @@ access(all) fun testPrintBallotIntoVoteBox() {
 
         Test.expect(scResult, Test.beSucceeded())
 
-        electionPublicEncryptionKey = scResult!.returnValue as! [UInt8]
+        electionPublicEncryptionKey = scResult!.returnValue as! String
 
         Test.assert(electionPublicEncryptionKey == selectedElectionPublicEncryptionKey,
             message: "ERROR: electionPublicEncryptionKey for election "

@@ -52,7 +52,7 @@ access(all) contract ElectionStandard {
         access(all) view fun getElectionBallot(): String
         access(all) view fun getElectionOptions(): {UInt8: String}
         access(all) view fun getElectionId(): UInt64
-        access(all) view fun getPublicEncryptionKey(): [UInt8]
+        access(all) view fun getPublicEncryptionKey(): String
         access(all) view fun getTotalBallotsMinted(): UInt
         access(all) view fun getTotalBallotsSubmitted(): UInt
         access(all) view fun getElectionCapability(): Capability?
@@ -80,9 +80,9 @@ access(all) contract ElectionStandard {
 
         /**
             This parameter stores the public encryption to distribute to the voters through Ballots. The voter's frontend uses this key to encrypt the selected option on the Ballot before submitting it. The private counterpart of this key remains secured with the Election Administration, to be used during
-            the counting process. Cadence does has a dedicated "PublicKey" type just for these kind of keys, but... PublicKey types are not storable, i.e., resources and structs that implement them are not storable in the account storage. Why? Who knows... And I found about this the hard way, i.e., by racking my head around a mysterious error out of nowhere, and then toggle on and off all Election parameters to find out which one was "not storable". Anyway, since I cannot use the PublicKey type, the next best option is the native way Cadence represents encryption keys and encrypted data: an [UInt8]. UInt8 arrays are handy because I can easily convert them to Strings and vice-versa, which simplifies the handling of these keys quite a lot.
+            the counting process.
         **/
-        access(contract) let publicKey: [UInt8]
+        access(contract) let publicKey: String
 
         // Use these parameters to keep track of how many Ballots were printed and submitted for this particular Election instance
         // I set these as "access(ElectionAdmin)" because I want my BallotPrinterAdmin resource to operate on them and no one else.
@@ -366,11 +366,11 @@ access(all) contract ElectionStandard {
         }
 
         /**
-            Function to retrieve the public encryption key, as a [UInt8], associated to this Ballot and Election.
+            Function to retrieve the public encryption key associated to this Ballot and Election.
 
-            @returns ([UInt8]) An array of UInt8 values representing the public encryption key to apply to the Ballot option.
+            @returns (String) The public encryption key to apply to the Ballot option.
         **/
-        access(all) view fun getPublicEncryptionKey(): [UInt8] {
+        access(all) view fun getPublicEncryptionKey(): String {
             return self.publicKey
         }
 
@@ -786,7 +786,7 @@ access(all) contract ElectionStandard {
             @param _electionName (String) The name for the Election resource.
             @param _electionBallot (String) The question that this Election wants to answer.
             @param _electionOptions ({UInt8: String}) The set of options that the voter must chose from.
-            @param _publicKey ([UInt8]) A [UInt8] representing the public encryption key that is to be used to encrypt the Ballot option from the frontend side.
+            @param _publicKey (String) The public encryption key that is to be used to encrypt the Ballot option from the frontend side.
             @param _electionStoragePath (StoragePath) A StoragePath-type item to where this Election resource is going to be stored into the voter's own account.
             @param _electionPublicPath (PublicPath) A PublicPath-type item where the public reference to this Election can be retrieved from.
 
@@ -796,7 +796,7 @@ access(all) contract ElectionStandard {
             _electionName: String,
             _electionBallot: String,
             _electionOptions: {UInt8: String},
-            _publicKey: [UInt8],
+            _publicKey: String,
             _electionStoragePath: StoragePath,
             _electionPublicPath: PublicPath
         ) {
@@ -847,7 +847,7 @@ access(all) contract ElectionStandard {
         @param newElectionName (String) The name for the Election resource.
         @param newElectionBallot (String) The question that this Election wants to answer.
         @param newElectionOptions ({UInt8: String}) The set of options that the voter must chose from.
-        @param newPublicKey ([UInt8]) A [UInt8] representing the public encryption key that is to be used to encrypt the Ballot option from the frontend side.
+        @param newPublicKey (String) The public encryption key that is to be used to encrypt the Ballot option from the frontend side.
         @param newElectionStoragePath (StoragePath) A StoragePath-type item to where this Election resource is going to be stored into the voter's own account.
         @param newElectionPublicPath (PublicPath) A PublicPath-type item where the public reference to this Election can be retrieved from.
 
@@ -857,7 +857,7 @@ access(all) contract ElectionStandard {
         newElectionName: String,
         newElectionBallot: String,
         newElectionOptions: {UInt8: String},
-        newPublicKey: [UInt8],
+        newPublicKey: String,
         newElectionStoragePath: StoragePath,
         newElectionPublicPath: PublicPath
     ): @ElectionStandard.Election {
