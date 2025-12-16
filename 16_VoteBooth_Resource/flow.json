@@ -198,15 +198,7 @@
                 "BallotStandard",
                 "ElectionStandard",
                 "VoteBoxStandard",
-                {
-                    "name": "VoteBooth",
-                    "args": [
-                        {
-                            "value": true,
-                            "type": "Bool"
-                        }
-                    ]
-                }
+                "VoteBooth"
             ]
         }
     }

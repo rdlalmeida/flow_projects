@@ -368,7 +368,7 @@ access(all) fun setup() {
     err = Test.deployContract(
         name: "VoteBooth",
         path: "../contracts/VoteBooth.cdc",
-        arguments: [verbose]
+        arguments: []
     )
 
     Test.expect(err, Test.beNil())
