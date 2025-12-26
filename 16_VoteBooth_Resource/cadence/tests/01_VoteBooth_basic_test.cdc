@@ -218,19 +218,19 @@ access(all) let expectedElectionIndexStoragePath: StoragePath = /storage/Electio
 access(all) let expectedElectionIndexPublicPath: PublicPath = /public/ElectionIndex
 
 // CUSTOM INPUT ARGUMENTS
-access(all) let electionNames: [String] = ["A. Bullfights", "B. Coconut Cake", "C. Basketball"]
+access(all) let electionNames: [String] = ["A. Dogs", "B. Coconut Cake", "C. Basketball"]
 access(all) let electionBallots: [String] = [
-    "A. What should happen to bullfighters once Portugal bans this stupid practice?",
+    "A. Which was the best dog this past Summer?",
     "B. What is the best frosting for coconut cake?",
     "C. Which NBA team is going to win the 2025-26 championship?"
 ]
 access(all) let electionOptions: [{UInt8: String}] = [
     {
-        1: "Starve them to death", 
-        2: "Bundle them in a shipping container and drop it into the ocean", 
-        3: "Enslave and make them build animal shelters until dead", 
-        4: "Process them into animal feed",
-        5: "Tax them into poverty and force them to clean animal stalls for food"
+        1: "Eddie", 
+        2: "Argus", 
+        3: "None", 
+        4: "Both",
+        5: "I'm an idiot and I don't like dogs."
     },
     {
         1: "Powdered sugar",

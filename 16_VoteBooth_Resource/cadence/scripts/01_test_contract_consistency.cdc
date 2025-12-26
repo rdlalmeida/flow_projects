@@ -25,11 +25,7 @@ access(all) fun main(): Bool {
     }
     else {
         log(
-            "WARNING: BallotStandard("
-            .concat(ballotDeployer.toString())
-            .concat(") and ElectionStandard(")
-            .concat(electionDeployer.toString())
-            .concat(") are deployed into different accounts!")
+            "WARNING: BallotStandard(`ballotDeployer.toString()`) and ElectionStandard(`electionDeployer.toString()`) are deployed into different accounts!"
         )
 
         return false
@@ -42,11 +38,7 @@ access(all) fun main(): Bool {
     }
     else {
         log(
-            "WARNING: VoteBoxStandard("
-            .concat(voteBoxDeployer.toString())
-            .concat(") and ElectionStandard(")
-            .concat(electionDeployer.toString())
-            .concat(") are deployed into different accounts!")
+            "WARNING: VoteBoxStandard(`voteBoxDeployer.toString()`) and ElectionStandard(`electionDeployer.toString()`) are deployed into different accounts!"
         )
 
         return false
@@ -54,16 +46,12 @@ access(all) fun main(): Bool {
 
     if (voteboothDeployer == voteBoxDeployer) {
         log(
-            "VoteBooth and the remaining standards are consistently deployed at ".concat(voteboothDeployer.toString())
+            "VoteBooth and the remaining standards are consistently deployed at `voteboothDeployer.toString()`"
         )
     }
     else {
         log(
-            "WARNING: VoteBooth("
-            .concat(voteboothDeployer.toString())
-            .concat(") and VoteBoxStandard(")
-            .concat(voteBoxDeployer.toString())
-            .concat(") are deployed into different accounts!")
+            "WARNING: VoteBooth(`voteboothDeployer.toString()`) and VoteBoxStandard(`voteBoxDeployer.toString()`) are deployed into different accounts!"
         )
 
         return false

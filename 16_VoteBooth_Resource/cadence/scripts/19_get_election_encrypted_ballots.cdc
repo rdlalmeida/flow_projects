@@ -12,8 +12,7 @@ import "VoteBooth"
 access(all) fun main(electionId: UInt64): [String] {
     let electionPublicRef: &{ElectionStandard.ElectionPublic} = VoteBooth.getElectionPublicReference(electionId: electionId) ??
     panic(
-        "Unable to get a valid &{ElectionStandard.ElectionPublic} from the VoteBooth contract for election "
-        .concat(electionId.toString())
+        "Unable to get a valid &{ElectionStandard.ElectionPublic} from the VoteBooth contract for election `electionId.toString())
     )
 
     return electionPublicRef.getEncryptedOptions()

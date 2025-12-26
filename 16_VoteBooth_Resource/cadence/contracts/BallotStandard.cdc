@@ -185,9 +185,7 @@ access(all) contract BallotStandard {
 
             if (hashDigest == nil) {
                 panic(
-                    "ERROR: Unable to decode hashed address "
-                    .concat(self.voterAddress!.toString())
-                    .concat(" back to a String...")
+                    "ERROR: Unable to decode hashed address `self.voterAddress!.toString()` back to a String..."
                 )
             }
             else {

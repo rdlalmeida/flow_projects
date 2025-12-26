@@ -21,10 +21,7 @@ transaction() {
         signer.storage.save(<- newVoteBox, to: VoteBoxStandard.voteBoxStoragePath)
         if (VoteBooth.verbose) {
             log(
-                "Created a new @VoteVoxStandard.VoteBox at "
-                .concat(VoteBoxStandard.voteBoxStoragePath.toString())
-                .concat(" for account ")
-                .concat(signer.address.toString())
+                "Created a new @VoteVoxStandard.VoteBox at `VoteBoxStandard.voteBoxStoragePath.toString()` for account `signer.address.toString()`"
             )
         }
 
@@ -37,10 +34,7 @@ transaction() {
 
         if (VoteBooth.verbose) {
             log(
-                "Published a new Capability<&{VoteBoxStandard.VoteBoxPublic}> at "
-                .concat(VoteBoxStandard.voteBoxPublicPath.toString())
-                .concat(" for account ")
-                .concat(signer.address.toString())
+                "Published a new Capability<&{VoteBoxStandard.VoteBoxPublic}> at `VoteBoxStandard.voteBoxPublicPath.toString()` for account `signer.address.toString()`"
             )
         }
     }

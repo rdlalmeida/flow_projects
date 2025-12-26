@@ -21,7 +21,7 @@ transaction() {
 
         self.vaultReference = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault) ??
         panic(
-            "Unable to get a reference to the vault for account ".concat(signer.address.toString())
+            "Unable to get a reference to the vault for account `signer.address.toString()`"
         )
 
         self.amount = 10.0
@@ -32,7 +32,7 @@ transaction() {
             let recipientAccount: &Account = getAccount(receiverAddress)
 
             self.receiverRef.append(recipientAccount.capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver) ?? panic(
-                "Unable to retrieve a &{FungibleToken.Receiver} from ".concat(receiverAddress.toString())
+                "Unable to retrieve a &{FungibleToken.Receiver} from `receiverAddress.toString()`"
             ))
         }
     }
@@ -44,12 +44,7 @@ transaction() {
             receiver.deposit(from: <- tempVault)
 
             log(
-                "Transferred "
-                .concat(self.amount.toString())
-                .concat(" FLOW from account ")
-                .concat(self.from.toString())
-                .concat(" to ")
-                .concat(self.to[index].toString())
+                "Transferred `self.amount.toString()` FLOW from account `self.from.toString()` to `self.to[index].toString()`"
             )
         }
     }

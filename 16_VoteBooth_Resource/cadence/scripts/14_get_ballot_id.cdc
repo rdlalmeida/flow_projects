@@ -11,10 +11,7 @@ import "VoteBoxStandard"
 access(all) fun main(voteboxAddress: Address, electionId: UInt64): UInt64? {
     let voteboxRef: &{VoteBoxStandard.VoteBoxPublic} = getAccount(voteboxAddress).capabilities.borrow<&{VoteBoxStandard.VoteBoxPublic}>(VoteBoxStandard.voteBoxPublicPath) ??
     panic(
-        "Unable to get a valid &{VoteBoxStandard.VoteBoxPublic} at "
-        .concat(VoteBoxStandard.voteBoxPublicPath.toString())
-        .concat(" from account ")
-        .concat(voteboxAddress.toString())
+        "Unable to get a valid &{VoteBoxStandard.VoteBoxPublic} at `VoteBoxStandard.voteBoxPublicPath.toString()` from account `voteboxAddress.toString()`"
     )
 
     return voteboxRef.getBallotId(electionId: electionId)
