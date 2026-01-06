@@ -21,8 +21,8 @@ transaction(_linkedElectionId: UInt64, _voterAddress: Address) {
 
         let newBallotId: UInt64 = self.voteBoothPrinterAdminRef.createBallot(newLinkedElectionId: _linkedElectionId, voterAddress: _voterAddress, deployer: signer) ??
         panic(
-                    "Unable to create a Ballot for Election `_linkedElectionId.toString()` and deposit it to voter account at `_voterAddress.toString()` using the VoteBoothPrinterAdmin at `VoteBooth.voteBoothPrinterAdminStoragePath.toString()` from account `signer.address.toString()`"
-                )
+            "Unable to create a Ballot for Election `_linkedElectionId.toString()` and deposit it to voter account at `_voterAddress.toString()` using the VoteBoothPrinterAdmin at `VoteBooth.voteBoothPrinterAdminStoragePath.toString()` from account `signer.address.toString()`"
+        )
 
         if (VoteBooth.verbose) {
             log(

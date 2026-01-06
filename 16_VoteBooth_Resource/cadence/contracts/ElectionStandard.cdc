@@ -110,6 +110,7 @@ access(all) contract ElectionStandard {
         access(self) var electionFinished: Bool
 
         // This array is going to be used to store the Ballots after tallying, just to keep them around just in case
+        // TODO: I think I can go without this one. Optimise the tally process to remove this one please
         access(self) var talliedBallots: @[BallotStandard.Ballot]
 
         // This array is used to keep the Ballot options while still encrypted. Since transactions cannot return values, I need to keep these somewhere and
@@ -160,17 +161,11 @@ access(all) contract ElectionStandard {
         **/
         access(ElectionStandard.ElectionAdmin) fun setEncryptedOptions(_ballotsToTally: @[BallotStandard.Ballot]): Void {
             pre{
-                self.storedBallots.length == 0: "ERROR: Unable to tally Election `self.electionId.toString()`. This one still has stored Ballots in it!"
-                self.talliedBallots.length == 0: "ERROR: Election `self.electionId.toString())` talliedBallots array is not empty! There are `self.talliedBallots.length.toString()` Ballots in it already!"
                 !self.electionFinished: "ERROR: Election `self.electionId.toString()` is set as finished already!"
-                self.encryptedOptions.length == 0: "ERROR: Election `self.electionId.toString()` has encrypted options set already!"
             }
 
             post {
-                self.storedBallots.length == 0: "ERROR: The tallying process for Election `self.electionId.toString()` still has `self.storedBallots.length.toString()` in storage still!"
                 !self.electionFinished: "ERROR: Election `self.electionId.toString()` was set as finished!"
-                self.talliedBallots.length == before(_ballotsToTally.length): "ERROR: Not all Ballots were processed for Election `self.electionId.toString()`: the number of tallied Ballots does not match the number of Ballots received!"
-                self.encryptedOptions.length > 0: "ERROR: Election `self.electionId.toString()` did not set any encrypted options!"
             }
 
             // The idea here is to move the input Ballots to the internal talliedBallots array and extract the options to another array in the process.
@@ -501,7 +496,13 @@ access(all) contract ElectionStandard {
                 // At the end of this function, check for Ballot consistency, namely, if at all times, the total submitted is always equal or less than the
                 // total minted.
                 self.totalBallotsSubmitted <= self.totalBallotsMinted: 
-                    "ERROR: Election `self.electionId.toString()` has more submitted Ballots (`self.totalBallotsSubmitted.toString()`) than minted ones (`self.totalBallotsMinted.toString()`)!"
+                    "ERROR: Election "
+                        .concat(self.electionId.toString())
+                        .concat(" has more submitted Ballots (")
+                        .concat(self.totalBallotsSubmitted.toString())
+                        .concat(") than minted ones (")
+                        .concat(self.totalBallotsMinted.toString())
+                        .concat(")!")
                 }
 
             self.totalBallotsMinted = self.totalBallotsMinted + ballots
@@ -516,7 +517,13 @@ access(all) contract ElectionStandard {
             post {
                 // Check if this execution did not incur into system inconsistencies.
                 self.totalBallotsSubmitted <= self.totalBallotsMinted:
-                    "ERROR: Election `self.electionId.toString()` has less minted Ballots (`self.totalBallotsMinted.toString()`) than submitted ones (`self.totalBallotsSubmitted.toString()`)!"
+                    "ERROR: Election "
+                        .concat(self.electionId.toString())
+                        .concat(" has less minted Ballots (")
+                        .concat(self.totalBallotsMinted.toString())
+                        .concat(") than submitted ones (")
+                        .concat(self.totalBallotsSubmitted.toString())
+                        .concat(")!")
             }
 
             self.totalBallotsSubmitted = self.totalBallotsSubmitted + ballots
@@ -533,7 +540,7 @@ access(all) contract ElectionStandard {
             // should never be raised.
             pre {
                 ballots <= self.totalBallotsMinted: 
-                    "Unable to decrease the total Ballots minted! Cannot decrease a total of `self.totalBallotsMinted.toString()` minted Ballots by `ballots.toString()` without triggering an underflow error!"
+                    "Unable to decrease the total Ballots minted! Cannot decrease a total of `self.totalBallotsMinted.toString()` minted Ballots by `ballots.toString()` without triggering an underflow error!" 
                 }
 
             self.totalBallotsMinted = self.totalBallotsMinted - ballots
@@ -595,7 +602,8 @@ access(all) contract ElectionStandard {
 
                 if (ballotIdToReturn != ballotId) {
                     panic(
-                        "ERROR: Retrieved ballotId #`ballotIdToReturn.toString()` from mintedBallots at index `ballotIndex!.toString()` but expected ballotId #`ballotId.toString()`. Cannot continue!")
+                        "ERROR: Retrieved ballotId #`ballotIdToReturn.toString()` from mintedBallots at index `ballotIndex!.toString()` but expected ballotId #`ballotId.toString()`. Cannot continue!"
+                    )
                 }
 
                 return self.mintedBallots.remove(at: ballotIndex!)
@@ -805,7 +813,7 @@ access(all) contract ElectionStandard {
             // Check that the Election is "empty" from the storedBallots and mintedBallots point of view. Panic if this burn process is not completely clean.
             if(self.storedBallots.length != 0) {
                 panic(
-                    "ERROR: Election `self.electionId.toString()` is about to be destroyed but it still has `self.storedBallots.length.toString()` Ballots stored in it yet! Cannot destroy this until its empty!"
+                    "ERROR: Election `self.electionId.toString()` is about to be destroyed but it still has `self.storedBallots.length.toString()` Ballots stored in it yet! Cannot destroy this until its empty! "
                 )
             }
 
